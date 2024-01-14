@@ -5,6 +5,7 @@
 pub extern crate hermit_abi as abi;
 
 pub mod ffi;
+pub mod fs;
 pub mod io;
 
 /// A prelude for conveniently writing platform-specific code.

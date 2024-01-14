@@ -1,0 +1,2 @@
+std:
+    ./x build std
