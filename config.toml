@@ -1,0 +1,24 @@
+change-id = 119373
+[build]
+build-stage = 2
+target=[
+    "aarch64-apple-darwin",
+    "aarch64-unknown-hermit",
+    "aarch64-unknown-none-softfloat"
+]
+extended = true
+tools = [
+    "rust-analyzer",
+    "rust-analyzer-proc-macro-srv",
+    "rustfmt"
+]
+
+[rust]
+incremental = true
+lto = "off"
+lld = true
+llvm-tools = true
+
+[llvm]
+download-ci-llvm = "if-unchanged"
+
