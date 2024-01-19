@@ -3114,6 +3114,10 @@ impl<B: BufRead> Iterator for Lines<B> {
     }
 }
 
-#[cfg(target_os = "hermit")]
+use crate::fs::File;
+//#[cfg(target_os = "hermit")]
+#[allow(missing_docs)]
 #[stable(feature = "rust1", since = "1.0.0")]
-pub use crate::sys::mmap::mmap;
+pub unsafe fn mmap(_f: &File, _ptr: *mut *mut u8) -> crate::io::Result<usize> {
+    Err(Error::new(ErrorKind::Other, "mmap not implemented"))
+}

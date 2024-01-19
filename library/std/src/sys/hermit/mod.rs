@@ -45,8 +45,6 @@ pub mod thread_local_dtor;
 pub mod thread_local_key;
 pub mod time;
 
-pub mod mmap;
-
 #[path = "../unix/locks"]
 pub mod locks {
     mod futex_condvar;
@@ -59,6 +57,15 @@ pub mod locks {
 
 use crate::io::ErrorKind;
 use crate::os::hermit::abi;
+
+use crate::fs::File;
+use crate::io::Error;
+
+#[allow(dead_code)]
+#[stable(feature = "rust1", since = "1.0.0")]
+pub unsafe fn mmap(_f: &File, _ptr: *mut *mut u8) -> crate::io::Result<usize> {
+    Err(Error::new(ErrorKind::Other, "mmap not implemented"))
+}
 
 pub fn unsupported<T>() -> crate::io::Result<T> {
     Err(unsupported_err())
