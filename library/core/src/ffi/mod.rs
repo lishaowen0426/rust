@@ -101,7 +101,7 @@ mod c_char_definition {
         // These are the targets on which c_char is unsigned.
         if #[cfg(any(
             all(
-                target_os = "linux",
+                any(target_os = "linux", target_os = "hermit", target_os="none"),
                 any(
                     target_arch = "aarch64",
                     target_arch = "arm",

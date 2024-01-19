@@ -72,7 +72,7 @@ pub fn current_exe() -> io::Result<PathBuf> {
 
 static mut ENV: Option<Mutex<HashMap<OsString, OsString>>> = None;
 
-pub fn init_environment(env: *const *const i8) {
+pub fn init_environment(env: *const *const u8) {
     unsafe {
         ENV = Some(Mutex::new(HashMap::new()));
 

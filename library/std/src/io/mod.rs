@@ -3113,3 +3113,7 @@ impl<B: BufRead> Iterator for Lines<B> {
         }
     }
 }
+
+#[cfg(target_os = "hermit")]
+#[stable(feature = "rust1", since = "1.0.0")]
+pub use crate::sys::mmap::mmap;

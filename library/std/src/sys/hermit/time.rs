@@ -14,6 +14,9 @@ struct Timespec {
 }
 
 impl Timespec {
+    pub const fn new(tv_sec: i64, tv_nsec: i64) -> Timespec {
+        Timespec { t: timespec { tv_sec, tv_nsec } }
+    }
     const fn zero() -> Timespec {
         Timespec { t: timespec { tv_sec: 0, tv_nsec: 0 } }
     }
@@ -195,6 +198,9 @@ pub struct SystemTime(Timespec);
 pub const UNIX_EPOCH: SystemTime = SystemTime(Timespec::zero());
 
 impl SystemTime {
+    pub fn new(tv_sec: i64, tv_nsec: i64) -> SystemTime {
+        SystemTime(Timespec::new(tv_sec, tv_nsec))
+    }
     pub fn now() -> SystemTime {
         let mut time: Timespec = Timespec::zero();
         let _ = unsafe { abi::clock_gettime(CLOCK_REALTIME, &mut time.t as *mut timespec) };

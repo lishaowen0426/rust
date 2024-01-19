@@ -1,19 +1,21 @@
 use crate::ffi::{CStr, OsString};
 use crate::fmt;
-use crate::hash::{Hash, Hasher};
 use crate::io::{self, Error, ErrorKind};
 use crate::io::{BorrowedCursor, IoSlice, IoSliceMut, SeekFrom};
+use crate::mem;
 use crate::os::hermit::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, RawFd};
 use crate::path::{Path, PathBuf};
 use crate::sys::common::small_c_string::run_path_with_cstr;
 use crate::sys::cvt;
 use crate::sys::hermit::abi::{
-    self, O_APPEND, O_CREAT, O_EXCL, O_RDONLY, O_RDWR, O_TRUNC, O_WRONLY,
+    self, O_APPEND, O_CREAT, O_EXCL, O_RDONLY, O_RDWR, O_TRUNC, O_WRONLY, S_IFDIR, S_IFLNK, S_IFMT,
+    S_IFREG,
 };
 use crate::sys::hermit::fd::FileDesc;
 use crate::sys::time::SystemTime;
 use crate::sys::unsupported;
 use crate::sys_common::{AsInner, AsInnerMut, FromInner, IntoInner};
+use alloc::vec::IntoIter;
 
 pub use crate::sys_common::fs::{copy, try_exists};
 //pub use crate::sys_common::fs::remove_dir_all;
@@ -21,11 +23,21 @@ pub use crate::sys_common::fs::{copy, try_exists};
 #[derive(Debug)]
 pub struct File(FileDesc);
 
-pub struct FileAttr(!);
+#[derive(Copy, Clone, Debug, Default)]
+pub struct FileAttr {
+    stat: abi::stat,
+}
 
-pub struct ReadDir(!);
+pub struct ReadDir {
+    entries: IntoIter<DirEntry>,
+}
 
-pub struct DirEntry(!);
+#[derive(Clone, Debug, Default)]
+pub struct DirEntry {
+    name: PathBuf,
+    attr: FileAttr,
+    dir: PathBuf,
+}
 
 #[derive(Clone, Debug)]
 pub struct OpenOptions {
@@ -41,127 +53,106 @@ pub struct OpenOptions {
 }
 
 #[derive(Copy, Clone, Debug, Default)]
-pub struct FileTimes {}
+pub struct FileTimes {
+    accessed: Option<SystemTime>,
+    modified: Option<SystemTime>,
+}
 
-pub struct FilePermissions(!);
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct FilePermissions {
+    mode: u32,
+}
 
-pub struct FileType(!);
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct FileType {
+    mode: u32,
+}
 
 #[derive(Debug)]
-pub struct DirBuilder {}
+pub struct DirBuilder {
+    mode: u32,
+}
 
 impl FileAttr {
     pub fn size(&self) -> u64 {
-        self.0
+        self.stat.st_size as u64
     }
 
     pub fn perm(&self) -> FilePermissions {
-        self.0
+        FilePermissions { mode: (self.stat.st_mode as u32) }
     }
 
     pub fn file_type(&self) -> FileType {
-        self.0
+        FileType { mode: self.stat.st_mode as u32 }
     }
 
     pub fn modified(&self) -> io::Result<SystemTime> {
-        self.0
+        Ok(SystemTime::new(self.stat.st_mtime as i64, self.stat.st_mtime_nsec as i64))
     }
 
     pub fn accessed(&self) -> io::Result<SystemTime> {
-        self.0
+        Ok(SystemTime::new(self.stat.st_atime as i64, self.stat.st_atime_nsec as i64))
     }
 
     pub fn created(&self) -> io::Result<SystemTime> {
-        self.0
-    }
-}
-
-impl Clone for FileAttr {
-    fn clone(&self) -> FileAttr {
-        self.0
+        Ok(SystemTime::new(self.stat.st_birthtime as i64, self.stat.st_birthtime_nsec as i64))
     }
 }
 
 impl FilePermissions {
     pub fn readonly(&self) -> bool {
-        self.0
+        self.mode & 0o222 == 0
     }
 
-    pub fn set_readonly(&mut self, _readonly: bool) {
-        self.0
-    }
-}
-
-impl Clone for FilePermissions {
-    fn clone(&self) -> FilePermissions {
-        self.0
-    }
-}
-
-impl PartialEq for FilePermissions {
-    fn eq(&self, _other: &FilePermissions) -> bool {
-        self.0
-    }
-}
-
-impl Eq for FilePermissions {}
-
-impl fmt::Debug for FilePermissions {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0
+    pub fn set_readonly(&mut self, readonly: bool) {
+        if readonly {
+            // remove write permission for all classes; equivalent to `chmod a-w <file>`
+            self.mode &= !0o222;
+        } else {
+            // add write permission for all classes; equivalent to `chmod a+w <file>`
+            self.mode |= 0o222;
+        }
     }
 }
 
 impl FileTimes {
-    pub fn set_accessed(&mut self, _t: SystemTime) {}
-    pub fn set_modified(&mut self, _t: SystemTime) {}
+    pub fn set_accessed(&mut self, t: SystemTime) {
+        self.accessed = Some(t);
+    }
+    pub fn set_modified(&mut self, t: SystemTime) {
+        self.modified = Some(t);
+    }
 }
 
 impl FileType {
     pub fn is_dir(&self) -> bool {
-        self.0
+        self.is(S_IFDIR)
     }
-
     pub fn is_file(&self) -> bool {
-        self.0
+        self.is(S_IFREG)
     }
-
     pub fn is_symlink(&self) -> bool {
-        self.0
+        self.is(S_IFLNK)
+    }
+
+    pub fn is(&self, mode: u32) -> bool {
+        self.masked() == mode
+    }
+
+    fn masked(&self) -> u32 {
+        self.mode & S_IFMT
     }
 }
 
-impl Clone for FileType {
-    fn clone(&self) -> FileType {
-        self.0
-    }
-}
-
-impl Copy for FileType {}
-
-impl PartialEq for FileType {
-    fn eq(&self, _other: &FileType) -> bool {
-        self.0
-    }
-}
-
-impl Eq for FileType {}
-
-impl Hash for FileType {
-    fn hash<H: Hasher>(&self, _h: &mut H) {
-        self.0
-    }
-}
-
-impl fmt::Debug for FileType {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0
+impl core::hash::Hash for FileType {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.masked().hash(state);
     }
 }
 
 impl fmt::Debug for ReadDir {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.entries, f)
     }
 }
 
@@ -169,25 +160,27 @@ impl Iterator for ReadDir {
     type Item = io::Result<DirEntry>;
 
     fn next(&mut self) -> Option<io::Result<DirEntry>> {
-        self.0
+        self.entries.next().map(|d| io::Result::Ok(d))
     }
 }
 
 impl DirEntry {
     pub fn path(&self) -> PathBuf {
-        self.0
+        self.dir.as_path().join(self.name.as_path())
     }
 
     pub fn file_name(&self) -> OsString {
-        self.0
+        let mut s = OsString::new();
+        s.push(self.name.as_path());
+        s
     }
 
     pub fn metadata(&self) -> io::Result<FileAttr> {
-        self.0
+        Ok(self.attr)
     }
 
     pub fn file_type(&self) -> io::Result<FileType> {
-        self.0
+        Ok(self.attr.file_type())
     }
 }
 
@@ -290,19 +283,22 @@ impl File {
     }
 
     pub fn file_attr(&self) -> io::Result<FileAttr> {
-        Err(Error::from_raw_os_error(22))
+        let fd = self.as_raw_fd();
+        let mut stat: abi::stat = unsafe { mem::zeroed() };
+        cvt(unsafe { abi::fstat(fd, &mut stat) })?;
+        Ok(FileAttr { stat })
     }
 
     pub fn fsync(&self) -> io::Result<()> {
-        Err(Error::from_raw_os_error(22))
+        Ok(())
     }
 
     pub fn datasync(&self) -> io::Result<()> {
-        self.fsync()
+        Ok(())
     }
 
     pub fn truncate(&self, _size: u64) -> io::Result<()> {
-        Err(Error::from_raw_os_error(22))
+        unsupported()
     }
 
     pub fn read(&self, buf: &mut [u8]) -> io::Result<usize> {
@@ -340,8 +336,16 @@ impl File {
         Ok(())
     }
 
-    pub fn seek(&self, _pos: SeekFrom) -> io::Result<u64> {
-        Err(Error::from_raw_os_error(22))
+    pub fn seek(&self, pos: SeekFrom) -> io::Result<u64> {
+        let (whence, pos) = match pos {
+            // Casting to `i64` is fine, too large values will end up as
+            // negative which will cause an error in `lseek64`.
+            SeekFrom::Start(off) => (abi::SEEK_SET, off as i64),
+            SeekFrom::End(off) => (abi::SEEK_END, off),
+            SeekFrom::Current(off) => (abi::SEEK_CUR, off),
+        };
+        let n = cvt(unsafe { abi::lseek(self.as_raw_fd(), pos as isize, whence) })?;
+        Ok(n as u64)
     }
 
     pub fn duplicate(&self) -> io::Result<File> {
@@ -359,12 +363,18 @@ impl File {
 
 impl DirBuilder {
     pub fn new() -> DirBuilder {
-        DirBuilder {}
+        DirBuilder { mode: 0o777 }
     }
 
-    pub fn mkdir(&self, _p: &Path) -> io::Result<()> {
-        unsupported()
+    pub fn mkdir(&self, p: &Path) -> io::Result<()> {
+        run_path_with_cstr(p, |p| cvt(unsafe { abi::mkdir(p.as_ptr(), self.mode) }).map(|_| ()))
     }
+
+    /*
+    pub fn set_mode(&mut self, mode: u32) {
+        self.mode = mode as mode_t;
+    }
+    */
 }
 
 impl AsInner<FileDesc> for File {
@@ -430,17 +440,24 @@ pub fn rename(_old: &Path, _new: &Path) -> io::Result<()> {
     unsupported()
 }
 
-pub fn set_perm(_p: &Path, perm: FilePermissions) -> io::Result<()> {
-    match perm.0 {}
+pub fn set_perm(path: &Path, perm: FilePermissions) -> io::Result<()> {
+    run_path_with_cstr(path, |p| {
+        cvt(unsafe { abi::set_permission(p.as_ptr(), perm.mode) }).map(|_| ())
+    })
 }
 
-pub fn rmdir(_p: &Path) -> io::Result<()> {
-    unsupported()
+pub fn rmdir(p: &Path) -> io::Result<()> {
+    run_path_with_cstr(p, |p| {
+        cvt(unsafe { abi::rmdir(p.as_ptr()) })?;
+        Ok(())
+    })
 }
 
-pub fn remove_dir_all(_path: &Path) -> io::Result<()> {
-    //unsupported()
-    Ok(())
+pub fn remove_dir_all(p: &Path) -> io::Result<()> {
+    run_path_with_cstr(p, |p| {
+        cvt(unsafe { abi::rmdir(p.as_ptr()) })?;
+        Ok(())
+    })
 }
 
 pub fn readlink(_p: &Path) -> io::Result<PathBuf> {
@@ -455,12 +472,20 @@ pub fn link(_original: &Path, _link: &Path) -> io::Result<()> {
     unsupported()
 }
 
-pub fn stat(_p: &Path) -> io::Result<FileAttr> {
-    unsupported()
+pub fn stat(p: &Path) -> io::Result<FileAttr> {
+    run_path_with_cstr(p, |p| {
+        let mut stat: abi::stat = unsafe { mem::zeroed() };
+        cvt(unsafe { abi::stat(p.as_ptr(), &mut stat) })?;
+        Ok(FileAttr { stat })
+    })
 }
 
-pub fn lstat(_p: &Path) -> io::Result<FileAttr> {
-    unsupported()
+pub fn lstat(p: &Path) -> io::Result<FileAttr> {
+    run_path_with_cstr(p, |p| {
+        let mut stat: abi::stat = unsafe { mem::zeroed() };
+        cvt(unsafe { abi::lstat(p.as_ptr(), &mut stat) })?;
+        Ok(FileAttr { stat })
+    })
 }
 
 pub fn canonicalize(_p: &Path) -> io::Result<PathBuf> {
