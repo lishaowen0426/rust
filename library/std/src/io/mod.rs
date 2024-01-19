@@ -3115,7 +3115,6 @@ impl<B: BufRead> Iterator for Lines<B> {
 }
 
 use crate::fs::File;
-//#[cfg(target_os = "hermit")]
 #[allow(missing_docs)]
 #[stable(feature = "rust1", since = "1.0.0")]
 pub unsafe fn mmap(_f: &File, _ptr: *mut *mut u8) -> crate::io::Result<usize> {
