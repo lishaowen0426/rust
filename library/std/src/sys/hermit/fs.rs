@@ -15,7 +15,6 @@ use crate::sys::hermit::fd::FileDesc;
 use crate::sys::time::SystemTime;
 use crate::sys::unsupported;
 use crate::sys_common::{AsInner, AsInnerMut, FromInner, IntoInner};
-use alloc::vec::IntoIter;
 
 pub use crate::sys_common::fs::{copy, try_exists};
 //pub use crate::sys_common::fs::remove_dir_all;
@@ -29,7 +28,7 @@ pub struct FileAttr {
 }
 
 pub struct ReadDir {
-    entries: IntoIter<DirEntry>,
+    dd: i32,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -152,7 +151,7 @@ impl core::hash::Hash for FileType {
 
 impl fmt::Debug for ReadDir {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.entries, f)
+        fmt::Debug::fmt(&self.dd, f)
     }
 }
 
@@ -160,7 +159,7 @@ impl Iterator for ReadDir {
     type Item = io::Result<DirEntry>;
 
     fn next(&mut self) -> Option<io::Result<DirEntry>> {
-        self.entries.next().map(|d| io::Result::Ok(d))
+        None
     }
 }
 
@@ -428,12 +427,14 @@ impl FromRawFd for File {
     }
 }
 
-pub fn readdir(_p: &Path) -> io::Result<ReadDir> {
-    unsupported()
+pub fn readdir(path: &Path) -> io::Result<ReadDir> {
+    let dd = run_path_with_cstr(path, |path| cvt(unsafe { abi::opendir(path.as_ptr()) }))?;
+    Ok(ReadDir { dd })
 }
 
-pub fn unlink(path: &Path) -> io::Result<()> {
-    run_path_with_cstr(path, |path| cvt(unsafe { abi::unlink(path.as_ptr()) }).map(|_| ()))
+pub fn unlink(_path: &Path) -> io::Result<()> {
+    //run_path_with_cstr(path, |path| cvt(unsafe { abi::unlink(path.as_ptr()) }).map(|_| ()))
+    unsupported()
 }
 
 pub fn rename(_old: &Path, _new: &Path) -> io::Result<()> {
