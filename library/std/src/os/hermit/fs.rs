@@ -293,55 +293,56 @@ pub trait MetadataExt {
     fn attrib(&self) -> u8;
 }
 
+use crate::sys_common::AsInner;
 #[stable(feature = "metadata_ext", since = "1.1.0")]
 impl MetadataExt for fs::Metadata {
     fn dev(&self) -> u64 {
-        0
+        self.as_inner().as_inner().st_dev as u64
     }
     fn ino(&self) -> u64 {
-        0
+        self.as_inner().as_inner().st_ino as u64
     }
     fn mode(&self) -> u32 {
-        0
+        self.as_inner().as_inner().st_mode as u32
     }
     fn nlink(&self) -> u64 {
-        0
+        self.as_inner().as_inner().st_nlink as u64
     }
     fn uid(&self) -> u32 {
-        0
+        self.as_inner().as_inner().st_uid as u32
     }
     fn gid(&self) -> u32 {
-        0
+        self.as_inner().as_inner().st_gid as u32
     }
     fn rdev(&self) -> u64 {
-        0
+        self.as_inner().as_inner().st_rdev as u64
     }
     fn size(&self) -> u64 {
-        0
+        self.as_inner().as_inner().st_size as u64
     }
     fn atime(&self) -> i64 {
-        0
+        self.as_inner().as_inner().st_atime as i64
     }
     fn atime_nsec(&self) -> i64 {
-        0
+        self.as_inner().as_inner().st_atime_nsec as i64
     }
     fn mtime(&self) -> i64 {
-        0
+        self.as_inner().as_inner().st_mtime as i64
     }
     fn mtime_nsec(&self) -> i64 {
-        0
+        self.as_inner().as_inner().st_mtime_nsec as i64
     }
     fn ctime(&self) -> i64 {
-        0
+        self.as_inner().as_inner().st_ctime as i64
     }
     fn ctime_nsec(&self) -> i64 {
-        0
+        self.as_inner().as_inner().st_ctime_nsec as i64
     }
     fn blksize(&self) -> u64 {
-        0
+        self.as_inner().as_inner().st_blksize as u64
     }
     fn blocks(&self) -> u64 {
-        0
+        self.as_inner().as_inner().st_blocks as u64
     }
     #[cfg(target_os = "vxworks")]
     fn attrib(&self) -> u8 {

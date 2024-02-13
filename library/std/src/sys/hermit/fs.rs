@@ -1,20 +1,27 @@
 use crate::ffi::{CStr, OsString};
-use crate::fmt;
 use crate::io::{self, Error, ErrorKind};
 use crate::io::{BorrowedCursor, IoSlice, IoSliceMut, SeekFrom};
-use crate::mem;
 use crate::os::hermit::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, RawFd};
 use crate::path::{Path, PathBuf};
+use crate::string::String;
 use crate::sys::common::small_c_string::run_path_with_cstr;
 use crate::sys::cvt;
+#[allow(unused_imports)]
 use crate::sys::hermit::abi::{
-    self, O_APPEND, O_CREAT, O_EXCL, O_RDONLY, O_RDWR, O_TRUNC, O_WRONLY, S_IFDIR, S_IFLNK, S_IFMT,
-    S_IFREG,
+    self, dirent,
+    littlefs::{
+        LF_BLK, LF_CHAR, LF_DIR, LF_FIFO, LF_FILE, LF_RDONLY, LF_SOCKET_DGRAM, LF_SOCKET_STREAM,
+        LF_SYMLINK,
+    },
+    DirectoryEntry, O_APPEND, O_CREAT, O_EXCL, O_RDONLY, O_RDWR, O_TRUNC, O_WRONLY, S_IFDIR,
+    S_IFLNK, S_IFMT, S_IFREG,
 };
 use crate::sys::hermit::fd::FileDesc;
 use crate::sys::time::SystemTime;
 use crate::sys::unsupported;
 use crate::sys_common::{AsInner, AsInnerMut, FromInner, IntoInner};
+use crate::vec::Vec;
+use crate::{mem, ptr};
 
 pub use crate::sys_common::fs::{copy, try_exists};
 //pub use crate::sys_common::fs::remove_dir_all;
@@ -23,19 +30,36 @@ pub use crate::sys_common::fs::{copy, try_exists};
 pub struct File(FileDesc);
 
 #[derive(Copy, Clone, Debug, Default)]
+#[repr(transparent)]
 pub struct FileAttr {
     stat: abi::stat,
 }
 
-pub struct ReadDir {
-    dd: i32,
+impl AsInner<abi::stat> for FileAttr {
+    #[inline]
+    fn as_inner(&self) -> &abi::stat {
+        &self.stat
+    }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
+pub struct ReadDir {
+    dd: i32,
+    end_of_stream: bool,
+}
+
+#[derive(Clone, Debug)]
+#[allow(dead_code)]
+struct dirent_min {
+    d_ino: u64,
+    d_type: u32,
+}
+
+#[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct DirEntry {
-    name: PathBuf,
-    attr: FileAttr,
-    dir: PathBuf,
+    ent: dirent_min,
+    name: crate::ffi::CString,
 }
 
 #[derive(Clone, Debug)]
@@ -149,37 +173,72 @@ impl core::hash::Hash for FileType {
     }
 }
 
-impl fmt::Debug for ReadDir {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.dd, f)
-    }
-}
-
 impl Iterator for ReadDir {
     type Item = io::Result<DirEntry>;
 
     fn next(&mut self) -> Option<io::Result<DirEntry>> {
-        None
+        unsafe {
+            if self.end_of_stream {
+                return None;
+            }
+
+            loop {
+                if let DirectoryEntry::Valid(entry_ptr) = abi::readdir(self.dd) {
+                    macro_rules! offset_ptr {
+                        ($entry_ptr:expr, $field:ident) => {{
+                            const OFFSET: isize = mem::offset_of!(dirent, $field) as isize;
+                            if true {
+                                // Cast to the same type determined by the else branch.
+                                $entry_ptr.byte_offset(OFFSET).cast::<_>()
+                            } else {
+                                #[allow(deref_nullptr)]
+                                {
+                                    ptr::addr_of!((*ptr::null::<dirent>()).$field)
+                                }
+                            }
+                        }};
+                    }
+                    if entry_ptr.is_null() {
+                        self.end_of_stream = true;
+                        return None;
+                    }
+                    let name = CStr::from_ptr(offset_ptr!(entry_ptr, d_name).cast());
+                    let name_bytes = name.to_bytes();
+                    if name_bytes == b"." || name_bytes == b".." {
+                        continue;
+                    }
+                    let entry = dirent_min {
+                        d_ino: *offset_ptr!(entry_ptr, d_ino) as u64,
+                        d_type: *offset_ptr!(entry_ptr, d_type) as u32,
+                    };
+                    return Some(Ok(DirEntry { ent: entry, name: name.to_owned() }));
+                } else {
+                    self.end_of_stream = true;
+                    return None;
+                }
+            }
+        }
     }
 }
 
 impl DirEntry {
     pub fn path(&self) -> PathBuf {
-        self.dir.as_path().join(self.name.as_path())
+        unsafe {
+            let s = String::from_utf8_unchecked(Vec::from(self.name.as_bytes()));
+            PathBuf::from(s)
+        }
     }
 
     pub fn file_name(&self) -> OsString {
-        let mut s = OsString::new();
-        s.push(self.name.as_path());
-        s
+        unsafe { OsString::from_encoded_bytes_unchecked(Vec::from(self.name.as_bytes())) }
     }
 
     pub fn metadata(&self) -> io::Result<FileAttr> {
-        Ok(self.attr)
+        unsupported()
     }
 
     pub fn file_type(&self) -> io::Result<FileType> {
-        Ok(self.attr.file_type())
+        unsupported()
     }
 }
 
@@ -429,7 +488,7 @@ impl FromRawFd for File {
 
 pub fn readdir(path: &Path) -> io::Result<ReadDir> {
     let dd = run_path_with_cstr(path, |path| cvt(unsafe { abi::opendir(path.as_ptr()) }))?;
-    Ok(ReadDir { dd })
+    Ok(ReadDir { dd, end_of_stream: false })
 }
 
 pub fn unlink(_path: &Path) -> io::Result<()> {
