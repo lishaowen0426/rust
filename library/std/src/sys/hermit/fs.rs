@@ -46,6 +46,7 @@ impl AsInner<abi::stat> for FileAttr {
 pub struct ReadDir {
     dd: i32,
     end_of_stream: bool,
+    base: PathBuf,
 }
 
 #[derive(Clone, Debug)]
@@ -59,7 +60,8 @@ struct dirent_min {
 #[allow(dead_code)]
 pub struct DirEntry {
     ent: dirent_min,
-    name: crate::ffi::CString,
+    //name: crate::ffi::CString,
+    path: PathBuf,
 }
 
 #[derive(Clone, Debug)]
@@ -211,7 +213,12 @@ impl Iterator for ReadDir {
                         d_ino: *offset_ptr!(entry_ptr, d_ino) as u64,
                         d_type: *offset_ptr!(entry_ptr, d_type) as u32,
                     };
-                    return Some(Ok(DirEntry { ent: entry, name: name.to_owned() }));
+
+                    let mut path = PathBuf::new();
+                    path.push(self.base.as_path());
+                    let s = PathBuf::from(String::from_utf8_unchecked(Vec::from(name_bytes)));
+                    path.push(s.as_path());
+                    return Some(Ok(DirEntry { ent: entry, path }));
                 } else {
                     self.end_of_stream = true;
                     return None;
@@ -223,22 +230,23 @@ impl Iterator for ReadDir {
 
 impl DirEntry {
     pub fn path(&self) -> PathBuf {
-        unsafe {
-            let s = String::from_utf8_unchecked(Vec::from(self.name.as_bytes()));
-            PathBuf::from(s)
-        }
+        self.path.clone()
     }
 
     pub fn file_name(&self) -> OsString {
-        unsafe { OsString::from_encoded_bytes_unchecked(Vec::from(self.name.as_bytes())) }
+        self.path.file_name().unwrap().to_os_string()
     }
 
     pub fn metadata(&self) -> io::Result<FileAttr> {
-        unsupported()
+        run_path_with_cstr(self.path().as_path(), |p| {
+            let mut stat: abi::stat = unsafe { mem::zeroed() };
+            cvt(unsafe { abi::stat(p.as_ptr(), &mut stat) })?;
+            Ok(FileAttr { stat })
+        })
     }
 
     pub fn file_type(&self) -> io::Result<FileType> {
-        unsupported()
+        Ok(FileType { mode: self.ent.d_type << 12 })
     }
 }
 
@@ -488,7 +496,7 @@ impl FromRawFd for File {
 
 pub fn readdir(path: &Path) -> io::Result<ReadDir> {
     let dd = run_path_with_cstr(path, |path| cvt(unsafe { abi::opendir(path.as_ptr()) }))?;
-    Ok(ReadDir { dd, end_of_stream: false })
+    Ok(ReadDir { dd, end_of_stream: false, base: path.to_path_buf() })
 }
 
 pub fn unlink(_path: &Path) -> io::Result<()> {
