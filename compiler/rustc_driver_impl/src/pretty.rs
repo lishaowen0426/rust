@@ -243,6 +243,7 @@ impl<'tcx> PrintExtra<'tcx> {
 
 pub fn print<'tcx>(sess: &Session, ppm: PpMode, ex: PrintExtra<'tcx>) {
     if ppm.needs_analysis() {
+        trace!("pretty printing needs analysis");
         if ex.tcx().analysis(()).is_err() {
             FatalError.raise();
         }
@@ -358,6 +359,7 @@ pub fn print<'tcx>(sess: &Session, ppm: PpMode, ex: PrintExtra<'tcx>) {
             out
         }
     };
+
 
     write_or_print(&out, sess);
 }

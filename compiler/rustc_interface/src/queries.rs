@@ -164,6 +164,7 @@ impl<'tcx> Queries<'tcx> {
                 let feed = tcx.feed_local_crate();
                 feed.crate_name(crate_name);
 
+
                 let feed = tcx.feed_unit_query();
                 feed.features_query(tcx.arena.alloc(rustc_expand::config::features(
                     sess,

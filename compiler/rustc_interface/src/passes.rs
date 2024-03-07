@@ -649,6 +649,11 @@ pub fn create_global_ctxt<'tcx>(
 
     let sess = &compiler.sess;
     let query_result_on_disk_cache = rustc_incremental::load_query_result_cache(sess);
+    if query_result_on_disk_cache.is_some(){
+        trace!("enable incremental compilation");
+    }else{
+        trace!("disable incremental compilation");
+    }
 
     let codegen_backend = &compiler.codegen_backend;
     let mut providers = *DEFAULT_QUERY_PROVIDERS;
@@ -659,6 +664,11 @@ pub fn create_global_ctxt<'tcx>(
     }
 
     let incremental = dep_graph.is_fully_enabled();
+    if incremental {
+        trace!("the full dep_graph will be built");
+    }else{
+        trace!("the full dep_graph will not be built");
+    }
 
     sess.time("setup_global_ctxt", || {
         gcx_cell.get_or_init(move || {

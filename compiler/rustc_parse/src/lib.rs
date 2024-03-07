@@ -58,6 +58,7 @@ macro_rules! panictry_buffer {
 }
 
 pub fn parse_crate_from_file<'a>(input: &Path, sess: &'a ParseSess) -> PResult<'a, ast::Crate> {
+    trace!("call parse_crate_from_file: {input:#?}");
     let mut parser = new_parser_from_file(sess, input, None);
     parser.parse_crate_mod()
 }

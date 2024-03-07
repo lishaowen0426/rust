@@ -421,6 +421,7 @@ fn compute_hir_hash(
 }
 
 pub fn lower_to_hir(tcx: TyCtxt<'_>, (): ()) -> hir::Crate<'_> {
+    trace!("enter lower to hir");
     let sess = tcx.sess;
     // Queries that borrow `resolver_for_lowering`.
     tcx.ensure_with_value().output_filenames(());
