@@ -2005,6 +2005,8 @@ written to standard error output)"),
         "whether to build a wasi command or reactor"),
     write_long_types_to_disk: bool = (true, parse_bool, [UNTRACKED],
         "whether long type names should be written to files instead of being printed in errors"),
+    trace_enable: bool = (false, parse_bool, [TRACKED],
+        "trace rustc dev"),
     // tidy-alphabetical-end
 
     // If you add a new option, please update:

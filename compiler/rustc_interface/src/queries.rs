@@ -106,6 +106,7 @@ impl<'tcx> Queries<'tcx> {
         if let Some(gcx) = self.gcx_cell.get() { gcx.finish() } else { Ok(0) }
     }
 
+    #[instrument(level="trace", skip(self))]
     pub fn parse(&self) -> Result<QueryResult<'_, ast::Crate>> {
         self.parse.compute(|| {
             passes::parse(&self.compiler.sess).map_err(|parse_error| parse_error.emit())
@@ -163,7 +164,6 @@ impl<'tcx> Queries<'tcx> {
             qcx.enter(|tcx| {
                 let feed = tcx.feed_local_crate();
                 feed.crate_name(crate_name);
-
 
                 let feed = tcx.feed_unit_query();
                 feed.features_query(tcx.arena.alloc(rustc_expand::config::features(

@@ -649,9 +649,9 @@ pub fn create_global_ctxt<'tcx>(
 
     let sess = &compiler.sess;
     let query_result_on_disk_cache = rustc_incremental::load_query_result_cache(sess);
-    if query_result_on_disk_cache.is_some(){
+    if query_result_on_disk_cache.is_some() {
         trace!("enable incremental compilation");
-    }else{
+    } else {
         trace!("disable incremental compilation");
     }
 
@@ -666,7 +666,7 @@ pub fn create_global_ctxt<'tcx>(
     let incremental = dep_graph.is_fully_enabled();
     if incremental {
         trace!("the full dep_graph will be built");
-    }else{
+    } else {
         trace!("the full dep_graph will not be built");
     }
 
@@ -695,6 +695,7 @@ pub fn create_global_ctxt<'tcx>(
 
 /// Runs the type-checking, region checking and other miscellaneous analysis
 /// passes on the crate.
+#[instrument(level="debug", skip(tcx))]
 fn analysis(tcx: TyCtxt<'_>, (): ()) -> Result<()> {
     rustc_passes::hir_id_validator::check_crate(tcx);
 
@@ -738,6 +739,13 @@ fn analysis(tcx: TyCtxt<'_>, (): ()) -> Result<()> {
 
     // passes are timed inside typeck
     rustc_hir_analysis::check_crate(tcx)?;
+
+    if sess.opts.unstable_opts.trace_enable{
+        tcx.hir().for_each_module(|_module|{
+
+        })
+
+    }
 
     sess.time("MIR_borrow_checking", || {
         tcx.hir().par_body_owners(|def_id| {

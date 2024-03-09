@@ -419,9 +419,8 @@ fn compute_hir_hash(
         stable_hasher.finish()
     })
 }
-
+#[instrument(level="debug", skip(tcx))]
 pub fn lower_to_hir(tcx: TyCtxt<'_>, (): ()) -> hir::Crate<'_> {
-    trace!("enter lower to hir");
     let sess = tcx.sess;
     // Queries that borrow `resolver_for_lowering`.
     tcx.ensure_with_value().output_filenames(());
@@ -675,7 +674,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
     /// actually used in the HIR, as that would trigger an assertion in the
     /// `HirIdValidator` later on, which makes sure that all `NodeId`s got mapped
     /// properly. Calling the method twice with the same `NodeId` is fine though.
-    #[instrument(level = "debug", skip(self), ret)]
+    #[instrument(level = "trace", skip(self), ret)]
     fn lower_node_id(&mut self, ast_node_id: NodeId) -> hir::HirId {
         assert_ne!(ast_node_id, DUMMY_NODE_ID);
 
@@ -707,7 +706,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
     }
 
     /// Generate a new `HirId` without a backing `NodeId`.
-    #[instrument(level = "debug", skip(self), ret)]
+    #[instrument(level = "trace", skip(self), ret)]
     fn next_id(&mut self) -> hir::HirId {
         let owner = self.current_hir_id_owner;
         let local_id = self.item_local_id_counter;

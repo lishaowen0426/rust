@@ -69,7 +69,7 @@ pub(super) fn index_hir<'hir>(
 }
 
 impl<'a, 'hir> NodeCollector<'a, 'hir> {
-    #[instrument(level = "debug", skip(self))]
+    #[instrument(level = "trace", skip(self))]
     fn insert(&mut self, span: Span, hir_id: HirId, node: Node<'hir>) {
         debug_assert_eq!(self.owner, hir_id.owner);
         debug_assert_ne!(hir_id.local_id.as_u32(), 0);

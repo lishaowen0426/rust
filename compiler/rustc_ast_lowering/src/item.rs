@@ -65,6 +65,7 @@ impl<'a, 'hir> ItemLowerer<'a, 'hir> {
         }
     }
 
+    #[instrument(level = "debug", skip(self))]
     pub(super) fn lower_node(&mut self, def_id: LocalDefId) -> hir::MaybeOwner<'hir> {
         let owner = self.owners.ensure_contains_elem(def_id, || hir::MaybeOwner::Phantom);
         if let hir::MaybeOwner::Phantom = owner {
