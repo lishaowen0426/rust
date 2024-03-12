@@ -15,6 +15,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     ) -> BlockAnd<()> {
         let Block { region_scope, span, ref stmts, expr, targeted_by_break, safety_mode } =
             self.thir[ast_block];
+
         self.in_scope((region_scope, source_info), LintLevel::Inherited, move |this| {
             if targeted_by_break {
                 this.in_breakable_scope(None, destination, span, |this| {
@@ -41,7 +42,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             }
         })
     }
-
+    #[instrument(level="debug", skip(self))]
     fn ast_block_stmts(
         &mut self,
         destination: Place<'tcx>,

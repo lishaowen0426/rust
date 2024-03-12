@@ -45,7 +45,7 @@ pub(super) fn predicates_of(tcx: TyCtxt<'_>, def_id: DefId) -> ty::GenericPredic
                 span,
             ))));
     }
-    debug!("predicates_of(def_id={:?}) = {:?}", def_id, result);
+    //debug!("predicates_of(def_id={:?}) = {:?}", def_id, result);
     result
 }
 

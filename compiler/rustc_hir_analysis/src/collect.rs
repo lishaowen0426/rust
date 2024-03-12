@@ -22,7 +22,7 @@ use rustc_hir as hir;
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LocalDefId, LocalModDefId};
 use rustc_hir::intravisit::{self, Visitor};
-use rustc_hir::{GenericParamKind, Node};
+use rustc_hir::{GenericParamKind, Node, ExprKind};
 use rustc_infer::infer::{InferCtxt, TyCtxtInferExt};
 use rustc_infer::traits::ObligationCause;
 use rustc_middle::hir::nested_filter;
@@ -58,6 +58,11 @@ fn collect_mod_item_types(tcx: TyCtxt<'_>, module_def_id: LocalModDefId) {
     tcx.hir().visit_item_likes_in_module(module_def_id, &mut CollectItemTypesVisitor { tcx });
 }
 
+//#[instrument(level="trace", skip(tcx))]
+fn collect_mod_unsafe_blocks(tcx: TyCtxt<'_>, module_def_id: LocalModDefId) {
+    tcx.hir().visit_item_likes_in_module(module_def_id, &mut CollectUnsafeBlocksVisitor { tcx });
+}
+
 pub fn provide(providers: &mut Providers) {
     resolve_bound_vars::provide(providers);
     *providers = Providers {
@@ -85,6 +90,7 @@ pub fn provide(providers: &mut Providers) {
         collect_mod_item_types,
         is_type_alias_impl_trait,
         find_field,
+        collect_mod_unsafe_blocks,
         ..*providers
     };
 }
@@ -327,6 +333,36 @@ impl<'tcx> Visitor<'tcx> for CollectItemTypesVisitor<'tcx> {
         intravisit::walk_impl_item(self, impl_item);
     }
 }
+
+
+
+struct CollectUnsafeBlocksVisitor<'tcx> {
+    tcx: TyCtxt<'tcx>,
+}
+
+impl<'tcx> Visitor<'tcx> for CollectUnsafeBlocksVisitor<'tcx>{
+    type NestedFilter = nested_filter::OnlyBodies;
+
+    fn nested_visit_map(&mut self) -> Self::Map {
+        self.tcx.hir()
+    }
+    
+
+    #[instrument(level="trace", skip(self))]
+    fn visit_expr(&mut self, expr: &'tcx hir::Expr<'tcx>) {
+        match expr.kind{
+            ExprKind::Block(blk, _) => {
+                if let hir::BlockCheckMode::UnsafeBlock(hir::UnsafeSource::UserProvided) = blk.rules{
+                    debug!("found user-provided unsafe block: {:?}", expr.hir_id);
+                }
+            }
+            _ => (),
+
+        }
+        intravisit::walk_expr(self, expr);
+    }
+
+} 
 
 ///////////////////////////////////////////////////////////////////////////
 // Utility types and common code for the above passes.
@@ -1635,16 +1671,18 @@ fn early_bound_lifetimes_from_generics<'a, 'tcx: 'a>(
 /// Returns a list of type predicates for the definition with ID `def_id`, including inferred
 /// lifetime constraints. This includes all predicates returned by `explicit_predicates_of`, plus
 /// inferred constraints concerning which regions outlive other regions.
-#[instrument(level = "debug", skip(tcx))]
+//#[instrument(level = "debug", skip(tcx))]
 fn predicates_defined_on(tcx: TyCtxt<'_>, def_id: DefId) -> ty::GenericPredicates<'_> {
     let mut result = tcx.explicit_predicates_of(def_id);
-    debug!("predicates_defined_on: explicit_predicates_of({:?}) = {:?}", def_id, result);
+    //debug!("predicates_defined_on: explicit_predicates_of({:?}) = {:?}", def_id, result);
     let inferred_outlives = tcx.inferred_outlives_of(def_id);
     if !inferred_outlives.is_empty() {
+        /* 
         debug!(
             "predicates_defined_on: inferred_outlives_of({:?}) = {:?}",
             def_id, inferred_outlives,
         );
+        */
         let inferred_outlives_iter =
             inferred_outlives.iter().map(|(clause, span)| ((*clause).to_predicate(tcx), *span));
         if result.predicates.is_empty() {
@@ -1656,7 +1694,7 @@ fn predicates_defined_on(tcx: TyCtxt<'_>, def_id: DefId) -> ty::GenericPredicate
         }
     }
 
-    debug!("predicates_defined_on({:?}) = {:?}", def_id, result);
+    //debug!("predicates_defined_on({:?}) = {:?}", def_id, result);
     result
 }
 

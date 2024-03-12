@@ -450,6 +450,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
     ///  Start a breakable scope, which tracks where `continue`, `break` and
     ///  `return` should branch to.
+    #[instrument(level="debug", skip(self, f))]
     pub(crate) fn in_breakable_scope<F>(
         &mut self,
         loop_block: Option<BasicBlock>,
@@ -461,6 +462,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         F: FnOnce(&mut Builder<'a, 'tcx>) -> Option<BlockAnd<()>>,
     {
         let region_scope = self.scopes.topmost();
+        debug!("topmost scope: {region_scope:#?}");
         let scope = BreakableScope {
             region_scope,
             break_destination,
@@ -468,7 +470,11 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             continue_drops: loop_block.map(|_| DropTree::new()),
         };
         self.scopes.breakable_scopes.push(scope);
+
+
         let normal_exit_block = f(self);
+
+
         let breakable_scope = self.scopes.breakable_scopes.pop().unwrap();
         assert!(breakable_scope.region_scope == region_scope);
         let break_block =
@@ -539,7 +545,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
     /// Convenience wrapper that pushes a scope and then executes `f`
     /// to build its contents, popping the scope afterwards.
-    #[instrument(skip(self, f), level = "debug")]
+    #[instrument(skip(self, f), level = "trace")]
     pub(crate) fn in_scope<F, R>(
         &mut self,
         region_scope: (region::Scope, SourceInfo),
