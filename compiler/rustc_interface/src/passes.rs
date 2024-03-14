@@ -693,10 +693,9 @@ pub fn create_global_ctxt<'tcx>(
     })
 }
 
-
 /// Runs the type-checking, region checking and other miscellaneous analysis
 /// passes on the crate.
-#[instrument(level="debug", skip(tcx))]
+#[instrument(level = "debug", skip(tcx))]
 fn analysis(tcx: TyCtxt<'_>, (): ()) -> Result<()> {
     rustc_passes::hir_id_validator::check_crate(tcx);
 
@@ -741,14 +740,13 @@ fn analysis(tcx: TyCtxt<'_>, (): ()) -> Result<()> {
     // passes are timed inside typeck
     rustc_hir_analysis::check_crate(tcx)?;
 
-    if sess.opts.unstable_opts.trace_enable{
+    if sess.opts.unstable_opts.trace_enable {
         debug!("trace enable");
-        tcx.hir().for_each_module(|module|{
+        tcx.hir().for_each_module(|module| {
             debug!("local mod def id {module:#?}");
             tcx.ensure().collect_mod_unsafe_blocks(module);
-
         })
-    }else{
+    } else {
         debug!("trace disable");
     }
 

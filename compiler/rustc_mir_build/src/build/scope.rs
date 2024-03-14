@@ -450,7 +450,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
     ///  Start a breakable scope, which tracks where `continue`, `break` and
     ///  `return` should branch to.
-    #[instrument(level="debug", skip(self, f))]
+    #[instrument(level = "debug", skip(self, f))]
     pub(crate) fn in_breakable_scope<F>(
         &mut self,
         loop_block: Option<BasicBlock>,
@@ -471,9 +471,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         };
         self.scopes.breakable_scopes.push(scope);
 
-
         let normal_exit_block = f(self);
-
 
         let breakable_scope = self.scopes.breakable_scopes.pop().unwrap();
         assert!(breakable_scope.region_scope == region_scope);

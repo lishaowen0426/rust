@@ -106,7 +106,7 @@ impl<'tcx> Queries<'tcx> {
         if let Some(gcx) = self.gcx_cell.get() { gcx.finish() } else { Ok(0) }
     }
 
-    #[instrument(level="trace", skip(self))]
+    #[instrument(level = "trace", skip(self))]
     pub fn parse(&self) -> Result<QueryResult<'_, ast::Crate>> {
         self.parse.compute(|| {
             passes::parse(&self.compiler.sess).map_err(|parse_error| parse_error.emit())

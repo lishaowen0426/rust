@@ -22,7 +22,7 @@ use rustc_hir as hir;
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LocalDefId, LocalModDefId};
 use rustc_hir::intravisit::{self, Visitor};
-use rustc_hir::{GenericParamKind, Node, ExprKind};
+use rustc_hir::{ExprKind, GenericParamKind, Node};
 use rustc_infer::infer::{InferCtxt, TyCtxtInferExt};
 use rustc_infer::traits::ObligationCause;
 use rustc_middle::hir::nested_filter;
@@ -334,35 +334,31 @@ impl<'tcx> Visitor<'tcx> for CollectItemTypesVisitor<'tcx> {
     }
 }
 
-
-
 struct CollectUnsafeBlocksVisitor<'tcx> {
     tcx: TyCtxt<'tcx>,
 }
 
-impl<'tcx> Visitor<'tcx> for CollectUnsafeBlocksVisitor<'tcx>{
+impl<'tcx> Visitor<'tcx> for CollectUnsafeBlocksVisitor<'tcx> {
     type NestedFilter = nested_filter::OnlyBodies;
 
     fn nested_visit_map(&mut self) -> Self::Map {
         self.tcx.hir()
     }
-    
 
-    #[instrument(level="trace", skip(self))]
+    #[instrument(level = "trace", skip(self))]
     fn visit_expr(&mut self, expr: &'tcx hir::Expr<'tcx>) {
-        match expr.kind{
+        match expr.kind {
             ExprKind::Block(blk, _) => {
-                if let hir::BlockCheckMode::UnsafeBlock(hir::UnsafeSource::UserProvided) = blk.rules{
+                if let hir::BlockCheckMode::UnsafeBlock(hir::UnsafeSource::UserProvided) = blk.rules
+                {
                     debug!("found user-provided unsafe block: {:?}", expr.hir_id);
                 }
             }
             _ => (),
-
         }
         intravisit::walk_expr(self, expr);
     }
-
-} 
+}
 
 ///////////////////////////////////////////////////////////////////////////
 // Utility types and common code for the above passes.
@@ -1677,7 +1673,7 @@ fn predicates_defined_on(tcx: TyCtxt<'_>, def_id: DefId) -> ty::GenericPredicate
     //debug!("predicates_defined_on: explicit_predicates_of({:?}) = {:?}", def_id, result);
     let inferred_outlives = tcx.inferred_outlives_of(def_id);
     if !inferred_outlives.is_empty() {
-        /* 
+        /*
         debug!(
             "predicates_defined_on: inferred_outlives_of({:?}) = {:?}",
             def_id, inferred_outlives,

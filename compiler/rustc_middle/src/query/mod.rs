@@ -2252,7 +2252,7 @@ rustc_queries! {
         eval_always
         desc { |tcx| "collecting unsafe blocks in {}", describe_as_module(key, tcx) }
     }
-    
+
 }
 
 rustc_query_append! { define_callbacks! }

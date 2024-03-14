@@ -1276,9 +1276,6 @@ pub struct BasicBlockData<'tcx> {
     /// generated (particularly for MSVC cleanup). Unwind blocks must
     /// only branch to other unwind blocks.
     pub is_cleanup: bool,
-
-
-
 }
 
 impl<'tcx> BasicBlockData<'tcx> {

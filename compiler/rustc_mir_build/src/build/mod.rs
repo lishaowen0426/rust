@@ -54,9 +54,9 @@ pub(crate) fn closure_saved_names_of_captured_variables<'tcx>(
 }
 
 /// Construct the MIR for a given `DefId`.
-#[instrument(level="debug", skip(tcx))]
+#[instrument(level = "debug", skip(tcx))]
 fn mir_build<'tcx>(tcx: TyCtxt<'tcx>, def: LocalDefId) -> Body<'tcx> {
-    debug!("build mir for def: {}",tcx.def_path_str(def));
+    debug!("build mir for def: {}", tcx.def_path_str(def));
     tcx.ensure_with_value().thir_abstract_const(def);
     if let Err(e) = tcx.check_match(def) {
         return construct_error(tcx, def, e);
@@ -452,7 +452,7 @@ macro_rules! unpack {
 ///////////////////////////////////////////////////////////////////////////
 /// the main entry point for building MIR for a function
 
-#[instrument(level="debug", skip(tcx, thir))]
+#[instrument(level = "debug", skip(tcx, thir))]
 fn construct_fn<'tcx>(
     tcx: TyCtxt<'tcx>,
     fn_def: LocalDefId,
