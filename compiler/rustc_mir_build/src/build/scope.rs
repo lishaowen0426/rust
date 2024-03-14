@@ -413,7 +413,7 @@ impl<'tcx> Scopes<'tcx> {
     }
 
     fn push_scope(&mut self, region_scope: (region::Scope, SourceInfo), vis_scope: SourceScope) {
-        debug!("push_scope({:?})", region_scope);
+        //debug!("push_scope({:?})", region_scope);
         self.scopes.push(Scope {
             source_scope: vis_scope,
             region_scope: region_scope.0,
@@ -545,7 +545,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
     /// Convenience wrapper that pushes a scope and then executes `f`
     /// to build its contents, popping the scope afterwards.
-    #[instrument(skip(self, f), level = "trace")]
+    #[instrument(skip(self, f), level = "debug")]
     pub(crate) fn in_scope<F, R>(
         &mut self,
         region_scope: (region::Scope, SourceInfo),
@@ -557,7 +557,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     {
         let source_scope = self.source_scope;
         if let LintLevel::Explicit(current_hir_id) = lint_level {
-            let parent_id =
+            let parent_id: HirId =
                 self.source_scopes[source_scope].local_data.as_ref().assert_crate_local().lint_root;
             self.maybe_new_source_scope(region_scope.1.span, None, current_hir_id, parent_id);
         }

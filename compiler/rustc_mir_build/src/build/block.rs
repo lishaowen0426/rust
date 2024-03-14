@@ -6,6 +6,7 @@ use rustc_middle::{mir::*, ty};
 use rustc_span::Span;
 
 impl<'a, 'tcx> Builder<'a, 'tcx> {
+    #[instrument(level="debug", skip(self))]
     pub(crate) fn ast_block(
         &mut self,
         destination: Place<'tcx>,
