@@ -27,6 +27,9 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         // just use the name `this` uniformly
         let this = self;
         let expr = &this.thir[expr_id];
+
+        debug!("expr_into_dest: {expr:?}");
+
         let expr_span = expr.span;
         let source_info = this.source_info(expr_span);
 

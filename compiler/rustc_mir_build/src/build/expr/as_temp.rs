@@ -34,6 +34,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let this = self;
 
         let expr = &this.thir[expr_id];
+        debug!("as_temp_inner: {expr:?}");
         let expr_span = expr.span;
         let source_info = this.source_info(expr_span);
         if let ExprKind::Scope { region_scope, lint_level, value } = expr.kind {

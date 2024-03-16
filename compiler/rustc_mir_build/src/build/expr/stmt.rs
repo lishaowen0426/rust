@@ -8,6 +8,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     /// Builds a block of MIR statements to evaluate the THIR `expr`.
     ///
     /// The `statement_scope` is used if a statement temporary must be dropped.
+    #[instrument(level="debug", skip(self))]
     pub(crate) fn stmt_expr(
         &mut self,
         mut block: BasicBlock,
@@ -16,6 +17,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     ) -> BlockAnd<()> {
         let this = self;
         let expr = &this.thir[expr_id];
+        debug!("stmt_expr: {expr:?}");
         let expr_span = expr.span;
         let source_info = this.source_info(expr.span);
         // Handle a number of expressions that don't need a destination at all. This
