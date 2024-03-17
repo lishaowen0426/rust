@@ -556,7 +556,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             target_block
         }
     }
-
+    #[instrument(level="debug", skip(self))]
     pub(super) fn expr_into_pattern(
         &mut self,
         mut block: BasicBlock,
@@ -719,7 +719,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     /// scope for the bindings in these patterns, if such a scope had to be
     /// created. NOTE: Declaring the bindings should always be done in their
     /// drop scope.
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self, guard, opt_match_place), level = "debug")]
     pub(crate) fn declare_bindings(
         &mut self,
         mut visibility_scope: Option<SourceScope>,

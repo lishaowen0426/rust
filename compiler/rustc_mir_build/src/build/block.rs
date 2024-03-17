@@ -268,6 +268,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
                     // Enter the remainder scope, i.e., the bindings' destruction scope.
                     this.push_scope((*remainder_scope, source_info));
+                    debug!("let stmt, remainder scope {remainder_scope:?}");
                     let_scope_stack.push(remainder_scope);
 
                     // Declare the bindings, which may create a source scope.
@@ -278,6 +279,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
                     // Evaluate the initializer, if present.
                     if let Some(init) = *initializer {
+                        debug!("ast_block_stmts -> let stmt -> no else, with initializer");
                         let initializer_span = this.thir[init].span;
                         let scope = (*init_scope, source_info);
 
@@ -295,6 +297,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                             })
                         )
                     } else {
+                        debug!("ast_block_stmts -> let stmt -> no else, no initializer");
                         let scope = (*init_scope, source_info);
                         unpack!(this.in_scope(scope, *lint_level, |this| {
                             this.declare_bindings(

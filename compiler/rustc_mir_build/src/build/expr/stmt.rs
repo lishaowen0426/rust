@@ -136,8 +136,24 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     None
                 };
 
+                //check unsafety
+                match expr.kind {
+                    ExprKind::Block { block} => {
+                        let blk = &this.thir[block];
+                        debug!("stmt_expr, check blk: {blk:?}");
+                    },
+                    _=>{}
+                }
+
+
+                //check before recursion
+                debug!("before as_temp, block is {block:?}");
+
                 let temp =
                     unpack!(block = this.as_temp(block, statement_scope, expr_id, Mutability::Not));
+
+                //check after recursion
+                debug!("after as_temp, block is {block:?}, temp is {temp:?}");
 
                 if let Some(span) = adjusted_span {
                     this.local_decls[temp].source_info.span = span;
