@@ -740,15 +740,7 @@ fn analysis(tcx: TyCtxt<'_>, (): ()) -> Result<()> {
     // passes are timed inside typeck
     rustc_hir_analysis::check_crate(tcx)?;
 
-    if sess.opts.unstable_opts.trace_enable {
-        debug!("trace enable");
-        tcx.hir().for_each_module(|module| {
-            debug!("local mod def id {module:#?}");
-            tcx.ensure().collect_mod_unsafe_blocks(module);
-        })
-    } else {
-        debug!("trace disable");
-    }
+
 
     sess.time("MIR_borrow_checking", || {
         tcx.hir().par_body_owners(|def_id| {

@@ -4,6 +4,25 @@ use super::{interpret::GlobalAlloc, *};
 ///////////////////////////////////////////////////////////////////////////
 // Statements
 
+#[derive(Debug,Clone, Copy, TyEncodable, TyDecodable, HashStable, TypeFoldable, TypeVisitable)]
+pub enum StatementSafety {
+    Safe,
+    Unsafe,
+}
+
+impl From<Safety> for StatementSafety{
+    fn from(value: Safety) -> Self {
+        match value {
+            Safety::Safe => Self::Safe,
+            _ => Self::Unsafe,
+        }
+    }
+}
+
+
+
+
+
 /// A statement in a basic block, including information about its source code.
 #[derive(Clone, TyEncodable, TyDecodable, HashStable, TypeFoldable, TypeVisitable)]
 pub struct Statement<'tcx> {
