@@ -43,6 +43,7 @@ pub fn as_constant_inner<'tcx>(
     tcx: TyCtxt<'tcx>,
 ) -> ConstOperand<'tcx> {
     let Expr { ty, temp_lifetime: _, span, ref kind } = *expr;
+    debug!(?kind);
     match *kind {
         ExprKind::Literal { lit, neg } => {
             let const_ = match lit_to_mir_constant(tcx, LitToConstInput { lit: &lit.node, ty, neg })

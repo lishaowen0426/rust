@@ -738,6 +738,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 }
                 let source_info = SourceInfo { span, scope: this.source_scope };
                 let visibility_scope = visibility_scope.unwrap();
+                debug!("declare_binding for {:?} with visibility_scope {:?}", name, this.source_scopes.get(visibility_scope));
                 this.declare_binding(
                     source_info,
                     visibility_scope,
@@ -786,7 +787,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             _ => {}
         }
     }
-
+    #[instrument(level="debug", skip(self))]
     pub(crate) fn storage_live_binding(
         &mut self,
         block: BasicBlock,

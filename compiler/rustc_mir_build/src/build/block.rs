@@ -17,6 +17,8 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let Block { region_scope, span, ref stmts, expr, targeted_by_break, safety_mode } =
             self.thir[ast_block];
 
+
+
         self.in_scope((region_scope, source_info), LintLevel::Inherited, move |this| {
             if targeted_by_break {
                 this.in_breakable_scope(None, destination, span, |this| {
@@ -85,7 +87,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let source_info = this.source_info(span);
         for stmt in stmts {
             let Stmt { ref kind } = this.thir[*stmt];
-            debug!("ast_block_stmts: {:?}", this.thir[*stmt]);
+            //debug!("ast_block_stmts: {:?}", this.thir[*stmt]);
             match kind {
                 StmtKind::Expr { scope, expr } => {
                     this.block_context.push(BlockFrame::Statement { ignores_expr_result: true });
@@ -263,12 +265,14 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     else_block: None,
                     span: _,
                 } => {
+
+                    debug!("remainder_scope: {:?}, init span: {:?}",remainder_scope, init_scope.span(this.tcx,this.region_scope_tree));
                     let ignores_expr_result = matches!(pattern.kind, PatKind::Wild);
                     this.block_context.push(BlockFrame::Statement { ignores_expr_result });
 
                     // Enter the remainder scope, i.e., the bindings' destruction scope.
                     this.push_scope((*remainder_scope, source_info));
-                    debug!("let stmt, remainder scope {remainder_scope:?}");
+                    //debug!("let stmt, remainder scope {remainder_scope:?}");
                     let_scope_stack.push(remainder_scope);
 
                     // Declare the bindings, which may create a source scope.
@@ -276,10 +280,12 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
                     let visibility_scope =
                         Some(this.new_source_scope(remainder_span, LintLevel::Inherited, None));
+                    
+                    debug!("let binding visibility_scope: {visibility_scope:?} = {:?}",this.source_scopes.get(visibility_scope.expect("visibility_scope is none")));
 
                     // Evaluate the initializer, if present.
                     if let Some(init) = *initializer {
-                        debug!("ast_block_stmts -> let stmt -> no else, with initializer");
+                        //debug!("ast_block_stmts -> let stmt -> no else, with initializer");
                         let initializer_span = this.thir[init].span;
                         let scope = (*init_scope, source_info);
 
@@ -297,7 +303,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                             })
                         )
                     } else {
-                        debug!("ast_block_stmts -> let stmt -> no else, no initializer");
+                        //debug!("ast_block_stmts -> let stmt -> no else, no initializer");
                         let scope = (*init_scope, source_info);
                         unpack!(this.in_scope(scope, *lint_level, |this| {
                             this.declare_bindings(
@@ -310,7 +316,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                             block.unit()
                         }));
 
-                        debug!("ast_block_stmts: pattern={:?}", pattern);
+                        //debug!("ast_block_stmts: pattern={:?}", pattern);
                         this.visit_primary_bindings(
                             pattern,
                             UserTypeProjections::none(),
@@ -376,7 +382,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
     /// If we are entering an unsafe block, create a new source scope
     fn update_source_scope_for_safety_mode(&mut self, span: Span, safety_mode: BlockSafety) {
-        debug!("update_source_scope_for({:?}, {:?})", span, safety_mode);
+        //debug!("update_source_scope_for({:?}, {:?})", span, safety_mode);
         let new_unsafety = match safety_mode {
             BlockSafety::Safe => return,
             BlockSafety::BuiltinUnsafe => Safety::BuiltinUnsafe,

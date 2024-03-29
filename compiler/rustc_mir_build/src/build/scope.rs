@@ -562,7 +562,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         self.push_scope(region_scope);
 
 
-
         let mut block;
         let rv = unpack!(block = f(self));
         unpack!(block = self.pop_scope(region_scope, block));
@@ -905,6 +904,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     ///
     /// When called with `DropKind::Storage`, `place` shouldn't be the return
     /// place, or a function parameter.
+    #[instrument(level="debug", skip(self))]
     pub(crate) fn schedule_drop(
         &mut self,
         span: Span,
@@ -989,6 +989,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 // Attribute scope exit drops to scope's closing brace.
                 let scope_end = self.tcx.sess.source_map().end_point(region_scope_span);
 
+                debug!("push a drop to {:?} for local {:?}", scope, local);
                 scope.drops.push(DropData {
                     source_info: SourceInfo { span: scope_end, scope: scope.source_scope },
                     local,

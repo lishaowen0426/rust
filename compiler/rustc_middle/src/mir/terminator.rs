@@ -329,6 +329,12 @@ impl<O> AssertKind<O> {
     }
 }
 
+#[derive(Debug,Clone, Copy, TyEncodable, TyDecodable, HashStable, TypeFoldable, TypeVisitable)]
+pub enum TerminatorSafety {
+    Safe,
+    Unsafe,
+}
+
 #[derive(Clone, Debug, TyEncodable, TyDecodable, HashStable, TypeFoldable, TypeVisitable)]
 pub struct Terminator<'tcx> {
     pub source_info: SourceInfo,

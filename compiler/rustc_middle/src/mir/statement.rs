@@ -19,10 +19,6 @@ impl From<Safety> for StatementSafety{
     }
 }
 
-
-
-
-
 /// A statement in a basic block, including information about its source code.
 #[derive(Clone, TyEncodable, TyDecodable, HashStable, TypeFoldable, TypeVisitable)]
 pub struct Statement<'tcx> {
