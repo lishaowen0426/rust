@@ -543,7 +543,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
     /// Convenience wrapper that pushes a scope and then executes `f`
     /// to build its contents, popping the scope afterwards.
-    #[instrument(skip(self, f), level = "debug")]
+    //#[instrument(skip(self, f), level = "debug")]
     pub(crate) fn in_scope<F, R>(
         &mut self,
         region_scope: (region::Scope, SourceInfo),
@@ -586,7 +586,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         region_scope: (region::Scope, SourceInfo),
         mut block: BasicBlock,
     ) -> BlockAnd<()> {
-        debug!("pop_scope({:?}, {:?})", region_scope, block);
+        //debug!("pop_scope({:?}, {:?})", region_scope, block);
 
         block = self.leave_top_scope(block);
 

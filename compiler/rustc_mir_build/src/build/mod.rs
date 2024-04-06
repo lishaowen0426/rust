@@ -911,6 +911,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             .collect();
     }
 
+    #[instrument(level="debug", skip(self))]
     fn args_and_body(
         &mut self,
         mut block: BasicBlock,
@@ -941,6 +942,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         }
 
         self.insert_upvar_arg();
+        debug!("upvars:{:?}",self.upvars);
 
         let mut scope = None;
         // Bind the argument patterns

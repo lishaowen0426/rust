@@ -6,6 +6,7 @@
 use super::{BasicBlock, Const, Local, UserTypeProjection};
 
 use crate::mir::coverage::CoverageKind;
+use crate::mir::Safety;
 use crate::traits::Reveal;
 use crate::ty::adjustment::PointerCoercion;
 use crate::ty::GenericArgsRef;
@@ -923,6 +924,7 @@ pub enum InlineAsmOperand<'tcx> {
 /// Type for MIR `Assert` terminator error messages.
 pub type AssertMessage<'tcx> = AssertKind<Operand<'tcx>>;
 
+
 ///////////////////////////////////////////////////////////////////////////
 // Places
 
@@ -1008,7 +1010,10 @@ pub struct Place<'tcx> {
 
     /// projection out of a place (access a field, deref a pointer, etc)
     pub projection: &'tcx List<PlaceElem<'tcx>>,
+
+
 }
+
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[derive(TyEncodable, TyDecodable, HashStable, TypeFoldable, TypeVisitable)]

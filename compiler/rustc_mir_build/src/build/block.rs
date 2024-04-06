@@ -266,7 +266,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     span: _,
                 } => {
 
-                    debug!("remainder_scope: {:?}, init span: {:?}",remainder_scope, init_scope.span(this.tcx,this.region_scope_tree));
+                    //debug!("remainder_scope: {:?}, init span: {:?}",remainder_scope, init_scope.span(this.tcx,this.region_scope_tree));
                     let ignores_expr_result = matches!(pattern.kind, PatKind::Wild);
                     this.block_context.push(BlockFrame::Statement { ignores_expr_result });
 
@@ -281,7 +281,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     let visibility_scope =
                         Some(this.new_source_scope(remainder_span, LintLevel::Inherited, None));
                     
-                    debug!("let binding visibility_scope: {visibility_scope:?} = {:?}",this.source_scopes.get(visibility_scope.expect("visibility_scope is none")));
+                    //debug!("let binding visibility_scope: {visibility_scope:?} = {:?}",this.source_scopes.get(visibility_scope.expect("visibility_scope is none")));
 
                     // Evaluate the initializer, if present.
                     if let Some(init) = *initializer {
