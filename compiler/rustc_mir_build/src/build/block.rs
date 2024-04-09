@@ -17,7 +17,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let Block { region_scope, span, ref stmts, expr, targeted_by_break, safety_mode } =
             self.thir[ast_block];
 
-
+        debug!(?safety_mode);
 
         self.in_scope((region_scope, source_info), LintLevel::Inherited, move |this| {
             if targeted_by_break {
@@ -85,6 +85,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         this.update_source_scope_for_safety_mode(span, safety_mode);
 
         let source_info = this.source_info(span);
+        debug!(?this.in_scope_unsafe);
         for stmt in stmts {
             let Stmt { ref kind } = this.thir[*stmt];
             //debug!("ast_block_stmts: {:?}", this.thir[*stmt]);
@@ -265,7 +266,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     else_block: None,
                     span: _,
                 } => {
-
                     //debug!("remainder_scope: {:?}, init span: {:?}",remainder_scope, init_scope.span(this.tcx,this.region_scope_tree));
                     let ignores_expr_result = matches!(pattern.kind, PatKind::Wild);
                     this.block_context.push(BlockFrame::Statement { ignores_expr_result });
@@ -280,7 +280,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
                     let visibility_scope =
                         Some(this.new_source_scope(remainder_span, LintLevel::Inherited, None));
-                    
+
                     //debug!("let binding visibility_scope: {visibility_scope:?} = {:?}",this.source_scopes.get(visibility_scope.expect("visibility_scope is none")));
 
                     // Evaluate the initializer, if present.
@@ -377,6 +377,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         // Restore the original source scope.
         this.source_scope = outer_source_scope;
         this.in_scope_unsafe = outer_in_scope_unsafe;
+        this.cfg.in_scope_unsafe = outer_in_scope_unsafe;
         block.unit()
     }
 
@@ -388,6 +389,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             BlockSafety::BuiltinUnsafe => Safety::BuiltinUnsafe,
             BlockSafety::ExplicitUnsafe(hir_id) => {
                 self.in_scope_unsafe = Safety::ExplicitUnsafe(hir_id);
+                self.cfg.in_scope_unsafe = Safety::ExplicitUnsafe(hir_id);
                 Safety::ExplicitUnsafe(hir_id)
             }
         };

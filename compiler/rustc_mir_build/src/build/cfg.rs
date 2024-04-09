@@ -27,7 +27,6 @@ impl<'tcx> CFG<'tcx> {
     }
 
     pub(crate) fn push(&mut self, block: BasicBlock, statement: Statement<'tcx>) {
-        debug!("push({:?}, {:?})", block, statement);
         self.block_data_mut(block).statements.push(statement);
     }
 

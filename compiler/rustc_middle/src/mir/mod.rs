@@ -1261,7 +1261,6 @@ pub struct BasicBlockData<'tcx> {
     /// List of statements in this block.
     pub statements: Vec<Statement<'tcx>>,
 
-
     /// Terminator for this block.
     ///
     /// N.B., this should generally ONLY be `None` during construction.

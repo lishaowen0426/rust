@@ -6,7 +6,6 @@
 use super::{BasicBlock, Const, Local, UserTypeProjection};
 
 use crate::mir::coverage::CoverageKind;
-use crate::mir::Safety;
 use crate::traits::Reveal;
 use crate::ty::adjustment::PointerCoercion;
 use crate::ty::GenericArgsRef;

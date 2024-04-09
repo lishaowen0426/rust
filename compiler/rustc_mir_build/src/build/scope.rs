@@ -450,7 +450,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
     ///  Start a breakable scope, which tracks where `continue`, `break` and
     ///  `return` should branch to.
-    #[instrument(level = "debug", skip(self, f))]
+    #[instrument(level = "debug", skip(self, f, span))]
     pub(crate) fn in_breakable_scope<F>(
         &mut self,
         loop_block: Option<BasicBlock>,
@@ -462,7 +462,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         F: FnOnce(&mut Builder<'a, 'tcx>) -> Option<BlockAnd<()>>,
     {
         let region_scope = self.scopes.topmost();
-        debug!("topmost scope: {region_scope:#?}");
+        //debug!("topmost scope: {region_scope:#?}");
         let scope = BreakableScope {
             region_scope,
             break_destination,
@@ -543,7 +543,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
     /// Convenience wrapper that pushes a scope and then executes `f`
     /// to build its contents, popping the scope afterwards.
-    //#[instrument(skip(self, f), level = "debug")]
+    #[instrument(skip(self, f, lint_level), level = "debug")]
     pub(crate) fn in_scope<F, R>(
         &mut self,
         region_scope: (region::Scope, SourceInfo),
@@ -553,6 +553,9 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     where
         F: FnOnce(&mut Builder<'a, 'tcx>) -> BlockAnd<R>,
     {
+        //for debug
+        {}
+
         let source_scope = self.source_scope;
         if let LintLevel::Explicit(current_hir_id) = lint_level {
             let parent_id: HirId =
@@ -560,7 +563,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             self.maybe_new_source_scope(region_scope.1.span, None, current_hir_id, parent_id);
         }
         self.push_scope(region_scope);
-
 
         let mut block;
         let rv = unpack!(block = f(self));
@@ -904,7 +906,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     ///
     /// When called with `DropKind::Storage`, `place` shouldn't be the return
     /// place, or a function parameter.
-    #[instrument(level="debug", skip(self))]
+    #[instrument(level = "debug", skip(self))]
     pub(crate) fn schedule_drop(
         &mut self,
         span: Span,
