@@ -482,6 +482,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                                 )),
                                 Variance::Invariant,
                             ),
+                            safety: self.in_scope_unsafe,
                         },
                     );
                 }
@@ -510,6 +511,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                                 )),
                                 Variance::Invariant,
                             ),
+                            safety: self.in_scope_unsafe,
                         },
                     );
                 }

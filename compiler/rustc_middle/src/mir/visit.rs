@@ -370,6 +370,7 @@ macro_rules! make_mir_visitor {
                 let Statement {
                     source_info,
                     kind,
+                    ..
                 } = statement;
 
                 self.visit_source_info(source_info);
@@ -466,7 +467,7 @@ macro_rules! make_mir_visitor {
             fn super_terminator(&mut self,
                                 terminator: &$($mutability)? Terminator<'tcx>,
                                 location: Location) {
-                let Terminator { source_info, kind } = terminator;
+                let Terminator { source_info, kind,.. } = terminator;
 
                 self.visit_source_info(source_info);
                 match kind {

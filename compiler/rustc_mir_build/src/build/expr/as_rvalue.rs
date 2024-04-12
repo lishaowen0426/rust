@@ -177,7 +177,11 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 let result = this.local_decls.push(LocalDecl::new(expr.ty, expr_span));
                 this.cfg.push(
                     block,
-                    Statement { source_info, kind: StatementKind::StorageLive(result) },
+                    Statement {
+                        source_info,
+                        kind: StatementKind::StorageLive(result),
+                        safety: self.in_scope_unsafe,
+                    },
                 );
                 if let Some(scope) = scope {
                     // schedule a shallow free of that memory, lest we unwind:
@@ -283,6 +287,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                                 kind: StatementKind::Intrinsic(Box::new(
                                     NonDivergingIntrinsic::Assume(Operand::Move(assert_place)),
                                 )),
+                                safety: self.in_scope_unsafe,
                             },
                         );
                     }
@@ -758,7 +763,14 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let source_info = this.source_info(upvar_span);
         let temp = this.local_decls.push(LocalDecl::new(upvar_ty, upvar_span));
 
-        this.cfg.push(block, Statement { source_info, kind: StatementKind::StorageLive(temp) });
+        this.cfg.push(
+            block,
+            Statement {
+                source_info,
+                kind: StatementKind::StorageLive(temp),
+                safety: self.in_scope_unsafe,
+            },
+        );
 
         let arg_place_builder = unpack!(block = this.as_place_builder(block, arg));
 

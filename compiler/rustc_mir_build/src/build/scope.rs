@@ -737,6 +737,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             unwind_to,
             is_coroutine && needs_cleanup,
             self.arg_count,
+            self.in_scope_unsafe
         ))
     }
 
@@ -1250,6 +1251,7 @@ fn build_scope_drops<'tcx>(
     mut unwind_to: DropIdx,
     storage_dead_on_unwind: bool,
     arg_count: usize,
+    safety: Safety,
 ) -> BlockAnd<()> {
     debug!("build_scope_drops({:?} -> {:?})", block, scope);
 
@@ -1316,7 +1318,10 @@ fn build_scope_drops<'tcx>(
                 }
                 // Only temps and vars need their storage dead.
                 assert!(local.index() > arg_count);
-                cfg.push(block, Statement { source_info, kind: StatementKind::StorageDead(local) });
+                cfg.push(
+                    block,
+                    Statement { source_info, kind: StatementKind::StorageDead(local), safety },
+                );
             }
         }
     }

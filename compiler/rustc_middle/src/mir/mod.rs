@@ -707,6 +707,16 @@ impl From<Unsafety> for Safety {
         }
     }
 }
+use rustc_middle::thir::BlockSafety;
+impl From<BlockSafety> for Safety {
+    fn from(value: BlockSafety) -> Self {
+        match value {
+            BlockSafety::Safe => Safety::Safe,
+            BlockSafety::BuiltinUnsafe => Safety::BuiltinUnsafe,
+            BlockSafety::ExplicitUnsafe(id) => Safety::ExplicitUnsafe(id),
+        }
+    }
+}
 
 impl<'tcx> Index<BasicBlock> for Body<'tcx> {
     type Output = BasicBlockData<'tcx>;
@@ -1363,7 +1373,11 @@ impl<'tcx> BasicBlockData<'tcx> {
         let mut gap = self.statements.len()..self.statements.len() + extra_stmts;
         self.statements.resize(
             gap.end,
-            Statement { source_info: SourceInfo::outermost(DUMMY_SP), kind: StatementKind::Nop },
+            Statement {
+                source_info: SourceInfo::outermost(DUMMY_SP),
+                kind: StatementKind::Nop,
+                safety: Safety::Safe,
+            },
         );
         for (splice_start, new_stmts) in splices.into_iter().rev() {
             let splice_end = splice_start + new_stmts.size_hint().0;

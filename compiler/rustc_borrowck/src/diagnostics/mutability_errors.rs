@@ -7,7 +7,7 @@ use rustc_hir as hir;
 use rustc_hir::intravisit::Visitor;
 use rustc_hir::Node;
 use rustc_infer::traits;
-use rustc_middle::mir::{Mutability, Place, PlaceRef, ProjectionElem};
+use rustc_middle::mir::{Mutability, Place, PlaceRef, ProjectionElem, Safety};
 use rustc_middle::ty::{self, InstanceDef, ToPredicate, Ty, TyCtxt};
 use rustc_middle::{
     hir::place::PlaceBase,
@@ -1104,6 +1104,7 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, 'tcx> {
                                     _,
                                     mir::Rvalue::Use(mir::Operand::Copy(place)),
                                 )),
+                            safety: Safety::Safe,
                         }) = self.body[location.block].statements.get(location.statement_index)
                         {
                             self.body.local_decls[place.local].source_info.span

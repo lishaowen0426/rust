@@ -613,7 +613,7 @@ where
         let discr = Place::from(self.new_temp(discr_ty));
         let discr_rv = Rvalue::Discriminant(self.place);
         let switch_block = BasicBlockData {
-            statements: vec![self.assign(discr, discr_rv, Safety:;Safe)],
+            statements: vec![self.assign(discr, discr_rv, Safety::Safe)],
             terminator: Some(Terminator {
                 source_info: self.source_info,
                 kind: TerminatorKind::SwitchInt {

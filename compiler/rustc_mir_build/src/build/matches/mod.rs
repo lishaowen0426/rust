@@ -556,7 +556,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             target_block
         }
     }
-    #[instrument(level="debug", skip(self))]
+    #[instrument(level = "debug", skip(self))]
     pub(super) fn expr_into_pattern(
         &mut self,
         mut block: BasicBlock,
@@ -631,6 +631,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                             // `<expr>`.
                             ty::Variance::Invariant,
                         ),
+                        safety: self.in_scope_unsafe,
                     },
                 );
 
@@ -738,7 +739,11 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 }
                 let source_info = SourceInfo { span, scope: this.source_scope };
                 let visibility_scope = visibility_scope.unwrap();
-                debug!("declare_binding for {:?} with visibility_scope {:?}", name, this.source_scopes.get(visibility_scope));
+                debug!(
+                    "declare_binding for {:?} with visibility_scope {:?}",
+                    name,
+                    this.source_scopes.get(visibility_scope)
+                );
                 this.declare_binding(
                     source_info,
                     visibility_scope,
@@ -787,7 +792,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             _ => {}
         }
     }
-    #[instrument(level="debug", skip(self))]
+    #[instrument(level = "debug", skip(self))]
     pub(crate) fn storage_live_binding(
         &mut self,
         block: BasicBlock,
@@ -798,7 +803,14 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     ) -> Place<'tcx> {
         let local_id = self.var_local_id(var, for_guard);
         let source_info = self.source_info(span);
-        self.cfg.push(block, Statement { source_info, kind: StatementKind::StorageLive(local_id) });
+        self.cfg.push(
+            block,
+            Statement {
+                source_info,
+                kind: StatementKind::StorageLive(local_id),
+                safety: self.in_scope_unsafe,
+            },
+        );
         // Although there is almost always scope for given variable in corner cases
         // like #92893 we might get variable with no scope.
         if let Some(region_scope) = self.region_scope_tree.var_scope(var.0.local_id)
@@ -2267,6 +2279,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                         )),
                         ascription.variance,
                     ),
+                    safety: self.in_scope_unsafe,
                 },
             );
         }

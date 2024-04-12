@@ -39,7 +39,11 @@ impl<'tcx> CFG<'tcx> {
     ) {
         self.push(
             block,
-            Statement { source_info, kind: StatementKind::Assign(Box::new((place, rvalue))) },
+            Statement {
+                source_info,
+                kind: StatementKind::Assign(Box::new((place, rvalue))),
+                safety: self.in_scope_unsafe,
+            },
         );
     }
 
@@ -85,7 +89,7 @@ impl<'tcx> CFG<'tcx> {
         place: Place<'tcx>,
     ) {
         let kind = StatementKind::FakeRead(Box::new((cause, place)));
-        let stmt = Statement { source_info, kind };
+        let stmt = Statement { source_info, kind, safety: self.in_scope_unsafe };
         self.push(block, stmt);
     }
 
@@ -96,7 +100,7 @@ impl<'tcx> CFG<'tcx> {
         place: Place<'tcx>,
     ) {
         let kind = StatementKind::PlaceMention(Box::new(place));
-        let stmt = Statement { source_info, kind };
+        let stmt = Statement { source_info, kind, safety: self.in_scope_unsafe };
         self.push(block, stmt);
     }
 
@@ -109,7 +113,7 @@ impl<'tcx> CFG<'tcx> {
         let kind = StatementKind::Coverage(Box::new(Coverage {
             kind: coverage::CoverageKind::SpanMarker,
         }));
-        let stmt = Statement { source_info, kind };
+        let stmt = Statement { source_info, kind, safety: self.in_scope_unsafe };
         self.push(block, stmt);
     }
 
@@ -126,7 +130,8 @@ impl<'tcx> CFG<'tcx> {
             block,
             self.block_data(block)
         );
-        self.block_data_mut(block).terminator = Some(Terminator { source_info, kind });
+        self.block_data_mut(block).terminator =
+            Some(Terminator { source_info, kind, safety: self.in_scope_unsafe });
     }
 
     /// In the `origin` block, push a `goto -> target` terminator.

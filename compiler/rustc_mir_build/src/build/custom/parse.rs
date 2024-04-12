@@ -318,6 +318,7 @@ impl<'tcx, 'body> ParseCtxt<'tcx, 'body> {
             data.statements.push(Statement {
                 source_info: SourceInfo { span, scope: self.source_scope },
                 kind: statement,
+                safety: block.safety_mode.into(),
             });
         }
 
@@ -327,6 +328,7 @@ impl<'tcx, 'body> ParseCtxt<'tcx, 'body> {
         data.terminator = Some(Terminator {
             source_info: SourceInfo { span, scope: self.source_scope },
             kind: terminator,
+            safety: block.safety_mode.into(),
         });
 
         Ok(data)
