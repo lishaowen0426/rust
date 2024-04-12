@@ -220,7 +220,7 @@ impl<'tcx> Queries<'tcx> {
             }
         }
     }
-
+    #[instrument(level = "debug", skip(self))]
     pub fn codegen_and_build_linker(&'tcx self) -> Result<Linker> {
         self.global_ctxt()?.enter(|tcx| {
             // Don't do code generation if there were any errors. Likewise if

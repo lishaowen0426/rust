@@ -404,7 +404,7 @@ fn run_compiler(
                         pretty::PrintExtra::AfterParsing { krate: &*krate.borrow() },
                     );
                 }
-                trace!("finished pretty-printing");
+                debug!("finished pretty-printing");
                 return early_exit();
             }
 
@@ -436,6 +436,7 @@ fn run_compiler(
             }
 
             queries.global_ctxt()?.enter(|tcx| tcx.analysis(()))?;
+            debug!("after tcx.analysis");
 
             if callbacks.after_analysis(compiler, queries) == Compilation::Stop {
                 return early_exit();

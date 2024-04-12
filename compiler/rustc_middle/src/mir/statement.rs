@@ -4,13 +4,13 @@ use super::{interpret::GlobalAlloc, *};
 ///////////////////////////////////////////////////////////////////////////
 // Statements
 
-#[derive(Debug,Clone, Copy, TyEncodable, TyDecodable, HashStable, TypeFoldable, TypeVisitable)]
+#[derive(Debug, Clone, Copy, TyEncodable, TyDecodable, HashStable, TypeFoldable, TypeVisitable)]
 pub enum StatementSafety {
     Safe,
     Unsafe,
 }
 
-impl From<Safety> for StatementSafety{
+impl From<Safety> for StatementSafety {
     fn from(value: Safety) -> Self {
         match value {
             Safety::Safe => Self::Safe,
@@ -24,6 +24,8 @@ impl From<Safety> for StatementSafety{
 pub struct Statement<'tcx> {
     pub source_info: SourceInfo,
     pub kind: StatementKind<'tcx>,
+
+    pub safety: Safety,
 }
 
 impl Statement<'_> {
