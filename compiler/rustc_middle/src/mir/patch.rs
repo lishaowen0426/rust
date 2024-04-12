@@ -4,9 +4,9 @@ use rustc_middle::mir::*;
 /// new statements and basic blocks and patch over block
 /// terminators.
 pub struct MirPatch<'tcx> {
-    patch_map: IndexVec<BasicBlock, Option<TerminatorKind<'tcx>>>,
+    patch_map: IndexVec<BasicBlock, Option<(TerminatorKind<'tcx>, Safety)>>,
     new_blocks: Vec<BasicBlockData<'tcx>>,
-    new_statements: Vec<(Location, StatementKind<'tcx>)>,
+    new_statements: Vec<(Location, StatementKind<'tcx>, Safety)>,
     new_locals: Vec<LocalDecl<'tcx>>,
     resume_block: Option<BasicBlock>,
     // Only for unreachable in cleanup path.
@@ -71,6 +71,7 @@ impl<'tcx> MirPatch<'tcx> {
             terminator: Some(Terminator {
                 source_info: SourceInfo::outermost(self.body_span),
                 kind: TerminatorKind::UnwindResume,
+                safety: Safety::Safe,
             }),
             is_cleanup: true,
         });
@@ -88,6 +89,7 @@ impl<'tcx> MirPatch<'tcx> {
             terminator: Some(Terminator {
                 source_info: SourceInfo::outermost(self.body_span),
                 kind: TerminatorKind::Unreachable,
+                safety: Safety::Safe,
             }),
             is_cleanup: true,
         });
@@ -107,6 +109,7 @@ impl<'tcx> MirPatch<'tcx> {
             terminator: Some(Terminator {
                 source_info: SourceInfo::outermost(self.body_span),
                 kind: TerminatorKind::UnwindTerminate(reason),
+                safety: Safety::Safe,
             }),
             is_cleanup: true,
         });
@@ -155,19 +158,30 @@ impl<'tcx> MirPatch<'tcx> {
         block
     }
 
-    pub fn patch_terminator(&mut self, block: BasicBlock, new: TerminatorKind<'tcx>) {
+    pub fn patch_terminator(
+        &mut self,
+        block: BasicBlock,
+        new: TerminatorKind<'tcx>,
+        safety: Safety,
+    ) {
         assert!(self.patch_map[block].is_none());
         debug!("MirPatch: patch_terminator({:?}, {:?})", block, new);
-        self.patch_map[block] = Some(new);
+        self.patch_map[block] = Some((new, safety));
     }
 
-    pub fn add_statement(&mut self, loc: Location, stmt: StatementKind<'tcx>) {
+    pub fn add_statement(&mut self, loc: Location, stmt: StatementKind<'tcx>, safety: Safety) {
         debug!("MirPatch: add_statement({:?}, {:?})", loc, stmt);
-        self.new_statements.push((loc, stmt));
+        self.new_statements.push((loc, stmt, safety));
     }
 
-    pub fn add_assign(&mut self, loc: Location, place: Place<'tcx>, rv: Rvalue<'tcx>) {
-        self.add_statement(loc, StatementKind::Assign(Box::new((place, rv))));
+    pub fn add_assign(
+        &mut self,
+        loc: Location,
+        place: Place<'tcx>,
+        rv: Rvalue<'tcx>,
+        safety: Safety,
+    ) {
+        self.add_statement(loc, StatementKind::Assign(Box::new((place, rv))), safety);
     }
 
     pub fn apply(self, body: &mut Body<'tcx>) {
@@ -190,9 +204,10 @@ impl<'tcx> MirPatch<'tcx> {
         bbs.extend(self.new_blocks);
         body.local_decls.extend(self.new_locals);
         for (src, patch) in self.patch_map.into_iter_enumerated() {
-            if let Some(patch) = patch {
+            if let Some((patch, safety)) = patch {
                 debug!("MirPatch: patching block {:?}", src);
                 bbs[src].terminator_mut().kind = patch;
+                bbs[src].terminator_mut().safety = safety;
             }
         }
 
@@ -201,7 +216,7 @@ impl<'tcx> MirPatch<'tcx> {
 
         let mut delta = 0;
         let mut last_bb = START_BLOCK;
-        for (mut loc, stmt) in new_statements {
+        for (mut loc, stmt, safety) in new_statements {
             if loc.block != last_bb {
                 delta = 0;
                 last_bb = loc.block;
@@ -211,7 +226,7 @@ impl<'tcx> MirPatch<'tcx> {
             let source_info = Self::source_info_for_index(&body[loc.block], loc);
             body[loc.block]
                 .statements
-                .insert(loc.statement_index, Statement { source_info, kind: stmt });
+                .insert(loc.statement_index, Statement { source_info, kind: stmt, safety });
             delta += 1;
         }
     }

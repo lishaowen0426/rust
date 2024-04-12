@@ -41,6 +41,7 @@ impl Statement<'_> {
         Statement {
             source_info: self.source_info,
             kind: mem::replace(&mut self.kind, StatementKind::Nop),
+            safety: self.safety,
         }
     }
 }
