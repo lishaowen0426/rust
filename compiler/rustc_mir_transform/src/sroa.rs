@@ -319,7 +319,11 @@ impl<'tcx, 'll> MutVisitor<'tcx> for ReplacementVisitor<'tcx, 'll> {
             StatementKind::StorageLive(l) => {
                 if let Some(final_locals) = self.replacements.place_fragments(l.into()) {
                     for (_, _, fl) in final_locals {
-                        self.patch.add_statement(location, StatementKind::StorageLive(fl));
+                        self.patch.add_statement(
+                            location,
+                            StatementKind::StorageLive(fl),
+                            statement.safety,
+                        );
                     }
                     statement.make_nop();
                 }
@@ -328,7 +332,11 @@ impl<'tcx, 'll> MutVisitor<'tcx> for ReplacementVisitor<'tcx, 'll> {
             StatementKind::StorageDead(l) => {
                 if let Some(final_locals) = self.replacements.place_fragments(l.into()) {
                     for (_, _, fl) in final_locals {
-                        self.patch.add_statement(location, StatementKind::StorageDead(fl));
+                        self.patch.add_statement(
+                            location,
+                            StatementKind::StorageDead(fl),
+                            statement.safety,
+                        );
                     }
                     statement.make_nop();
                 }
@@ -337,8 +345,11 @@ impl<'tcx, 'll> MutVisitor<'tcx> for ReplacementVisitor<'tcx, 'll> {
             StatementKind::Deinit(box place) => {
                 if let Some(final_locals) = self.replacements.place_fragments(place) {
                     for (_, _, fl) in final_locals {
-                        self.patch
-                            .add_statement(location, StatementKind::Deinit(Box::new(fl.into())));
+                        self.patch.add_statement(
+                            location,
+                            StatementKind::Deinit(Box::new(fl.into())),
+                            statement.safety,
+                        );
                     }
                     statement.make_nop();
                     return;
@@ -367,6 +378,7 @@ impl<'tcx, 'll> MutVisitor<'tcx> for ReplacementVisitor<'tcx, 'll> {
                             self.patch.add_statement(
                                 location,
                                 StatementKind::Assign(Box::new((new_local.into(), rvalue))),
+                                statement.safety,
                             );
                         }
                     }
@@ -393,6 +405,7 @@ impl<'tcx, 'll> MutVisitor<'tcx> for ReplacementVisitor<'tcx, 'll> {
                         self.patch.add_statement(
                             location,
                             StatementKind::Assign(Box::new((new_local.into(), rvalue))),
+                            statement.safety,
                         );
                     }
                     // We still need `place.local` to exist, so don't make it nop.
@@ -430,6 +443,7 @@ impl<'tcx, 'll> MutVisitor<'tcx> for ReplacementVisitor<'tcx, 'll> {
                         self.patch.add_statement(
                             location,
                             StatementKind::Assign(Box::new((new_local.into(), rvalue))),
+                            statement.safety,
                         );
                     }
                     statement.make_nop();

@@ -343,7 +343,7 @@ impl<'b, 'tcx> ElaborateDropsCtxt<'b, 'tcx> {
                 .ty
                 .needs_drop(self.tcx, self.env.param_env)
             {
-                self.patch.patch_terminator(bb, TerminatorKind::Goto { target });
+                self.patch.patch_terminator(bb, TerminatorKind::Goto { target }, terminator.safety);
                 continue;
             }
 
@@ -402,7 +402,13 @@ impl<'b, 'tcx> ElaborateDropsCtxt<'b, 'tcx> {
         })))
     }
 
-    fn set_drop_flag(&mut self, loc: Location, path: MovePathIndex, val: DropFlagState) {
+    fn set_drop_flag(
+        &mut self,
+        loc: Location,
+        path: MovePathIndex,
+        val: DropFlagState,
+        safety: Safety,
+    ) {
         if let Some(flag) = self.drop_flags[path] {
             let span = self.patch.source_info_for_location(self.body, loc).span;
             let val = self.constant_bool(span, val.value());

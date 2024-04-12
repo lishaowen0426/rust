@@ -31,7 +31,7 @@ impl MirPass<'_> for UnreachablePropagation {
                 TerminatorKind::Unreachable => true,
                 // This will unconditionally run into an unreachable and is therefore unreachable as well.
                 TerminatorKind::Goto { target } if unreachable_blocks.contains(target) => {
-                    patch.patch_terminator(bb, TerminatorKind::Unreachable);
+                    patch.patch_terminator(bb, TerminatorKind::Unreachable, terminator.safety);
                     true
                 }
                 // Try to remove unreachable targets from the switch.
@@ -71,6 +71,7 @@ fn remove_successors_from_switch<'tcx>(
     patch: &mut MirPatch<'tcx>,
 ) -> bool {
     let terminator = body.basic_blocks[bb].terminator();
+    let terminator_safety = terminator.safety;
     let TerminatorKind::SwitchInt { discr, targets } = &terminator.kind else { bug!() };
     let source_info = terminator.source_info;
     let location = body.terminator_loc(bb);
@@ -111,10 +112,14 @@ fn remove_successors_from_switch<'tcx>(
             const_: Const::from_scalar(tcx, Scalar::from_uint(value, discr_size), discr_ty),
         }));
         let cmp = Rvalue::BinaryOp(binop, Box::new((discr.to_copy(), value)));
-        patch.add_assign(location, local.into(), cmp);
+        patch.add_assign(location, local.into(), cmp, terminator.safety);
 
         let assume = NonDivergingIntrinsic::Assume(Operand::Move(local.into()));
-        patch.add_statement(location, StatementKind::Intrinsic(Box::new(assume)));
+        patch.add_statement(
+            location,
+            StatementKind::Intrinsic(Box::new(assume)),
+            terminator.safety,
+        );
     };
 
     let otherwise = targets.otherwise();
@@ -151,6 +156,6 @@ fn remove_successors_from_switch<'tcx>(
         _ => TerminatorKind::SwitchInt { discr: discr.clone(), targets: new_targets },
     };
 
-    patch.patch_terminator(bb, terminator);
+    patch.patch_terminator(bb, terminator, terminator_safety);
     fully_unreachable
 }

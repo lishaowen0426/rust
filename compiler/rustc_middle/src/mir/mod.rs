@@ -20,7 +20,7 @@ use rustc_errors::{
 use rustc_hir::def::{CtorKind, Namespace};
 use rustc_hir::def_id::{DefId, CRATE_DEF_ID};
 use rustc_hir::{self, CoroutineDesugaring, CoroutineKind, ImplicitSelfKind};
-use rustc_hir::{self as hir, HirId};
+use rustc_hir::{self as hir, HirId, Unsafety};
 use rustc_session::Session;
 use rustc_target::abi::{FieldIdx, VariantIdx};
 
@@ -697,6 +697,15 @@ pub enum Safety {
     FnUnsafe,
     /// Unsafe because of an `unsafe` block
     ExplicitUnsafe(hir::HirId),
+}
+
+impl From<Unsafety> for Safety {
+    fn from(value: Unsafety) -> Self {
+        match value {
+            Unsafety::Unsafe => Safety::BuiltinUnsafe, //this is used only for compiler-generated code, e.g., shim. Otherwise, we should know the hirId
+            Unsafety::Normal => Safety::Safe,
+        }
+    }
 }
 
 impl<'tcx> Index<BasicBlock> for Body<'tcx> {
