@@ -227,9 +227,11 @@ where
     pub fn elaborate_drop(&mut self, bb: BasicBlock) {
         match self.elaborator.drop_style(self.path, DropFlagMode::Deep) {
             DropStyle::Dead => {
-                self.elaborator
-                    .patch()
-                    .patch_terminator(bb, TerminatorKind::Goto { target: self.succ });
+                self.elaborator.patch().patch_terminator(
+                    bb,
+                    TerminatorKind::Goto { target: self.succ },
+                    Safety::Safe,
+                );
             }
             DropStyle::Static => {
                 self.elaborator.patch().patch_terminator(
@@ -240,19 +242,24 @@ where
                         unwind: self.unwind.into_action(),
                         replace: false,
                     },
+                    Safety::Safe,
                 );
             }
             DropStyle::Conditional => {
                 let drop_bb = self.complete_drop(self.succ, self.unwind);
-                self.elaborator
-                    .patch()
-                    .patch_terminator(bb, TerminatorKind::Goto { target: drop_bb });
+                self.elaborator.patch().patch_terminator(
+                    bb,
+                    TerminatorKind::Goto { target: drop_bb },
+                    Safety::Safe,
+                );
             }
             DropStyle::Open => {
                 let drop_bb = self.open_drop();
-                self.elaborator
-                    .patch()
-                    .patch_terminator(bb, TerminatorKind::Goto { target: drop_bb });
+                self.elaborator.patch().patch_terminator(
+                    bb,
+                    TerminatorKind::Goto { target: drop_bb },
+                    Safety::Safe,
+                );
             }
         }
     }
@@ -448,6 +455,7 @@ where
                 terminator: Some(Terminator {
                     source_info: self.source_info,
                     kind: TerminatorKind::Unreachable,
+                    safety: Safety::Safe,
                 }),
                 is_cleanup: self.unwind.is_cleanup(),
             });
@@ -605,7 +613,7 @@ where
         let discr = Place::from(self.new_temp(discr_ty));
         let discr_rv = Rvalue::Discriminant(self.place);
         let switch_block = BasicBlockData {
-            statements: vec![self.assign(discr, discr_rv)],
+            statements: vec![self.assign(discr, discr_rv, Safety:;Safe)],
             terminator: Some(Terminator {
                 source_info: self.source_info,
                 kind: TerminatorKind::SwitchInt {
@@ -615,6 +623,7 @@ where
                         *blocks.last().unwrap(),
                     ),
                 },
+                safety: Safety::Safe,
             }),
             is_cleanup: unwind.is_cleanup(),
         };
@@ -645,6 +654,7 @@ where
                     BorrowKind::Mut { kind: MutBorrowKind::Default },
                     self.place,
                 ),
+                Safety::Safe,
             )],
             terminator: Some(Terminator {
                 kind: TerminatorKind::Call {
@@ -665,6 +675,7 @@ where
                     fn_span: self.source_info.span,
                 },
                 source_info: self.source_info,
+                safety: Safety::Safe,
             }),
             is_cleanup: unwind.is_cleanup(),
         };
@@ -710,10 +721,12 @@ where
                 self.assign(
                     ptr,
                     Rvalue::AddressOf(Mutability::Mut, tcx.mk_place_index(self.place, cur)),
+                    Safety::Safe,
                 ),
                 self.assign(
                     cur.into(),
                     Rvalue::BinaryOp(BinOp::Add, Box::new((move_(cur.into()), one))),
+                    Safety::Safe,
                 ),
             ],
             is_cleanup: unwind.is_cleanup(),
@@ -721,6 +734,7 @@ where
                 source_info: self.source_info,
                 // this gets overwritten by drop elaboration.
                 kind: TerminatorKind::Unreachable,
+                safety: Safety::Safe,
             }),
         };
         let drop_block = self.elaborator.patch().new_block(drop_block);
@@ -729,11 +743,13 @@ where
             statements: vec![self.assign(
                 can_go,
                 Rvalue::BinaryOp(BinOp::Eq, Box::new((copy(Place::from(cur)), copy(len.into())))),
+                Safety::Safe,
             )],
             is_cleanup: unwind.is_cleanup(),
             terminator: Some(Terminator {
                 source_info: self.source_info,
                 kind: TerminatorKind::if_(move_(can_go), succ, drop_block),
+                safety: Safety::Safe,
             }),
         };
         let loop_block = self.elaborator.patch().new_block(loop_block);
@@ -746,6 +762,7 @@ where
                 unwind: unwind.into_action(),
                 replace: false,
             },
+            Safety::Safe,
         );
 
         loop_block
@@ -833,13 +850,14 @@ where
         let zero = self.constant_usize(0);
         let block = BasicBlockData {
             statements: vec![
-                self.assign(len.into(), Rvalue::Len(self.place)),
-                self.assign(cur.into(), Rvalue::Use(zero)),
+                self.assign(len.into(), Rvalue::Len(self.place), Safety::Safe),
+                self.assign(cur.into(), Rvalue::Use(zero), Safety::Safe),
             ],
             is_cleanup: unwind.is_cleanup(),
             terminator: Some(Terminator {
                 source_info: self.source_info,
                 kind: TerminatorKind::Goto { target: loop_block },
+                safety: Safety::Safe,
             }),
         };
 
@@ -966,7 +984,11 @@ where
     fn new_block(&mut self, unwind: Unwind, k: TerminatorKind<'tcx>) -> BasicBlock {
         self.elaborator.patch().new_block(BasicBlockData {
             statements: vec![],
-            terminator: Some(Terminator { source_info: self.source_info, kind: k }),
+            terminator: Some(Terminator {
+                source_info: self.source_info,
+                kind: k,
+                safety: Safety::Safe,
+            }),
             is_cleanup: unwind.is_cleanup(),
         })
     }
@@ -983,10 +1005,11 @@ where
         }))
     }
 
-    fn assign(&self, lhs: Place<'tcx>, rhs: Rvalue<'tcx>) -> Statement<'tcx> {
+    fn assign(&self, lhs: Place<'tcx>, rhs: Rvalue<'tcx>, safety: Safety) -> Statement<'tcx> {
         Statement {
             source_info: self.source_info,
             kind: StatementKind::Assign(Box::new((lhs, rhs))),
+            safety,
         }
     }
 }

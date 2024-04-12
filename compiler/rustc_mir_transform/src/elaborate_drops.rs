@@ -402,17 +402,11 @@ impl<'b, 'tcx> ElaborateDropsCtxt<'b, 'tcx> {
         })))
     }
 
-    fn set_drop_flag(
-        &mut self,
-        loc: Location,
-        path: MovePathIndex,
-        val: DropFlagState,
-        safety: Safety,
-    ) {
+    fn set_drop_flag(&mut self, loc: Location, path: MovePathIndex, val: DropFlagState) {
         if let Some(flag) = self.drop_flags[path] {
             let span = self.patch.source_info_for_location(self.body, loc).span;
             let val = self.constant_bool(span, val.value());
-            self.patch.add_assign(loc, Place::from(flag), val);
+            self.patch.add_assign(loc, Place::from(flag), val, Safety::Safe);
         }
     }
 
@@ -421,7 +415,7 @@ impl<'b, 'tcx> ElaborateDropsCtxt<'b, 'tcx> {
         let span = self.patch.source_info_for_location(self.body, loc).span;
         let false_ = self.constant_bool(span, false);
         for flag in self.drop_flags.iter().flatten() {
-            self.patch.add_assign(loc, Place::from(*flag), false_.clone());
+            self.patch.add_assign(loc, Place::from(*flag), false_.clone(), Safety::Safe);
         }
     }
 

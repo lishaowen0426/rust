@@ -139,13 +139,18 @@ impl<'tcx> MirPass<'tcx> for EarlyOtherwiseBranch {
             let second_discriminant_temp =
                 patch.new_temp(opt_data.child_ty, opt_data.child_source.span);
 
-            patch.add_statement(parent_end, StatementKind::StorageLive(second_discriminant_temp));
+            patch.add_statement(
+                parent_end,
+                StatementKind::StorageLive(second_discriminant_temp),
+                Safety::Safe,
+            );
 
             // create assignment of discriminant
             patch.add_assign(
                 parent_end,
                 Place::from(second_discriminant_temp),
                 Rvalue::Discriminant(opt_data.child_place),
+                Safety::Safe,
             );
 
             // create temp to store inequality comparison between the two discriminants, `_t` in
@@ -153,7 +158,7 @@ impl<'tcx> MirPass<'tcx> for EarlyOtherwiseBranch {
             let nequal = BinOp::Ne;
             let comp_res_type = nequal.ty(tcx, parent_ty, opt_data.child_ty);
             let comp_temp = patch.new_temp(comp_res_type, opt_data.child_source.span);
-            patch.add_statement(parent_end, StatementKind::StorageLive(comp_temp));
+            patch.add_statement(parent_end, StatementKind::StorageLive(comp_temp), Safety::Safe);
 
             // create inequality comparison between the two discriminants
             let comp_rvalue = Rvalue::BinaryOp(
@@ -163,6 +168,7 @@ impl<'tcx> MirPass<'tcx> for EarlyOtherwiseBranch {
             patch.add_statement(
                 parent_end,
                 StatementKind::Assign(Box::new((Place::from(comp_temp), comp_rvalue))),
+                Safety::Safe,
             );
 
             let eq_new_targets = parent_targets.iter().map(|(value, child)| {
@@ -182,6 +188,7 @@ impl<'tcx> MirPass<'tcx> for EarlyOtherwiseBranch {
                     discr: parent_op,
                     targets: eq_targets,
                 },
+                safety: Safety::Safe,
             }));
 
             let eq_bb = patch.new_block(eq_switch);
@@ -192,10 +199,15 @@ impl<'tcx> MirPass<'tcx> for EarlyOtherwiseBranch {
             patch.patch_terminator(
                 parent,
                 TerminatorKind::if_(Operand::Move(Place::from(comp_temp)), true_case, false_case),
+                Safety::Safe,
             );
 
             // generate StorageDead for the second_discriminant_temp not in use anymore
-            patch.add_statement(parent_end, StatementKind::StorageDead(second_discriminant_temp));
+            patch.add_statement(
+                parent_end,
+                StatementKind::StorageDead(second_discriminant_temp),
+                Safety::Safe,
+            );
 
             // Generate a StorageDead for comp_temp in each of the targets, since we moved it into
             // the switch
@@ -203,6 +215,7 @@ impl<'tcx> MirPass<'tcx> for EarlyOtherwiseBranch {
                 patch.add_statement(
                     Location { block: *bb, statement_index: 0 },
                     StatementKind::StorageDead(comp_temp),
+                    Safety::Safe,
                 );
             }
 

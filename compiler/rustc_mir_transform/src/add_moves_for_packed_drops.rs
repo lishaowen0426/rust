@@ -88,13 +88,21 @@ fn add_move_for_packed_drop<'tcx>(
     let temp = patch.new_temp(ty, terminator.source_info.span);
 
     let storage_dead_block = patch.new_block(BasicBlockData {
-        statements: vec![Statement { source_info, kind: StatementKind::StorageDead(temp) }],
-        terminator: Some(Terminator { source_info, kind: TerminatorKind::Goto { target } }),
+        statements: vec![Statement {
+            source_info,
+            kind: StatementKind::StorageDead(temp),
+            safety: terminator.safety,
+        }],
+        terminator: Some(Terminator {
+            source_info,
+            kind: TerminatorKind::Goto { target },
+            safety: terminator.safety,
+        }),
         is_cleanup,
     });
 
-    patch.add_statement(loc, StatementKind::StorageLive(temp));
-    patch.add_assign(loc, Place::from(temp), Rvalue::Use(Operand::Move(*place)));
+    patch.add_statement(loc, StatementKind::StorageLive(temp), terminator.safety);
+    patch.add_assign(loc, Place::from(temp), Rvalue::Use(Operand::Move(*place)), terminator.safety);
     patch.patch_terminator(
         loc.block,
         TerminatorKind::Drop {
@@ -103,5 +111,6 @@ fn add_move_for_packed_drop<'tcx>(
             unwind,
             replace,
         },
+        terminator.safety,
     );
 }

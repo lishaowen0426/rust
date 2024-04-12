@@ -51,6 +51,7 @@ impl<'a, 'tcx> MutVisitor<'tcx> for DerefChecker<'a, 'tcx> {
                         loc,
                         Place::from(temp),
                         Rvalue::CopyForDeref(deref_place),
+                        Safety::Safe,
                     );
                     place_local = temp;
                     last_len = p_ref.projection.len();

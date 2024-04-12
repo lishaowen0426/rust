@@ -297,11 +297,16 @@ impl<'tcx> TransformVisitor<'tcx> {
         let statements = vec![Statement {
             kind: StatementKind::Assign(Box::new((Place::return_place(), none_value))),
             source_info,
+            safety: Safety::Safe,
         }];
 
         body.basic_blocks_mut().push(BasicBlockData {
             statements,
-            terminator: Some(Terminator { source_info, kind: TerminatorKind::Return }),
+            terminator: Some(Terminator {
+                source_info,
+                kind: TerminatorKind::Return,
+                safety: Safety::Safe,
+            }),
             is_cleanup: false,
         });
 
@@ -434,6 +439,7 @@ impl<'tcx> TransformVisitor<'tcx> {
         statements.push(Statement {
             kind: StatementKind::Assign(Box::new((Place::return_place(), rvalue))),
             source_info,
+            safety: Safety::Safe,
         });
     }
 
@@ -456,6 +462,7 @@ impl<'tcx> TransformVisitor<'tcx> {
                 place: Box::new(self_place),
                 variant_index: state_disc,
             },
+            safety: Safety::Safe,
         }
     }
 
@@ -469,6 +476,7 @@ impl<'tcx> TransformVisitor<'tcx> {
         let assign = Statement {
             source_info: SourceInfo::outermost(body.span),
             kind: StatementKind::Assign(Box::new((temp, Rvalue::Discriminant(self_place)))),
+            safety: Safety::Safe,
         };
         (assign, temp)
     }
@@ -541,8 +549,11 @@ impl<'tcx> MutVisitor<'tcx> for TransformVisitor<'tcx> {
                         && !self.remap.contains_key(&l)
                         && !self.always_live_locals.contains(l);
                     if needs_storage_dead {
-                        data.statements
-                            .push(Statement { source_info, kind: StatementKind::StorageDead(l) });
+                        data.statements.push(Statement {
+                            source_info,
+                            kind: StatementKind::StorageDead(l),
+                            safety: Safety::Safe,
+                        });
                     }
                 }
 
@@ -684,11 +695,13 @@ fn eliminate_get_context_call<'tcx>(bb_data: &mut BasicBlockData<'tcx>) -> Local
         let assign = Statement {
             source_info: terminator.source_info,
             kind: StatementKind::Assign(Box::new((destination, arg))),
+            safety: Safety::Safe,
         };
         bb_data.statements.push(assign);
         bb_data.terminator = Some(Terminator {
             source_info: terminator.source_info,
             kind: TerminatorKind::Goto { target: target.unwrap() },
+            safety: Safety::Safe,
         });
         local
     } else {
@@ -1159,7 +1172,7 @@ fn insert_switch<'tcx>(
         0,
         BasicBlockData {
             statements: vec![assign],
-            terminator: Some(Terminator { source_info, kind: switch }),
+            terminator: Some(Terminator { source_info, kind: switch, safety: Safety }),
             is_cleanup: false,
         },
     );
@@ -1190,6 +1203,7 @@ fn elaborate_coroutine_drops<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
             Terminator {
                 source_info,
                 kind: TerminatorKind::Drop { place, target, unwind, replace: _ },
+                safety: Safety::Safe,
             } => {
                 if let Some(local) = place.as_local() {
                     if local == SELF_ARG {
@@ -1292,7 +1306,7 @@ fn insert_term_block<'tcx>(body: &mut Body<'tcx>, kind: TerminatorKind<'tcx>) ->
     let source_info = SourceInfo::outermost(body.span);
     body.basic_blocks_mut().push(BasicBlockData {
         statements: Vec::new(),
-        terminator: Some(Terminator { source_info, kind }),
+        terminator: Some(Terminator { source_info, kind, safety: Safety::Safe }),
         is_cleanup: false,
     })
 }
@@ -1318,7 +1332,7 @@ fn insert_panic_block<'tcx>(
     let source_info = SourceInfo::outermost(body.span);
     body.basic_blocks_mut().push(BasicBlockData {
         statements: Vec::new(),
-        terminator: Some(Terminator { source_info, kind: term }),
+        terminator: Some(Terminator { source_info, kind: term, safety: Safety::Safe }),
         is_cleanup: false,
     });
 
@@ -1394,7 +1408,11 @@ fn create_coroutine_resume_function<'tcx>(
         let source_info = SourceInfo::outermost(body.span);
         let poison_block = body.basic_blocks_mut().push(BasicBlockData {
             statements: vec![transform.set_discr(VariantIdx::new(POISONED), source_info)],
-            terminator: Some(Terminator { source_info, kind: TerminatorKind::UnwindResume }),
+            terminator: Some(Terminator {
+                source_info,
+                kind: TerminatorKind::UnwindResume,
+                safety: Safety::Safe,
+            }),
             is_cleanup: true,
         });
 
@@ -1408,6 +1426,7 @@ fn create_coroutine_resume_function<'tcx>(
                     *block.terminator_mut() = Terminator {
                         source_info,
                         kind: TerminatorKind::Goto { target: poison_block },
+                        safety: Safety::Safe,
                     };
                 }
             } else if !block.is_cleanup {
@@ -1485,7 +1504,7 @@ fn insert_clean_drop(body: &mut Body<'_>) -> BasicBlock {
     // Create a block to destroy an unresumed coroutines. This can only destroy upvars.
     body.basic_blocks_mut().push(BasicBlockData {
         statements: Vec::new(),
-        terminator: Some(Terminator { source_info, kind: term }),
+        terminator: Some(Terminator { source_info, kind: term, safety: Safety::Safe }),
         is_cleanup: false,
     })
 }
@@ -1528,8 +1547,11 @@ fn create_cases<'tcx>(
                         && !transform.remap.contains_key(&l)
                         && !transform.always_live_locals.contains(l);
                     if needs_storage_live {
-                        statements
-                            .push(Statement { source_info, kind: StatementKind::StorageLive(l) });
+                        statements.push(Statement {
+                            source_info,
+                            kind: StatementKind::StorageLive(l),
+                            safety: Safety::Safe,
+                        });
                     }
                 }
 
@@ -1542,6 +1564,7 @@ fn create_cases<'tcx>(
                             point.resume_arg,
                             Rvalue::Use(Operand::Move(resume_arg.into())),
                         ))),
+                        safety: Safety::Safe,
                     });
                 }
 
@@ -1551,6 +1574,7 @@ fn create_cases<'tcx>(
                     terminator: Some(Terminator {
                         source_info,
                         kind: TerminatorKind::Goto { target },
+                        safety: Safety::Safe,
                     }),
                     is_cleanup: false,
                 });
@@ -1679,6 +1703,7 @@ impl<'tcx> MirPass<'tcx> for StateTransform {
                     old_resume_local.into(),
                     Rvalue::Use(Operand::Move(resume_local.into())),
                 ))),
+                safety: Safety::Safe,
             },
         );
 
