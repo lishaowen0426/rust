@@ -2,6 +2,7 @@
 
 use crate::MirPass;
 use rustc_data_structures::fx::FxHashSet;
+use rustc_middle::mir::StatementSafety;
 use rustc_middle::mir::{
     BasicBlockData, Body, Local, Operand, Rvalue, StatementKind, Terminator, TerminatorKind,
 };
@@ -124,6 +125,7 @@ impl<'tcx> MirPass<'tcx> for UninhabitedEnumBranching {
         let new_block = BasicBlockData::new(Some(Terminator {
             source_info: body.basic_blocks[removable_switchs[0].0].terminator().source_info,
             kind: TerminatorKind::Unreachable,
+            safety: StatementSafety::Safe,
         }));
         let unreachable_block = body.basic_blocks.as_mut().push(new_block);
 

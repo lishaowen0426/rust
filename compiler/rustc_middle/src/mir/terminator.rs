@@ -329,18 +329,12 @@ impl<O> AssertKind<O> {
     }
 }
 
-#[derive(Debug, Clone, Copy, TyEncodable, TyDecodable, HashStable, TypeFoldable, TypeVisitable)]
-pub enum TerminatorSafety {
-    Safe,
-    Unsafe,
-}
-
 #[derive(Clone, Debug, TyEncodable, TyDecodable, HashStable, TypeFoldable, TypeVisitable)]
 pub struct Terminator<'tcx> {
     pub source_info: SourceInfo,
     pub kind: TerminatorKind<'tcx>,
 
-    pub safety: Safety,
+    pub safety: StatementSafety,
 }
 
 pub type Successors<'a> = impl DoubleEndedIterator<Item = BasicBlock> + 'a;

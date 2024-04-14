@@ -4,9 +4,9 @@ use rustc_middle::mir::*;
 /// new statements and basic blocks and patch over block
 /// terminators.
 pub struct MirPatch<'tcx> {
-    patch_map: IndexVec<BasicBlock, Option<(TerminatorKind<'tcx>, Safety)>>,
+    patch_map: IndexVec<BasicBlock, Option<(TerminatorKind<'tcx>, StatementSafety)>>,
     new_blocks: Vec<BasicBlockData<'tcx>>,
-    new_statements: Vec<(Location, StatementKind<'tcx>, Safety)>,
+    new_statements: Vec<(Location, StatementKind<'tcx>, StatementSafety)>,
     new_locals: Vec<LocalDecl<'tcx>>,
     resume_block: Option<BasicBlock>,
     // Only for unreachable in cleanup path.
@@ -71,7 +71,7 @@ impl<'tcx> MirPatch<'tcx> {
             terminator: Some(Terminator {
                 source_info: SourceInfo::outermost(self.body_span),
                 kind: TerminatorKind::UnwindResume,
-                safety: Safety::Safe,
+                safety: StatementSafety::Safe,
             }),
             is_cleanup: true,
         });
@@ -89,7 +89,7 @@ impl<'tcx> MirPatch<'tcx> {
             terminator: Some(Terminator {
                 source_info: SourceInfo::outermost(self.body_span),
                 kind: TerminatorKind::Unreachable,
-                safety: Safety::Safe,
+                safety: StatementSafety::Safe,
             }),
             is_cleanup: true,
         });
@@ -109,7 +109,7 @@ impl<'tcx> MirPatch<'tcx> {
             terminator: Some(Terminator {
                 source_info: SourceInfo::outermost(self.body_span),
                 kind: TerminatorKind::UnwindTerminate(reason),
-                safety: Safety::Safe,
+                safety: StatementSafety::Safe,
             }),
             is_cleanup: true,
         });
@@ -162,14 +162,19 @@ impl<'tcx> MirPatch<'tcx> {
         &mut self,
         block: BasicBlock,
         new: TerminatorKind<'tcx>,
-        safety: Safety,
+        safety: StatementSafety,
     ) {
         assert!(self.patch_map[block].is_none());
         debug!("MirPatch: patch_terminator({:?}, {:?})", block, new);
         self.patch_map[block] = Some((new, safety));
     }
 
-    pub fn add_statement(&mut self, loc: Location, stmt: StatementKind<'tcx>, safety: Safety) {
+    pub fn add_statement(
+        &mut self,
+        loc: Location,
+        stmt: StatementKind<'tcx>,
+        safety: StatementSafety,
+    ) {
         debug!("MirPatch: add_statement({:?}, {:?})", loc, stmt);
         self.new_statements.push((loc, stmt, safety));
     }
@@ -179,7 +184,7 @@ impl<'tcx> MirPatch<'tcx> {
         loc: Location,
         place: Place<'tcx>,
         rv: Rvalue<'tcx>,
-        safety: Safety,
+        safety: StatementSafety,
     ) {
         self.add_statement(loc, StatementKind::Assign(Box::new((place, rv))), safety);
     }

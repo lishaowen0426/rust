@@ -148,6 +148,8 @@ struct DropData {
 
     /// Whether this is a value Drop or a StorageDead.
     kind: DropKind,
+
+    pub safety: StatementSafety,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -256,8 +258,12 @@ impl DropTree {
         // represents the block in the tree that should be jumped to once all
         // of the required drops have been performed.
         let fake_source_info = SourceInfo::outermost(DUMMY_SP);
-        let fake_data =
-            DropData { source_info: fake_source_info, local: Local::MAX, kind: DropKind::Storage };
+        let fake_data = DropData {
+            source_info: fake_source_info,
+            local: Local::MAX,
+            kind: DropKind::Storage,
+            safety: StatementSafety::Safe,
+        };
         let drop_idx = DropIdx::MAX;
         let drops = IndexVec::from_elem_n((fake_data, drop_idx), 1);
         Self { drops, entry_points: Vec::new(), previous_drops: FxHashMap::default() }
@@ -383,6 +389,7 @@ impl DropTree {
                     let stmt = Statement {
                         source_info: drop_data.0.source_info,
                         kind: StatementKind::StorageDead(drop_data.0.local),
+                        safety: drop_data.0.safety,
                     };
                     cfg.push(block, stmt);
                     let target = blocks[drop_data.1].unwrap();
@@ -997,6 +1004,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     source_info: SourceInfo { span: scope_end, scope: scope.source_scope },
                     local,
                     kind: drop_kind,
+                    safety: self.in_scope_unsafe.into(),
                 });
 
                 return;
@@ -1320,7 +1328,11 @@ fn build_scope_drops<'tcx>(
                 assert!(local.index() > arg_count);
                 cfg.push(
                     block,
-                    Statement { source_info, kind: StatementKind::StorageDead(local), safety },
+                    Statement {
+                        source_info,
+                        kind: StatementKind::StorageDead(local),
+                        safety: safety.into(),
+                    },
                 );
             }
         }

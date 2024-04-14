@@ -145,6 +145,7 @@ impl EnumSizeOpt {
                     let store_live = Statement {
                         source_info,
                         kind: StatementKind::StorageLive(size_array_local),
+                        safety: StatementSafety::Safe,
                     };
 
                     let place = Place::from(size_array_local);
@@ -161,6 +162,7 @@ impl EnumSizeOpt {
                     let const_assign = Statement {
                         source_info,
                         kind: StatementKind::Assign(Box::new((place, rval))),
+                        safety: StatementSafety::Safe,
                     };
 
                     let discr_place = Place::from(
@@ -174,6 +176,7 @@ impl EnumSizeOpt {
                             discr_place,
                             Rvalue::Discriminant(*rhs),
                         ))),
+                        safety: StatementSafety::Safe,
                     };
 
                     let discr_cast_place =
@@ -189,6 +192,7 @@ impl EnumSizeOpt {
                                 tcx.types.usize,
                             ),
                         ))),
+                        safety: StatementSafety::Safe,
                     };
 
                     let size_place =
@@ -204,6 +208,7 @@ impl EnumSizeOpt {
                                     .mk_place_elems(&[PlaceElem::Index(discr_cast_place.local)]),
                             })),
                         ))),
+                        safety: StatementSafety::Safe,
                     };
 
                     let dst = Place::from(
@@ -216,6 +221,7 @@ impl EnumSizeOpt {
                             dst,
                             Rvalue::AddressOf(Mutability::Mut, *lhs),
                         ))),
+                        safety: StatementSafety::Safe,
                     };
 
                     let dst_cast_ty = Ty::new_mut_ptr(tcx, tcx.types.u8);
@@ -228,6 +234,7 @@ impl EnumSizeOpt {
                             dst_cast_place,
                             Rvalue::Cast(CastKind::PtrToPtr, Operand::Copy(dst), dst_cast_ty),
                         ))),
+                        safety: StatementSafety::Safe,
                     };
 
                     let src = Place::from(
@@ -240,6 +247,7 @@ impl EnumSizeOpt {
                             src,
                             Rvalue::AddressOf(Mutability::Not, *rhs),
                         ))),
+                        safety: StatementSafety::Safe,
                     };
 
                     let src_cast_ty = Ty::new_imm_ptr(tcx, tcx.types.u8);
@@ -252,10 +260,14 @@ impl EnumSizeOpt {
                             src_cast_place,
                             Rvalue::Cast(CastKind::PtrToPtr, Operand::Copy(src), src_cast_ty),
                         ))),
+                        safety: StatementSafety::Safe,
                     };
 
-                    let deinit_old =
-                        Statement { source_info, kind: StatementKind::Deinit(Box::new(dst)) };
+                    let deinit_old = Statement {
+                        source_info,
+                        kind: StatementKind::Deinit(Box::new(dst)),
+                        safety: StatementSafety::Safe,
+                    };
 
                     let copy_bytes = Statement {
                         source_info,
@@ -266,11 +278,13 @@ impl EnumSizeOpt {
                                 count: Operand::Copy(size_place),
                             }),
                         )),
+                        safety: StatementSafety::Safe,
                     };
 
                     let store_dead = Statement {
                         source_info,
                         kind: StatementKind::StorageDead(size_array_local),
+                        safety: StatementSafety::Safe,
                     };
                     let iter = [
                         store_live,

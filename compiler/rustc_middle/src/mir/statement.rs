@@ -18,14 +18,29 @@ impl From<Safety> for StatementSafety {
         }
     }
 }
+impl From<Unsafety> for StatementSafety {
+    fn from(value: Unsafety) -> Self {
+        match value {
+            Unsafety::Normal => Self::Safe,
+            _ => Self::Unsafe,
+        }
+    }
+}
 
+impl From<BlockSafety> for StatementSafety {
+    fn from(value: BlockSafety) -> Self {
+        match value {
+            BlockSafety::Safe => Self::Safe,
+            _ => Self::Unsafe,
+        }
+    }
+}
 /// A statement in a basic block, including information about its source code.
 #[derive(Clone, TyEncodable, TyDecodable, HashStable, TypeFoldable, TypeVisitable)]
 pub struct Statement<'tcx> {
     pub source_info: SourceInfo,
     pub kind: StatementKind<'tcx>,
-
-    pub safety: Safety,
+    pub safety: StatementSafety,
 }
 
 impl Statement<'_> {

@@ -435,12 +435,12 @@ fn build_thread_local_shim<'tcx>(tcx: TyCtxt<'tcx>, instance: ty::InstanceDef<'t
                 Place::return_place(),
                 Rvalue::ThreadLocalRef(def_id),
             ))),
-            safety: Safety::Safe,
+            safety: StatementSafety::Safe,
         }],
         terminator: Some(Terminator {
             source_info,
             kind: TerminatorKind::Return,
-            safety: Safety::Safe,
+            safety: StatementSafety::Safe,
         }),
         is_cleanup: false,
     });
@@ -527,7 +527,7 @@ impl<'tcx> CloneShimBuilder<'tcx> {
         let source_info = self.source_info();
         self.blocks.push(BasicBlockData {
             statements,
-            terminator: Some(Terminator { source_info, kind, safety }),
+            terminator: Some(Terminator { source_info, kind, safety: safety.into() }),
             is_cleanup,
         })
     }
@@ -541,7 +541,7 @@ impl<'tcx> CloneShimBuilder<'tcx> {
     }
 
     fn make_statement(&self, kind: StatementKind<'tcx>, safety: Safety) -> Statement<'tcx> {
-        Statement { source_info: self.source_info(), kind, safety }
+        Statement { source_info: self.source_info(), kind, safety: safety.into() }
     }
 
     fn copy_shim(&mut self) {

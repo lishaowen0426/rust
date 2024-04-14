@@ -149,6 +149,7 @@ impl<'tcx> MirPass<'tcx> for MatchBranchSimplification {
                             Statement {
                                 source_info: f.source_info,
                                 kind: StatementKind::Assign(Box::new((*lhs, rhs))),
+                                safety: StatementSafety::Safe,
                             }
                         }
                     }
@@ -157,18 +158,25 @@ impl<'tcx> MirPass<'tcx> for MatchBranchSimplification {
                 }
             });
 
-            from.statements
-                .push(Statement { source_info, kind: StatementKind::StorageLive(discr_local) });
+            from.statements.push(Statement {
+                source_info,
+                kind: StatementKind::StorageLive(discr_local),
+                safety: StatementSafety::Safe,
+            });
             from.statements.push(Statement {
                 source_info,
                 kind: StatementKind::Assign(Box::new((
                     Place::from(discr_local),
                     Rvalue::Use(discr),
                 ))),
+                safety: StatementSafety::Safe,
             });
             from.statements.extend(new_stmts);
-            from.statements
-                .push(Statement { source_info, kind: StatementKind::StorageDead(discr_local) });
+            from.statements.push(Statement {
+                source_info,
+                kind: StatementKind::StorageDead(discr_local),
+                safety: StatementSafety::Safe,
+            });
             from.terminator_mut().kind = first.terminator().kind.clone();
             should_cleanup = true;
         }

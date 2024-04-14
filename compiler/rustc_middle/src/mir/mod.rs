@@ -1376,7 +1376,7 @@ impl<'tcx> BasicBlockData<'tcx> {
             Statement {
                 source_info: SourceInfo::outermost(DUMMY_SP),
                 kind: StatementKind::Nop,
-                safety: Safety::Safe,
+                safety: StatementSafety::Safe,
             },
         );
         for (splice_start, new_stmts) in splices.into_iter().rev() {
@@ -1752,12 +1752,12 @@ mod size_asserts {
     use super::*;
     use rustc_data_structures::static_assert_size;
     // tidy-alphabetical-start
-    static_assert_size!(BasicBlockData<'_>, 144);
+    static_assert_size!(BasicBlockData<'_>, 136);
     static_assert_size!(LocalDecl<'_>, 40);
     static_assert_size!(SourceScopeData<'_>, 72);
-    static_assert_size!(Statement<'_>, 40);
+    static_assert_size!(Statement<'_>, 32);
     static_assert_size!(StatementKind<'_>, 16);
-    static_assert_size!(Terminator<'_>, 112);
+    static_assert_size!(Terminator<'_>, 104);
     static_assert_size!(TerminatorKind<'_>, 88);
     static_assert_size!(VarDebugInfo<'_>, 88);
     // tidy-alphabetical-end

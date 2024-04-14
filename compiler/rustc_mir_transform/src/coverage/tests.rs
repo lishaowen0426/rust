@@ -75,6 +75,7 @@ impl<'tcx> MockBlocks<'tcx> {
             terminator: Some(Terminator {
                 source_info: SourceInfo::outermost(Span::with_root_ctxt(next_lo, next_hi)),
                 kind,
+                safety: StatementSafety::Safe,
             }),
             is_cleanup: false,
         })

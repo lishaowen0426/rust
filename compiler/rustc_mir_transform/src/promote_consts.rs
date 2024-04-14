@@ -662,6 +662,7 @@ impl<'a, 'tcx> Promoter<'a, 'tcx> {
             terminator: Some(Terminator {
                 source_info: SourceInfo::outermost(span),
                 kind: TerminatorKind::Return,
+                safety: StatementSafety::Safe,
             }),
             is_cleanup: false,
         })
@@ -673,6 +674,7 @@ impl<'a, 'tcx> Promoter<'a, 'tcx> {
         data.statements.push(Statement {
             source_info: SourceInfo::outermost(span),
             kind: StatementKind::Assign(Box::new((Place::from(dest), rvalue))),
+            safety: StatementSafety::Safe,
         });
     }
 
@@ -747,6 +749,7 @@ impl<'a, 'tcx> Promoter<'a, 'tcx> {
                 Terminator {
                     source_info: terminator.source_info,
                     kind: mem::replace(&mut terminator.kind, TerminatorKind::Goto { target }),
+                    safety: terminator.safety,
                 }
             };
 
@@ -844,6 +847,7 @@ impl<'a, 'tcx> Promoter<'a, 'tcx> {
                     Place::from(promoted_ref),
                     Rvalue::Use(promoted_operand(ref_ty, span)),
                 ))),
+                safety: StatementSafety::Safe,
             };
             self.extra_statements.push((loc, promoted_ref_statement));
 

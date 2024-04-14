@@ -1,10 +1,11 @@
 use std::iter;
 
 use super::MirPass;
+
 use rustc_middle::{
     mir::{
         interpret::Scalar, BasicBlock, BinOp, Body, Operand, Place, Rvalue, Statement,
-        StatementKind, SwitchTargets, TerminatorKind,
+        StatementKind, StatementSafety, SwitchTargets, TerminatorKind,
     },
     ty::{Ty, TyCtxt},
 };
@@ -114,6 +115,7 @@ impl<'tcx> MirPass<'tcx> for SimplifyComparisonIntegral {
                         Statement {
                             source_info: terminator.source_info,
                             kind: StatementKind::StorageDead(opt.to_switch_on.local),
+                            safety: StatementSafety::Safe,
                         },
                     ));
                 }

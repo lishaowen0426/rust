@@ -77,7 +77,7 @@ impl<'tcx, 'a> MutVisitor<'tcx> for ElaborateBoxDerefVisitor<'tcx, 'a> {
                     Place::from(place.local)
                         .project_deeper(&build_projection(unique_ty, nonnull_ty, ptr_ty), tcx),
                 )),
-                Safety::Safe,
+                StatementSafety::Safe,
             );
 
             place.local = ptr_local;

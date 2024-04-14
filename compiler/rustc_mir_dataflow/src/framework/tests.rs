@@ -17,11 +17,19 @@ fn mock_body<'tcx>() -> mir::Body<'tcx> {
 
     let mut blocks = IndexVec::new();
     let mut block = |n, kind| {
-        let nop = mir::Statement { source_info, kind: mir::StatementKind::Nop };
+        let nop = mir::Statement {
+            source_info,
+            kind: mir::StatementKind::Nop,
+            safety: mir::StatementSafety::Safe,
+        };
 
         blocks.push(mir::BasicBlockData {
             statements: std::iter::repeat(&nop).cloned().take(n).collect(),
-            terminator: Some(mir::Terminator { source_info, kind }),
+            terminator: Some(mir::Terminator {
+                source_info,
+                kind,
+                safety: mir::StatementSafety::Safe,
+            }),
             is_cleanup: false,
         })
     };

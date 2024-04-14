@@ -631,7 +631,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                             // `<expr>`.
                             ty::Variance::Invariant,
                         ),
-                        safety: self.in_scope_unsafe,
+                        safety: self.in_scope_unsafe.into(),
                     },
                 );
 
@@ -808,7 +808,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             Statement {
                 source_info,
                 kind: StatementKind::StorageLive(local_id),
-                safety: self.in_scope_unsafe,
+                safety: self.in_scope_unsafe.into(),
             },
         );
         // Although there is almost always scope for given variable in corner cases
@@ -2279,7 +2279,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                         )),
                         ascription.variance,
                     ),
-                    safety: self.in_scope_unsafe,
+                    safety: self.in_scope_unsafe.into(),
                 },
             );
         }

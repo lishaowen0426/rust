@@ -180,7 +180,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     Statement {
                         source_info,
                         kind: StatementKind::StorageLive(result),
-                        safety: self.in_scope_unsafe,
+                        safety: this.in_scope_unsafe.into(),
                     },
                 );
                 if let Some(scope) = scope {
@@ -287,7 +287,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                                 kind: StatementKind::Intrinsic(Box::new(
                                     NonDivergingIntrinsic::Assume(Operand::Move(assert_place)),
                                 )),
-                                safety: self.in_scope_unsafe,
+                                safety: this.in_scope_unsafe.into(),
                             },
                         );
                     }
@@ -768,7 +768,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             Statement {
                 source_info,
                 kind: StatementKind::StorageLive(temp),
-                safety: self.in_scope_unsafe,
+                safety: this.in_scope_unsafe.into(),
             },
         );
 

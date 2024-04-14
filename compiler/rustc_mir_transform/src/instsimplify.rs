@@ -248,6 +248,7 @@ impl<'tcx> InstSimplifyContext<'tcx, '_> {
                     arg_place.project_deeper(&[ProjectionElem::Deref], self.tcx),
                 )),
             ))),
+            safety: StatementSafety::Safe,
         });
         terminator.kind = TerminatorKind::Goto { target: destination_block };
     }

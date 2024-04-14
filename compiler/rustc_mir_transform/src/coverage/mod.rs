@@ -17,8 +17,8 @@ use rustc_middle::hir;
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrFlags;
 use rustc_middle::mir::coverage::*;
 use rustc_middle::mir::{
-    self, BasicBlock, BasicBlockData, Coverage, SourceInfo, Statement, StatementKind, Terminator,
-    TerminatorKind,
+    self, BasicBlock, BasicBlockData, Coverage, SourceInfo, Statement, StatementKind,
+    StatementSafety, Terminator, TerminatorKind,
 };
 use rustc_middle::ty::TyCtxt;
 use rustc_span::def_id::LocalDefId;
@@ -212,6 +212,7 @@ fn inject_edge_counter_basic_block(
         terminator: Some(Terminator {
             source_info: SourceInfo::outermost(span),
             kind: TerminatorKind::Goto { target: to_bb },
+            safety: StatementSafety::Safe,
         }),
         is_cleanup: false,
     });
@@ -231,6 +232,7 @@ fn inject_statement(mir_body: &mut mir::Body<'_>, counter_kind: CoverageKind, bb
     let statement = Statement {
         source_info,
         kind: StatementKind::Coverage(Box::new(Coverage { kind: counter_kind })),
+        safety: StatementSafety::Safe,
     };
     data.statements.insert(0, statement);
 }

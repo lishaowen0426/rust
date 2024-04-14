@@ -51,6 +51,7 @@ impl AddCallGuards {
                 Some(Terminator {
                     kind: TerminatorKind::Call { target: Some(ref mut destination), unwind, .. },
                     source_info,
+                    safety,
                 }) if pred_count[*destination] > 1
                     && (matches!(
                         unwind,
@@ -64,6 +65,7 @@ impl AddCallGuards {
                         terminator: Some(Terminator {
                             source_info,
                             kind: TerminatorKind::Goto { target: *destination },
+                            safety,
                         }),
                     };
 

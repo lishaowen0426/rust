@@ -3,6 +3,7 @@
 use crate::MirPass;
 
 use rustc_data_structures::graph::dominators::Dominators;
+use rustc_middle::mir::StatementSafety;
 use rustc_middle::mir::{
     BasicBlock, BasicBlockData, Body, Statement, StatementKind, TerminatorKind,
 };
@@ -54,5 +55,6 @@ fn insert_counter(basic_block_data: &mut BasicBlockData<'_>) {
     basic_block_data.statements.push(Statement {
         source_info: basic_block_data.terminator().source_info,
         kind: StatementKind::ConstEvalCounter,
+        safety: StatementSafety::Safe,
     });
 }

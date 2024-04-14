@@ -81,6 +81,7 @@ impl<'tcx> MirPass<'tcx> for AddRetag {
                 places.map(|(place, source_info)| Statement {
                     source_info,
                     kind: StatementKind::Retag(RetagKind::FnEntry, Box::new(place)),
+                    safety: StatementSafety::Safe,
                 }),
             );
         }
@@ -96,7 +97,12 @@ impl<'tcx> MirPass<'tcx> for AddRetag {
                         if needs_retag(&destination) =>
                     {
                         // Remember the return destination for later
-                        Some((block_data.terminator().source_info, destination, target))
+                        Some((
+                            block_data.terminator().source_info,
+                            destination,
+                            target,
+                            block_data.terminator().safety,
+                        ))
                     }
 
                     // `Drop` is also a call, but it doesn't return anything so we are good.
@@ -107,12 +113,13 @@ impl<'tcx> MirPass<'tcx> for AddRetag {
             })
             .collect::<Vec<_>>();
         // Now we go over the returns we collected to retag the return values.
-        for (source_info, dest_place, dest_block) in returns {
+        for (source_info, dest_place, dest_block, safety) in returns {
             basic_blocks[dest_block].statements.insert(
                 0,
                 Statement {
                     source_info,
                     kind: StatementKind::Retag(RetagKind::Default, Box::new(dest_place)),
+                    safety,
                 },
             );
         }
@@ -123,7 +130,7 @@ impl<'tcx> MirPass<'tcx> for AddRetag {
             // We want to insert statements as we iterate. To this end, we
             // iterate backwards using indices.
             for i in (0..block_data.statements.len()).rev() {
-                let (retag_kind, place) = match block_data.statements[i].kind {
+                let (retag_kind, place, safety) = match block_data.statements[i].kind {
                     // Retag after assignments of reference type.
                     StatementKind::Assign(box (ref place, ref rvalue)) if needs_retag(place) => {
                         let add_retag = match rvalue {
@@ -133,7 +140,7 @@ impl<'tcx> MirPass<'tcx> for AddRetag {
                             _ => true,
                         };
                         if add_retag {
-                            (RetagKind::Default, *place)
+                            (RetagKind::Default, *place, block_data.statements[i].safety)
                         } else {
                             continue;
                         }
@@ -148,6 +155,7 @@ impl<'tcx> MirPass<'tcx> for AddRetag {
                     Statement {
                         source_info,
                         kind: StatementKind::Retag(retag_kind, Box::new(place)),
+                        safety,
                     },
                 );
             }

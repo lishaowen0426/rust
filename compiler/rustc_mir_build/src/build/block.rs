@@ -377,7 +377,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         // Restore the original source scope.
         this.source_scope = outer_source_scope;
         this.in_scope_unsafe = outer_in_scope_unsafe;
-        this.cfg.in_scope_unsafe = outer_in_scope_unsafe;
+        this.cfg.in_scope_unsafe = outer_in_scope_unsafe.into();
         block.unit()
     }
 
@@ -389,7 +389,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             BlockSafety::BuiltinUnsafe => Safety::BuiltinUnsafe,
             BlockSafety::ExplicitUnsafe(hir_id) => {
                 self.in_scope_unsafe = Safety::ExplicitUnsafe(hir_id);
-                self.cfg.in_scope_unsafe = Safety::ExplicitUnsafe(hir_id);
+                self.cfg.in_scope_unsafe = StatementSafety::Unsafe;
                 Safety::ExplicitUnsafe(hir_id)
             }
         };

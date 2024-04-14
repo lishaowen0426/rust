@@ -28,6 +28,7 @@ impl<'tcx> MirPass<'tcx> for LowerIntrinsics {
                                 *destination,
                                 Rvalue::NullaryOp(NullOp::DebugAssertions, tcx.types.bool),
                             ))),
+                            safety: StatementSafety::Safe,
                         });
                         terminator.kind = TerminatorKind::Goto { target };
                     }
@@ -43,6 +44,7 @@ impl<'tcx> MirPass<'tcx> for LowerIntrinsics {
                                         const_: Const::zero_sized(tcx.types.unit),
                                     }))),
                                 ))),
+                                safety: StatementSafety::Safe,
                             });
                             terminator.kind = TerminatorKind::Goto { target };
                         }
@@ -61,6 +63,7 @@ impl<'tcx> MirPass<'tcx> for LowerIntrinsics {
                                     },
                                 ),
                             )),
+                            safety: StatementSafety::Safe,
                         });
                         assert_eq!(
                             args.next(),
@@ -78,6 +81,7 @@ impl<'tcx> MirPass<'tcx> for LowerIntrinsics {
                             kind: StatementKind::Intrinsic(Box::new(
                                 NonDivergingIntrinsic::Assume(args.next().unwrap().node),
                             )),
+                            safety: StatementSafety::Safe,
                         });
                         assert_eq!(
                             args.next(),
@@ -124,6 +128,7 @@ impl<'tcx> MirPass<'tcx> for LowerIntrinsics {
                                 *destination,
                                 Rvalue::BinaryOp(bin_op, Box::new((lhs.node, rhs.node))),
                             ))),
+                            safety: StatementSafety::Safe,
                         });
                         terminator.kind = TerminatorKind::Goto { target };
                     }
@@ -148,6 +153,7 @@ impl<'tcx> MirPass<'tcx> for LowerIntrinsics {
                                     *destination,
                                     Rvalue::CheckedBinaryOp(bin_op, Box::new((lhs.node, rhs.node))),
                                 ))),
+                                safety: StatementSafety::Safe,
                             });
                             terminator.kind = TerminatorKind::Goto { target };
                         }
@@ -166,6 +172,7 @@ impl<'tcx> MirPass<'tcx> for LowerIntrinsics {
                                     *destination,
                                     Rvalue::NullaryOp(null_op, tp_ty),
                                 ))),
+                                safety: StatementSafety::Safe,
                             });
                             terminator.kind = TerminatorKind::Goto { target };
                         }
@@ -192,6 +199,7 @@ impl<'tcx> MirPass<'tcx> for LowerIntrinsics {
                                 *destination,
                                 Rvalue::Use(Operand::Copy(derefed_place)),
                             ))),
+                            safety: StatementSafety::Safe,
                         });
                         terminator.kind = match *target {
                             None => {
@@ -226,6 +234,7 @@ impl<'tcx> MirPass<'tcx> for LowerIntrinsics {
                                 derefed_place,
                                 Rvalue::Use(val.node),
                             ))),
+                            safety: StatementSafety::Safe,
                         });
                         terminator.kind = TerminatorKind::Goto { target };
                     }
@@ -238,6 +247,7 @@ impl<'tcx> MirPass<'tcx> for LowerIntrinsics {
                                     *destination,
                                     Rvalue::Discriminant(arg),
                                 ))),
+                                safety: StatementSafety::Safe,
                             });
                             terminator.kind = TerminatorKind::Goto { target };
                         }
@@ -256,6 +266,7 @@ impl<'tcx> MirPass<'tcx> for LowerIntrinsics {
                                 *destination,
                                 Rvalue::BinaryOp(BinOp::Offset, Box::new((ptr.node, delta.node))),
                             ))),
+                            safety: StatementSafety::Safe,
                         });
                         terminator.kind = TerminatorKind::Goto { target };
                     }
@@ -277,6 +288,7 @@ impl<'tcx> MirPass<'tcx> for LowerIntrinsics {
                                 *destination,
                                 Rvalue::Cast(CastKind::Transmute, arg.node, dst_ty),
                             ))),
+                            safety: StatementSafety::Safe,
                         });
 
                         if let Some(target) = *target {

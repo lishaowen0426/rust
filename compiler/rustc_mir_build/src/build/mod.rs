@@ -393,7 +393,7 @@ impl LocalsForNode {
 #[allow(dead_code)]
 struct CFG<'tcx> {
     basic_blocks: IndexVec<BasicBlock, BasicBlockData<'tcx>>,
-    pub in_scope_unsafe: Safety,
+    pub in_scope_unsafe: StatementSafety,
 }
 
 rustc_index::newtype_index! {
@@ -729,7 +729,7 @@ fn construct_error(tcx: TyCtxt<'_>, def_id: LocalDefId, guar: ErrorGuaranteed) -
     let local_decls = IndexVec::from_iter(
         [output].iter().chain(&inputs).map(|ty| LocalDecl::with_source_info(*ty, source_info)),
     );
-    let mut cfg = CFG { basic_blocks: IndexVec::new(), in_scope_unsafe: Safety::Safe };
+    let mut cfg = CFG { basic_blocks: IndexVec::new(), in_scope_unsafe: StatementSafety::Safe };
     let mut source_scopes = IndexVec::new();
 
     cfg.start_new_block();
@@ -799,7 +799,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             hir_id,
             parent_module: tcx.parent_module(hir_id).to_def_id(),
             check_overflow,
-            cfg: CFG { basic_blocks: IndexVec::new(), in_scope_unsafe: safety },
+            cfg: CFG { basic_blocks: IndexVec::new(), in_scope_unsafe: safety.into() },
             fn_span: span,
             arg_count,
             coroutine,

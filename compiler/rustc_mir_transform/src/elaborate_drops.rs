@@ -406,7 +406,7 @@ impl<'b, 'tcx> ElaborateDropsCtxt<'b, 'tcx> {
         if let Some(flag) = self.drop_flags[path] {
             let span = self.patch.source_info_for_location(self.body, loc).span;
             let val = self.constant_bool(span, val.value());
-            self.patch.add_assign(loc, Place::from(flag), val, Safety::Safe);
+            self.patch.add_assign(loc, Place::from(flag), val, StatementSafety::Safe);
         }
     }
 
@@ -415,7 +415,7 @@ impl<'b, 'tcx> ElaborateDropsCtxt<'b, 'tcx> {
         let span = self.patch.source_info_for_location(self.body, loc).span;
         let false_ = self.constant_bool(span, false);
         for flag in self.drop_flags.iter().flatten() {
-            self.patch.add_assign(loc, Place::from(*flag), false_.clone(), Safety::Safe);
+            self.patch.add_assign(loc, Place::from(*flag), false_.clone(), StatementSafety::Safe);
         }
     }
 

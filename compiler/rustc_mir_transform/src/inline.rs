@@ -575,6 +575,7 @@ impl<'tcx> Inliner<'tcx> {
             let mut data = BasicBlockData::new(Some(Terminator {
                 source_info: terminator.source_info,
                 kind: TerminatorKind::Goto { target: block },
+                safety: StatementSafety::Safe,
             }));
             data.is_cleanup = caller_body[block].is_cleanup;
             Some(caller_body.basic_blocks_mut().push(data))
@@ -611,6 +612,7 @@ impl<'tcx> Inliner<'tcx> {
             caller_body[callsite.block].statements.push(Statement {
                 source_info: callsite.source_info,
                 kind: StatementKind::Assign(Box::new((temp, dest))),
+                safety: terminator.safety,
             });
             self.tcx.mk_place_deref(temp)
         } else {
@@ -664,6 +666,7 @@ impl<'tcx> Inliner<'tcx> {
                 caller_body[callsite.block].statements.push(Statement {
                     source_info: callsite.source_info,
                     kind: StatementKind::StorageLive(new_local),
+                    safety: StatementSafety::Safe,
                 });
             }
         }
@@ -678,6 +681,7 @@ impl<'tcx> Inliner<'tcx> {
                         dest,
                         Rvalue::Use(Operand::Move(destination_local.into())),
                     ))),
+                    safety: StatementSafety::Safe,
                 });
                 n += 1;
             }
@@ -687,6 +691,7 @@ impl<'tcx> Inliner<'tcx> {
                     caller_body[block].statements.push(Statement {
                         source_info: callsite.source_info,
                         kind: StatementKind::StorageDead(new_local),
+                        safety: StatementSafety::Safe,
                     });
                     n += 1;
                 }
@@ -703,6 +708,7 @@ impl<'tcx> Inliner<'tcx> {
         caller_body[callsite.block].terminator = Some(Terminator {
             source_info: callsite.source_info,
             kind: TerminatorKind::Goto { target: integrator.map_block(START_BLOCK) },
+            safety: StatementSafety::Safe,
         });
 
         // Copy only unevaluated constants from the callee_body into the caller_body.
@@ -817,6 +823,7 @@ impl<'tcx> Inliner<'tcx> {
         caller_body[callsite.block].statements.push(Statement {
             source_info: callsite.source_info,
             kind: StatementKind::Assign(Box::new((Place::from(local), Rvalue::Use(arg)))),
+            safety: StatementSafety::Safe,
         });
         local
     }
@@ -834,6 +841,7 @@ impl<'tcx> Inliner<'tcx> {
         caller_body[callsite.block].statements.push(Statement {
             source_info: callsite.source_info,
             kind: StatementKind::StorageLive(local),
+            safety: StatementSafety::Safe,
         });
 
         if let Some(block) = return_block {
@@ -842,6 +850,7 @@ impl<'tcx> Inliner<'tcx> {
                 Statement {
                     source_info: callsite.source_info,
                     kind: StatementKind::StorageDead(local),
+                    safety: StatementSafety::Safe,
                 },
             );
         }

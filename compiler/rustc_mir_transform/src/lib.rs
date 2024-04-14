@@ -32,6 +32,8 @@ use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
 use rustc_index::IndexVec;
 use rustc_middle::mir::visit::Visitor as _;
+
+use rustc_middle::mir::StatementSafety;
 use rustc_middle::mir::{
     traversal, AnalysisPhase, Body, CallSource, ClearCrossCrate, ConstOperand, ConstQualifs,
     LocalDecl, MirPass, MirPhase, Operand, Place, ProjectionElem, Promoted, RuntimePhase, Rvalue,
@@ -181,6 +183,7 @@ fn remap_mir_for_const_eval_select<'tcx>(
                                     local.into(),
                                     Rvalue::Use(tupled_args.node.clone()),
                                 ))),
+                                safety: StatementSafety::Safe,
                             });
                             (Operand::Move, local.into())
                         }

@@ -95,7 +95,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     Statement {
                         source_info,
                         kind: StatementKind::StorageLive(temp),
-                        safety: self.in_scope_unsafe,
+                        safety: this.in_scope_unsafe.into(),
                     },
                 );
 
