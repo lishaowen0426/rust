@@ -8,7 +8,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     /// Builds a block of MIR statements to evaluate the THIR `expr`.
     ///
     /// The `statement_scope` is used if a statement temporary must be dropped.
-    #[instrument(level="debug", skip(self))]
+    #[instrument(level = "debug", skip(self))]
     pub(crate) fn stmt_expr(
         &mut self,
         mut block: BasicBlock,
@@ -35,18 +35,22 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 // is better for borrowck interaction with overloaded
                 // operators like x[j] = x[i].
 
-                debug!("stmt_expr Assign block_context.push(SubExpr) : {:?}", expr);
+                //debug!("stmt_expr Assign block_context.push(SubExpr) : {:?}", expr);
                 this.block_context.push(BlockFrame::SubExpr);
 
                 // Generate better code for things that don't need to be
                 // dropped.
                 if lhs_expr.ty.needs_drop(this.tcx, this.param_env) {
+                    debug!("lhs needs drop");
                     let rhs = unpack!(block = this.as_local_rvalue(block, rhs));
                     let lhs = unpack!(block = this.as_place(block, lhs));
+                    debug!("{lhs:?} = {rhs:?}");
                     unpack!(block = this.build_drop_and_replace(block, lhs_expr.span, lhs, rhs));
                 } else {
+                    debug!("lhs does not need drop");
                     let rhs = unpack!(block = this.as_local_rvalue(block, rhs));
                     let lhs = unpack!(block = this.as_place(block, lhs));
+                    debug!("{lhs:?} = {rhs:?}");
                     this.cfg.push_assign(block, source_info, lhs, rhs);
                 }
 
@@ -138,13 +142,12 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
                 //check unsafety
                 match expr.kind {
-                    ExprKind::Block { block} => {
+                    ExprKind::Block { block } => {
                         let blk = &this.thir[block];
                         debug!("stmt_expr, check blk: {blk:?}");
-                    },
-                    _=>{}
+                    }
+                    _ => {}
                 }
-
 
                 //check before recursion
                 debug!("before as_temp, block is {block:?}");

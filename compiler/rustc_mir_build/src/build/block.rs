@@ -88,7 +88,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         debug!(?this.in_scope_unsafe);
         for stmt in stmts {
             let Stmt { ref kind } = this.thir[*stmt];
-            //debug!("ast_block_stmts: {:?}", this.thir[*stmt]);
+            debug!("ast_block_stmts: {:?}", this.thir[*stmt]);
             match kind {
                 StmtKind::Expr { scope, expr } => {
                     this.block_context.push(BlockFrame::Statement { ignores_expr_result: true });

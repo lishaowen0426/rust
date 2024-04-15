@@ -623,7 +623,8 @@ where
 
     // Terminator at the bottom.
     extra_data(PassWhere::BeforeLocation(current_location), w)?;
-    let indented_terminator = format!("{0}{0}{1:?};", INDENT, data.terminator().kind);
+    let indented_terminator =
+        format!("{0}{0}{2:?} {1:?};", INDENT, data.terminator().kind, data.terminator().safety);
     if tcx.sess.opts.unstable_opts.mir_include_spans {
         writeln!(
             w,
@@ -654,6 +655,7 @@ where
 impl Debug for Statement<'_> {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> fmt::Result {
         use self::StatementKind::*;
+        write!(fmt, "{:?} ", self.safety)?;
         match self.kind {
             Assign(box (ref place, ref rv)) => write!(fmt, "{place:?} = {rv:?}"),
             FakeRead(box (ref cause, ref place)) => {

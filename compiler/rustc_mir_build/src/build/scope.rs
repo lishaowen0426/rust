@@ -291,7 +291,7 @@ impl DropTree {
         cfg: &mut CFG<'tcx>,
         blocks: &mut IndexVec<DropIdx, Option<BasicBlock>>,
     ) {
-        debug!("DropTree::build_mir(drops = {:#?})", self);
+        //debug!("DropTree::build_mir(drops = {:#?})", self);
         assert_eq!(blocks.len(), self.drops.len());
 
         self.assign_blocks::<T>(cfg, blocks);
@@ -550,7 +550,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
     /// Convenience wrapper that pushes a scope and then executes `f`
     /// to build its contents, popping the scope afterwards.
-    #[instrument(skip(self, f, lint_level), level = "debug")]
+    #[instrument(skip(self, f, lint_level), level = "trace")]
     pub(crate) fn in_scope<F, R>(
         &mut self,
         region_scope: (region::Scope, SourceInfo),

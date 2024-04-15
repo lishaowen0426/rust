@@ -39,6 +39,7 @@ impl<'tcx> MirPass<'tcx> for CheckAlignment {
             for statement_index in (0..basic_blocks[block].statements.len()).rev() {
                 let location = Location { block, statement_index };
                 let statement = &basic_blocks[block].statements[statement_index];
+                let safety = statement.safety;
                 let source_info = statement.source_info;
 
                 let mut finder =
@@ -56,6 +57,7 @@ impl<'tcx> MirPass<'tcx> for CheckAlignment {
                         ty,
                         source_info,
                         new_block,
+                        safety,
                     );
                 }
             }
@@ -71,6 +73,7 @@ struct PointerFinder<'tcx, 'a> {
 }
 
 impl<'tcx, 'a> Visitor<'tcx> for PointerFinder<'tcx, 'a> {
+    #[instrument(level = "debug", skip(self))]
     fn visit_place(&mut self, place: &Place<'tcx>, context: PlaceContext, location: Location) {
         // We want to only check reads and writes to Places, so we specifically exclude
         // Borrows and AddressOf.
@@ -91,6 +94,7 @@ impl<'tcx, 'a> Visitor<'tcx> for PointerFinder<'tcx, 'a> {
         }
 
         if !place.is_indirect() {
+            debug!("Place is not indirect, return");
             return;
         }
 
@@ -101,7 +105,7 @@ impl<'tcx, 'a> Visitor<'tcx> for PointerFinder<'tcx, 'a> {
 
         // We only want to check places based on unsafe pointers
         if !pointer_ty.is_unsafe_ptr() {
-            trace!("Indirect, but not based on an unsafe ptr, not checking {:?}", place);
+            debug!("Indirect, but not based on an unsafe ptr, not checking {:?}", place);
             return;
         }
 
@@ -155,6 +159,7 @@ fn insert_alignment_check<'tcx>(
     pointee_ty: Ty<'tcx>,
     source_info: SourceInfo,
     new_block: BasicBlock,
+    safety: StatementSafety,
 ) {
     // Cast the pointer to a *const ()
     let const_raw_ptr = Ty::new_ptr(tcx, TypeAndMut { ty: tcx.types.unit, mutbl: Mutability::Not });
@@ -163,7 +168,7 @@ fn insert_alignment_check<'tcx>(
     block_data.statements.push(Statement {
         source_info,
         kind: StatementKind::Assign(Box::new((thin_ptr, rvalue))),
-        safety: StatementSafety::Safe,
+        safety,
     });
 
     // Transmute the pointer to a usize (equivalent to `ptr.addr()`)
@@ -172,7 +177,7 @@ fn insert_alignment_check<'tcx>(
     block_data.statements.push(Statement {
         source_info,
         kind: StatementKind::Assign(Box::new((addr, rvalue))),
-        safety: StatementSafety::Safe,
+        safety,
     });
 
     // Get the alignment of the pointee
@@ -182,7 +187,7 @@ fn insert_alignment_check<'tcx>(
     block_data.statements.push(Statement {
         source_info,
         kind: StatementKind::Assign(Box::new((alignment, rvalue))),
-        safety: StatementSafety::Safe,
+        safety,
     });
 
     // Subtract 1 from the alignment to get the alignment mask
@@ -199,7 +204,7 @@ fn insert_alignment_check<'tcx>(
             alignment_mask,
             Rvalue::BinaryOp(BinOp::Sub, Box::new((Operand::Copy(alignment), one))),
         ))),
-        safety: StatementSafety::Safe,
+        safety,
     });
 
     // BitAnd the alignment mask with the pointer
@@ -214,7 +219,7 @@ fn insert_alignment_check<'tcx>(
                 Box::new((Operand::Copy(addr), Operand::Copy(alignment_mask))),
             ),
         ))),
-        safety: StatementSafety::Safe,
+        safety,
     });
 
     // Check if the alignment bits are all zero
@@ -230,7 +235,7 @@ fn insert_alignment_check<'tcx>(
             is_ok,
             Rvalue::BinaryOp(BinOp::Eq, Box::new((Operand::Copy(alignment_bits), zero.clone()))),
         ))),
-        safety: StatementSafety::Safe,
+        safety,
     });
 
     // Set this block's terminator to our assert, continuing to new_block if we pass
@@ -249,6 +254,6 @@ fn insert_alignment_check<'tcx>(
             // make a failing UB check turn into much worse UB when we start unwinding.
             unwind: UnwindAction::Unreachable,
         },
-        safety: StatementSafety::Safe,
+        safety,
     });
 }
