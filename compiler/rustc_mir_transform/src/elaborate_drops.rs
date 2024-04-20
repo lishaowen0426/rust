@@ -49,7 +49,7 @@ pub struct ElaborateDrops;
 impl<'tcx> MirPass<'tcx> for ElaborateDrops {
     #[instrument(level = "trace", skip(self, tcx, body))]
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
-        debug!("elaborate_drops({:?} @ {:?})", body.source, body.span);
+        //debug!("elaborate_drops({:?} @ {:?})", body.source, body.span);
 
         let def_id = body.source.def_id();
         let param_env = tcx.param_env_reveal_all_normalized(def_id);
@@ -173,7 +173,7 @@ impl<'a, 'tcx> DropElaborator<'a, 'tcx> for Elaborator<'a, '_, 'tcx> {
                 let mut children_count = 0;
                 on_all_children_bits(self.ctxt.move_data(), path, |child| {
                     let (live, dead) = self.ctxt.init_data.maybe_live_dead(child);
-                    debug!("elaborate_drop: state({:?}) = {:?}", child, (live, dead));
+                    //debug!("elaborate_drop: state({:?}) = {:?}", child, (live, dead));
                     some_live |= live;
                     some_dead |= dead;
                     children_count += 1;

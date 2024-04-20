@@ -48,6 +48,7 @@ impl<'tcx> GenKillAnalysis<'tcx> for MaybeLiveLocals {
         body.local_decls.len()
     }
 
+    #[instrument(level = "debug", skip(self, trans, location))]
     fn statement_effect(
         &mut self,
         trans: &mut impl GenKill<Self::Idx>,
