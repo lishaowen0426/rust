@@ -889,24 +889,25 @@ impl<'tcx> Debug for Rvalue<'tcx> {
         use self::Rvalue::*;
 
         match *self {
-            Use(ref place) => write!(fmt, "{place:?}"),
+            Use(ref place) => write!(fmt, "Use: {place:?}"),
             Repeat(ref a, b) => {
-                write!(fmt, "[{a:?}; ")?;
+                write!(fmt, "Repeat: [{a:?}; ")?;
                 pretty_print_const(b, fmt, false)?;
                 write!(fmt, "]")
             }
             Len(ref a) => write!(fmt, "Len({a:?})"),
             Cast(ref kind, ref place, ref ty) => {
-                with_no_trimmed_paths!(write!(fmt, "{place:?} as {ty} ({kind:?})"))
+                with_no_trimmed_paths!(write!(fmt, "Cast: {place:?} as {ty} ({kind:?})"))
             }
-            BinaryOp(ref op, box (ref a, ref b)) => write!(fmt, "{op:?}({a:?}, {b:?})"),
+            BinaryOp(ref op, box (ref a, ref b)) => write!(fmt, "BinOp: {op:?}({a:?}, {b:?})"),
             CheckedBinaryOp(ref op, box (ref a, ref b)) => {
                 write!(fmt, "Checked{op:?}({a:?}, {b:?})")
             }
-            UnaryOp(ref op, ref a) => write!(fmt, "{op:?}({a:?})"),
+            UnaryOp(ref op, ref a) => write!(fmt, "UnaryOp: {op:?}({a:?})"),
             Discriminant(ref place) => write!(fmt, "discriminant({place:?})"),
             NullaryOp(ref op, ref t) => {
                 let t = with_no_trimmed_paths!(format!("{}", t));
+                write!(fmt, "NullaryOp: ")?;
                 match op {
                     NullOp::SizeOf => write!(fmt, "SizeOf({t})"),
                     NullOp::AlignOf => write!(fmt, "AlignOf({t})"),
@@ -919,6 +920,7 @@ impl<'tcx> Debug for Rvalue<'tcx> {
                 write!(fmt, "&/*tls*/ {}{}", muta, tcx.def_path_str(did))
             }),
             Ref(region, borrow_kind, ref place) => {
+                write!(fmt, "Ref: ")?;
                 let kind_str = match borrow_kind {
                     BorrowKind::Shared => "",
                     BorrowKind::Fake => "fake ",
@@ -945,6 +947,7 @@ impl<'tcx> Debug for Rvalue<'tcx> {
             CopyForDeref(ref place) => write!(fmt, "deref_copy {place:#?}"),
 
             AddressOf(mutability, ref place) => {
+                write!(fmt, "AddressOf: ")?;
                 let kind_str = match mutability {
                     Mutability::Mut => "mut",
                     Mutability::Not => "const",
@@ -954,6 +957,7 @@ impl<'tcx> Debug for Rvalue<'tcx> {
             }
 
             Aggregate(ref kind, ref places) => {
+                write!(fmt, "Aggregate: ")?;
                 let fmt_tuple = |fmt: &mut Formatter<'_>, name: &str| {
                     let mut tuple_fmt = fmt.debug_tuple(name);
                     for place in places {
@@ -1060,8 +1064,8 @@ impl<'tcx> Debug for Operand<'tcx> {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> fmt::Result {
         use self::Operand::*;
         match *self {
-            Constant(ref a) => write!(fmt, "{a:?}"),
-            Copy(ref place) => write!(fmt, "{place:?}"),
+            Constant(ref a) => write!(fmt, "constant: {a:?}"),
+            Copy(ref place) => write!(fmt, "copy {place:?}"),
             Move(ref place) => write!(fmt, "move {place:?}"),
         }
     }

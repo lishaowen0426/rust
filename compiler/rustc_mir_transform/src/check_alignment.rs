@@ -47,7 +47,7 @@ impl<'tcx> MirPass<'tcx> for CheckAlignment {
                 finder.visit_statement(statement, location);
 
                 for (local, ty) in finder.pointers {
-                    debug!("Inserting alignment check for {:?}", ty);
+                    //debug!("Inserting alignment check for {:?}", ty);
                     let new_block = split_block(basic_blocks, location);
                     insert_alignment_check(
                         tcx,
@@ -73,7 +73,7 @@ struct PointerFinder<'tcx, 'a> {
 }
 
 impl<'tcx, 'a> Visitor<'tcx> for PointerFinder<'tcx, 'a> {
-    #[instrument(level = "debug", skip(self))]
+    //#[instrument(level = "debug", skip(self))]
     fn visit_place(&mut self, place: &Place<'tcx>, context: PlaceContext, location: Location) {
         // We want to only check reads and writes to Places, so we specifically exclude
         // Borrows and AddressOf.

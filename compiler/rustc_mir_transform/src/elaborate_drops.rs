@@ -163,7 +163,7 @@ impl<'a, 'tcx> DropElaborator<'a, 'tcx> for Elaborator<'a, '_, 'tcx> {
         self.ctxt.param_env()
     }
 
-    #[instrument(level = "debug", skip(self), ret)]
+    //#[instrument(level = "debug", skip(self), ret)]
     fn drop_style(&self, path: Self::Path, mode: DropFlagMode) -> DropStyle {
         let ((maybe_live, maybe_dead), multipart) = match mode {
             DropFlagMode::Shallow => (self.ctxt.init_data.maybe_live_dead(path), false),
@@ -258,7 +258,7 @@ impl<'b, 'tcx> ElaborateDropsCtxt<'b, 'tcx> {
 
     fn create_drop_flag(&mut self, index: MovePathIndex, span: Span) {
         let patch = &mut self.patch;
-        debug!("create_drop_flag({:?})", self.body.span);
+        //debug!("create_drop_flag({:?})", self.body.span);
         self.drop_flags[index].get_or_insert_with(|| patch.new_temp(self.tcx.types.bool, span));
     }
 
@@ -287,13 +287,14 @@ impl<'b, 'tcx> ElaborateDropsCtxt<'b, 'tcx> {
             let TerminatorKind::Drop { ref place, .. } = terminator.kind else { continue };
 
             let path = self.move_data().rev_lookup.find(place.as_ref());
-            debug!("collect_drop_flags: {:?}, place {:?} ({:?})", bb, place, path);
+            //debug!("collect_drop_flags: {:?}, place {:?} ({:?})", bb, place, path);
 
             match path {
                 LookupResult::Exact(path) => {
                     self.init_data.seek_before(self.body.terminator_loc(bb));
                     on_all_children_bits(self.move_data(), path, |child| {
                         let (maybe_live, maybe_dead) = self.init_data.maybe_live_dead(child);
+                        /*
                         debug!(
                             "collect_drop_flags: collecting {:?} from {:?}@{:?} - {:?}",
                             child,
@@ -301,6 +302,7 @@ impl<'b, 'tcx> ElaborateDropsCtxt<'b, 'tcx> {
                             path,
                             (maybe_live, maybe_dead)
                         );
+                        */
                         if maybe_live && maybe_dead {
                             self.create_drop_flag(child, terminator.source_info.span)
                         }
@@ -454,9 +456,9 @@ impl<'b, 'tcx> ElaborateDropsCtxt<'b, 'tcx> {
         // clobbered before they are read.
 
         for (bb, data) in self.body.basic_blocks.iter_enumerated() {
-            debug!("drop_flags_for_locs({:?})", data);
+            //debug!("drop_flags_for_locs({:?})", data);
             for i in 0..(data.statements.len() + 1) {
-                debug!("drop_flag_for_locs: stmt {}", i);
+                //debug!("drop_flag_for_locs: stmt {}", i);
                 if i == data.statements.len() {
                     match data.terminator().kind {
                         TerminatorKind::Drop { .. } => {

@@ -70,6 +70,9 @@ pub(crate) fn simplify_cfg(body: &mut Body<'_>) {
 }
 
 impl<'tcx> MirPass<'tcx> for SimplifyCfg {
+    fn is_enabled(&self, _sess: &rustc_session::Session) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         self.name()
     }

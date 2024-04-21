@@ -893,7 +893,7 @@ fn promote_candidates<'tcx>(
     candidates: Vec<Candidate>,
 ) -> IndexVec<Promoted, Body<'tcx>> {
     // Visit candidates in reverse, in case they're nested.
-    debug!("promote_candidates({:?})", candidates);
+    //debug!("promote_candidates({:?})", candidates);
 
     let mut promotions = IndexVec::new();
 

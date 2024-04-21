@@ -5,6 +5,7 @@
 mod borrowed_locals;
 mod initialized;
 mod liveness;
+mod safety;
 mod storage_liveness;
 
 pub use self::borrowed_locals::borrowed_locals;
@@ -17,3 +18,5 @@ pub use self::liveness::MaybeLiveLocals;
 pub use self::liveness::MaybeTransitiveLiveLocals;
 pub use self::liveness::TransferFunction as LivenessTransferFunction;
 pub use self::storage_liveness::{MaybeRequiresStorage, MaybeStorageDead, MaybeStorageLive};
+
+pub use self::safety::SafetyLocals;

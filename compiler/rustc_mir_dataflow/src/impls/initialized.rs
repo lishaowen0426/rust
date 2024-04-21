@@ -666,7 +666,7 @@ impl<'tcx> GenKillAnalysis<'tcx> for EverInitializedPlaces<'_, 'tcx> {
         self.move_data().inits.len()
     }
 
-    #[instrument(skip(self, trans), level = "debug")]
+    //#[instrument(skip(self, trans), level = "debug")]
     fn statement_effect(
         &mut self,
         trans: &mut impl GenKill<Self::Idx>,
@@ -678,7 +678,7 @@ impl<'tcx> GenKillAnalysis<'tcx> for EverInitializedPlaces<'_, 'tcx> {
         let init_loc_map = &move_data.init_loc_map;
         let rev_lookup = &move_data.rev_lookup;
 
-        debug!("initializes move_indexes {:?}", &init_loc_map[location]);
+        //debug!("initializes move_indexes {:?}", &init_loc_map[location]);
         trans.gen_all(init_loc_map[location].iter().copied());
 
         if let mir::StatementKind::StorageDead(local) = stmt.kind {
@@ -694,7 +694,7 @@ impl<'tcx> GenKillAnalysis<'tcx> for EverInitializedPlaces<'_, 'tcx> {
         }
     }
 
-    #[instrument(skip(self, trans, terminator), level = "debug")]
+    //#[instrument(skip(self, trans, terminator), level = "debug")]
     fn terminator_effect<'mir>(
         &mut self,
         trans: &mut Self::Domain,
