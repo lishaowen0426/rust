@@ -903,7 +903,7 @@ where
     }
 
     fn complete_drop(&mut self, succ: BasicBlock, unwind: Unwind) -> BasicBlock {
-        debug!("complete_drop(succ={:?}, unwind={:?})", succ, unwind);
+        //debug!("complete_drop(succ={:?}, unwind={:?})", succ, unwind);
 
         let drop_block = self.drop_block(succ, unwind);
 

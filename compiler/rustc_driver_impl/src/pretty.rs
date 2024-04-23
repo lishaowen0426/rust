@@ -316,7 +316,6 @@ pub fn print<'tcx>(sess: &Session, ppm: PpMode, ex: PrintExtra<'tcx>) {
             }
         }
         HirTree => {
-            debug!("pretty printing HIR tree");
             format!("{:#?}", ex.tcx().hir().krate())
         }
         Mir => {

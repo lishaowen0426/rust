@@ -94,7 +94,6 @@ impl<'tcx, 'a> Visitor<'tcx> for PointerFinder<'tcx, 'a> {
         }
 
         if !place.is_indirect() {
-            debug!("Place is not indirect, return");
             return;
         }
 
