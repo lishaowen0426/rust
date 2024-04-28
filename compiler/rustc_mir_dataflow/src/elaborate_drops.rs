@@ -166,6 +166,8 @@ where
     path: D::Path,
     succ: BasicBlock,
     unwind: Unwind,
+
+    safety: StatementSafety,
 }
 
 /// "Elaborates" a drop of `place`/`path` and patches `bb`'s terminator to execute it.
@@ -184,11 +186,12 @@ pub fn elaborate_drop<'b, 'tcx, D>(
     succ: BasicBlock,
     unwind: Unwind,
     bb: BasicBlock,
+    safety: StatementSafety,
 ) where
     D: DropElaborator<'b, 'tcx>,
     'tcx: 'b,
 {
-    DropCtxt { elaborator, source_info, place, path, succ, unwind }.elaborate_drop(bb)
+    DropCtxt { elaborator, source_info, place, path, succ, unwind, safety }.elaborate_drop(bb)
 }
 
 impl<'l, 'b, 'tcx, D> DropCtxt<'l, 'b, 'tcx, D>
@@ -230,7 +233,7 @@ where
                 self.elaborator.patch().patch_terminator(
                     bb,
                     TerminatorKind::Goto { target: self.succ },
-                    StatementSafety::Safe,
+                    self.safety,
                 );
             }
             DropStyle::Static => {
@@ -242,7 +245,7 @@ where
                         unwind: self.unwind.into_action(),
                         replace: false,
                     },
-                    StatementSafety::Safe,
+                    self.safety,
                 );
             }
             DropStyle::Conditional => {
@@ -250,7 +253,7 @@ where
                 self.elaborator.patch().patch_terminator(
                     bb,
                     TerminatorKind::Goto { target: drop_bb },
-                    StatementSafety::Safe,
+                    self.safety,
                 );
             }
             DropStyle::Open => {
@@ -258,7 +261,7 @@ where
                 self.elaborator.patch().patch_terminator(
                     bb,
                     TerminatorKind::Goto { target: drop_bb },
-                    StatementSafety::Safe,
+                    self.safety,
                 );
             }
         }
@@ -299,7 +302,7 @@ where
         unwind: Unwind,
     ) -> BasicBlock {
         if let Some(path) = path {
-            debug!("drop_subpath: for std field {:?}", place);
+            //debug!("drop_subpath: for std field {:?}", place);
 
             DropCtxt {
                 elaborator: self.elaborator,
@@ -308,10 +311,11 @@ where
                 place,
                 succ,
                 unwind,
+                safety: self.safety,
             }
             .elaborated_drop_block()
         } else {
-            debug!("drop_subpath: for rest field {:?}", place);
+            //debug!("drop_subpath: for rest field {:?}", place);
 
             DropCtxt {
                 elaborator: self.elaborator,
@@ -322,6 +326,7 @@ where
                 // Using `self.path` here to condition the drop on
                 // our own drop flag.
                 path: self.path,
+                safety: self.safety,
             }
             .complete_drop(succ, unwind)
         }

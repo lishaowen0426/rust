@@ -1239,6 +1239,7 @@ fn elaborate_coroutine_drops<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
             *target,
             unwind,
             block,
+            StatementSafety::Safe,
         );
     }
     elaborator.patch.apply(body);

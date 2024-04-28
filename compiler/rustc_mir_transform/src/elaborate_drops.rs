@@ -377,6 +377,7 @@ impl<'b, 'tcx> ElaborateDropsCtxt<'b, 'tcx> {
                         target,
                         unwind,
                         bb,
+                        terminator.safety,
                     )
                 }
                 LookupResult::Parent(None) => {}

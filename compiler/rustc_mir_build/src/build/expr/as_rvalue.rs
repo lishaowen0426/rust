@@ -25,6 +25,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     /// The operand returned from this function will *not be valid* after
     /// an ExprKind::Scope is passed, so please do *not* return it from
     /// functions to avoid bad miscompiles.
+    #[instrument(level = "debug", skip(self))]
     pub(crate) fn as_local_rvalue(
         &mut self,
         block: BasicBlock,
@@ -399,6 +400,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 ref fake_reads,
                 movability: _,
             }) => {
+                debug!("compile closure {closure_id:?} as rvalue, with fake reads: {fake_reads:?}");
                 // Convert the closure fake reads, if any, from `ExprRef` to mir `Place`
                 // and push the fake reads.
                 // This must come before creating the operands. This is required in case

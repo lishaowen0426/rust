@@ -587,8 +587,8 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
                     _ => true,
                 });
-
                 let rvalue = unpack!(block = this.as_local_rvalue(block, expr_id));
+                debug!(?rvalue, "{:?}", this.in_scope_unsafe);
                 this.cfg.push_assign(block, source_info, destination, rvalue);
                 block.unit()
             }

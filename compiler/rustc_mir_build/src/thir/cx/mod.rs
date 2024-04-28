@@ -23,6 +23,7 @@ pub(crate) fn thir_body(
 ) -> Result<(&Steal<Thir<'_>>, ExprId), ErrorGuaranteed> {
     let hir = tcx.hir();
     let body = hir.body(hir.body_owned_by(owner_def));
+    //debug!("build thir for {body:?}");
     let mut cx = Cx::new(tcx, owner_def);
     if let Some(reported) = cx.typeck_results.tainted_by_errors {
         return Err(reported);

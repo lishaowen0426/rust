@@ -240,7 +240,7 @@ fn local_decls_for_sig<'tcx>(
 }
 
 fn build_drop_shim<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId, ty: Option<Ty<'tcx>>) -> Body<'tcx> {
-    debug!("build_drop_shim(def_id={:?}, ty={:?})", def_id, ty);
+    //debug!("build_drop_shim(def_id={:?}, ty={:?})", def_id, ty);
 
     assert!(!matches!(ty, Some(ty) if ty.is_coroutine()));
 
@@ -317,6 +317,7 @@ fn build_drop_shim<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId, ty: Option<Ty<'tcx>>)
                 return_block,
                 elaborate_drops::Unwind::To(resume_block),
                 START_BLOCK,
+                sig.unsafety.into(),
             );
             elaborator.patch
         };

@@ -136,6 +136,7 @@ impl<'tcx> UnsafetyVisitor<'_, 'tcx> {
     }
 
     /// Handle closures/coroutines/inline-consts, which is unsafecked with their parent body.
+    #[instrument(level = "debug", skip(self))]
     fn visit_inner_body(&mut self, def: LocalDefId) {
         if let Ok((inner_thir, expr)) = self.tcx.thir_body(def) {
             // Runs all other queries that depend on THIR.
@@ -143,6 +144,7 @@ impl<'tcx> UnsafetyVisitor<'_, 'tcx> {
             let inner_thir = &inner_thir.steal();
             let hir_context = self.tcx.local_def_id_to_hir_id(def);
             let safety_context = mem::replace(&mut self.safety_context, SafetyContext::Safe);
+            debug!("inner body: {:?}", safety_context);
             let mut inner_visitor = UnsafetyVisitor {
                 tcx: self.tcx,
                 thir: inner_thir,
@@ -324,7 +326,7 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> for UnsafetyVisitor<'a, 'tcx> {
             }
         }
     }
-
+    #[instrument(level = "debug", skip(self))]
     fn visit_expr(&mut self, expr: &'a Expr<'tcx>) {
         // could we be in the LHS of an assignment to a field?
         match expr.kind {
@@ -531,7 +533,7 @@ impl<'a, 'tcx> Visitor<'a, 'tcx> for UnsafetyVisitor<'a, 'tcx> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum SafetyContext {
     Safe,
     BuiltinUnsafeBlock,
@@ -544,7 +546,7 @@ enum SafetyContext {
     },
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct NestedUsedBlock {
     hir_id: hir::HirId,
     span: Span,
@@ -907,6 +909,7 @@ impl UnsafeOpKind {
     }
 }
 
+#[instrument(level = "debug", skip(tcx))]
 pub fn check_unsafety(tcx: TyCtxt<'_>, def: LocalDefId) {
     // THIR unsafeck can be disabled with `-Z thir-unsafeck=off`
     if !tcx.sess.opts.unstable_opts.thir_unsafeck {
