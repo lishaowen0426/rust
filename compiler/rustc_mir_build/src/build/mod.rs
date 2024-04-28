@@ -479,7 +479,7 @@ fn construct_fn<'tcx>(
         .output
         .span();
 
-    let safety = match fn_sig.unsafety {
+    let mut safety = match fn_sig.unsafety {
         hir::Unsafety::Normal => Safety::Safe,
         hir::Unsafety::Unsafe => Safety::FnUnsafe,
     };
@@ -489,7 +489,10 @@ fn construct_fn<'tcx>(
     if let DefKind::Closure = tcx.def_kind(fn_def) {
         // HACK(eddyb) Avoid having RustCall on closures,
         // as it adds unnecessary (and wrong) auto-tupling.
-        debug!("construct_fn for a closure: {fn_def:?}");
+        safety =
+            if let Some(closure_safety) = tcx.closure_mir_safety { closure_safety } else { safety };
+
+        debug!("construct_fn for a closure: {fn_def:?} in {safety:?}");
         abi = Abi::Rust;
     }
 

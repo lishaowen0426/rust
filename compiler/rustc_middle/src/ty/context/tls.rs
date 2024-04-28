@@ -38,7 +38,7 @@ pub struct ImplicitCtxt<'a, 'tcx> {
 
 impl<'a, 'tcx> ImplicitCtxt<'a, 'tcx> {
     pub fn new(gcx: &'tcx GlobalCtxt<'tcx>) -> Self {
-        let tcx = TyCtxt { gcx };
+        let tcx = TyCtxt { gcx, closure_mir_safety: None };
         ImplicitCtxt {
             tcx,
             query: None,

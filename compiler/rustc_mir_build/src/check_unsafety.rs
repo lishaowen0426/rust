@@ -6,7 +6,7 @@ use rustc_middle::thir::visit::Visitor;
 
 use rustc_errors::DiagArgValue;
 use rustc_hir as hir;
-use rustc_middle::mir::BorrowKind;
+use rustc_middle::mir::{BorrowKind, Safety};
 use rustc_middle::thir::*;
 use rustc_middle::ty::print::with_no_trimmed_paths;
 use rustc_middle::ty::{self, ParamEnv, Ty, TyCtxt};
@@ -140,7 +140,14 @@ impl<'tcx> UnsafetyVisitor<'_, 'tcx> {
     fn visit_inner_body(&mut self, def: LocalDefId) {
         if let Ok((inner_thir, expr)) = self.tcx.thir_body(def) {
             // Runs all other queries that depend on THIR.
+
+            //enter closure safety
+            let outer_safety = self.tcx.closure_mir_safety;
+            self.tcx.closure_mir_safety = Some((&self.safety_context).into());
             self.tcx.ensure_with_value().mir_built(def);
+            //restore safety
+            self.tcx.closure_mir_safety = outer_safety;
+
             let inner_thir = &inner_thir.steal();
             let hir_context = self.tcx.local_def_id_to_hir_id(def);
             let safety_context = mem::replace(&mut self.safety_context, SafetyContext::Safe);
@@ -544,6 +551,17 @@ enum SafetyContext {
         used: bool,
         nested_used_blocks: Vec<NestedUsedBlock>,
     },
+}
+
+impl From<&SafetyContext> for Safety {
+    fn from(value: &SafetyContext) -> Self {
+        match value {
+            SafetyContext::Safe => Safety::Safe,
+            SafetyContext::UnsafeFn => Safety::FnUnsafe,
+            SafetyContext::BuiltinUnsafeBlock => Safety::BuiltinUnsafe,
+            SafetyContext::UnsafeBlock { span: _, hir_id, .. } => Safety::ExplicitUnsafe(*hir_id),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
