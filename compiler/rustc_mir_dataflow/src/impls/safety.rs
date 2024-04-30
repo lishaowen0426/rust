@@ -1,4 +1,4 @@
-use crate::{AnalysisDomain, Backward, GenKill, GenKillAnalysis};
+use crate::{Analysis, AnalysisDomain, Backward, GenKill};
 use rustc_index::bit_set::BitSet;
 use rustc_middle::mir::visit::{PlaceContext, Visitor};
 use rustc_middle::mir::{
@@ -22,43 +22,31 @@ impl<'tcx> AnalysisDomain<'tcx> for SafetyLocals {
     }
 }
 #[allow(unused_variables)]
-impl<'tcx> GenKillAnalysis<'tcx> for SafetyLocals {
-    type Idx = Local;
-
-    fn domain_size(&self, body: &rustc_middle::mir::Body<'tcx>) -> usize {
-        body.local_decls.len()
-    }
-
-    fn statement_effect(
+impl<'tcx> Analysis<'tcx> for SafetyLocals {
+    fn apply_statement_effect(
         &mut self,
-        trans: &mut impl GenKill<Self::Idx>,
+        state: &mut Self::Domain,
         statement: &Statement<'tcx>,
         location: Location,
     ) {
-        TransferFunction(trans, StatementSafety::Safe).visit_statement(statement, location)
+        debug!(?statement);
+        TransferFunction(state, statement.safety).visit_statement(statement, location);
     }
 
-    fn terminator_effect<'mir>(
+    fn apply_terminator_effect<'mir>(
         &mut self,
-        trans: &mut Self::Domain,
+        state: &mut Self::Domain,
         terminator: &'mir Terminator<'tcx>,
-        location: rustc_middle::mir::Location,
+        location: Location,
     ) -> TerminatorEdges<'mir, 'tcx> {
         terminator.edges()
     }
-    fn call_return_effect(
+
+    fn apply_call_return_effect(
         &mut self,
-        trans: &mut Self::Domain,
+        state: &mut Self::Domain,
         block: rustc_middle::mir::BasicBlock,
         return_places: rustc_middle::mir::CallReturnPlaces<'_, 'tcx>,
-    ) {
-    }
-
-    fn switch_int_edge_effects<G: crate::GenKill<Self::Idx>>(
-        &mut self,
-        _block: rustc_middle::mir::BasicBlock,
-        _discr: &rustc_middle::mir::Operand<'tcx>,
-        _edge_effects: &mut impl crate::SwitchIntEdgeEffects<G>,
     ) {
     }
 }
@@ -67,10 +55,7 @@ impl<'tcx> GenKillAnalysis<'tcx> for SafetyLocals {
 struct TransferFunction<'a, T>(pub &'a mut T, StatementSafety);
 
 #[allow(unused_variables)]
-impl<'tcx, T> Visitor<'tcx> for TransferFunction<'_, T>
-where
-    T: GenKill<Local>,
-{
+impl<'tcx> Visitor<'tcx> for TransferFunction<'_, BitSet<Local>> {
     fn visit_statement(&mut self, statement: &Statement<'tcx>, location: Location) {
         let out_safety = self.1;
         self.1 = statement.safety;
@@ -79,29 +64,28 @@ where
     }
 
     fn visit_assign(&mut self, place: &Place<'tcx>, rvalue: &Rvalue<'tcx>, location: Location) {
-        debug!(?rvalue);
-
         if let StatementSafety::Unsafe = self.1 {
             // if the statement is unsafe
             // lhs becomes unsafe
             self.0.gen(place.local);
+
+            // then we check if this leads to any rhs place become unsafe
+            LTRRvaluePlaceVisitor { gen_kill: self.0 }.visit_rvalue(rvalue, location);
         } else {
-            // the statement is safe, we
-            //
+            // if the statement is safe,
+            // we check if any unsafe rhs leads lhs unsafe
+            RTLRvaluePlaceVisitor { gen_kill: self.0, lhs: place.local }
+                .visit_rvalue(rvalue, location);
         }
     }
 }
 
 #[allow(dead_code)]
-struct RvalueVisitor<'a, T> {
-    pub gen_kill: &'a mut T,
-    pub in_unsafe_context: bool,
+struct LTRRvaluePlaceVisitor<'a> {
+    pub gen_kill: &'a mut BitSet<Local>,
 }
 #[allow(unused_variables)]
-impl<'tcx, T> Visitor<'tcx> for RvalueVisitor<'_, T>
-where
-    T: GenKill<Local>,
-{
+impl<'tcx> Visitor<'tcx> for LTRRvaluePlaceVisitor<'_> {
     fn visit_rvalue(&mut self, rvalue: &Rvalue<'tcx>, location: Location) {
         match rvalue {
             Rvalue::Use(_)
@@ -111,18 +95,32 @@ where
             | Rvalue::Discriminant(_)
             | Rvalue::Aggregate(..)
             | Rvalue::UnaryOp(..) => {
-                //safe case
+                //safe case, we return without further descending to the place
+                return;
             }
-            Rvalue::Ref(_, kind, place) => {}
-            Rvalue::ThreadLocalRef(def_id) => {}
-            Rvalue::AddressOf(mutability, place) => {}
-            Rvalue::Cast(cast_kind, op, ty) => {}
+            Rvalue::Ref(_, kind, place) => self.super_rvalue(rvalue, location),
+            Rvalue::ThreadLocalRef(def_id) => self.super_rvalue(rvalue, location),
+            Rvalue::AddressOf(mutability, place) => self.super_rvalue(rvalue, location),
+            Rvalue::Cast(cast_kind, op, ty) => self.super_rvalue(rvalue, location),
             Rvalue::BinaryOp(op, operands) | Rvalue::CheckedBinaryOp(op, operands) => {
-                if let BinOp::Offset = op {}
+                if let BinOp::Offset = op {
+                    self.super_rvalue(rvalue, location)
+                }
             }
-            Rvalue::ShallowInitBox(op, _) => {}
-            Rvalue::CopyForDeref(place) => {}
+            Rvalue::ShallowInitBox(op, _) => self.super_rvalue(rvalue, location),
+            Rvalue::CopyForDeref(place) => self.super_rvalue(rvalue, location),
         }
+        return;
     }
-    fn visit_place(&mut self, place: &Place<'tcx>, context: PlaceContext, location: Location) {}
+
+    fn visit_place(&mut self, place: &Place<'tcx>, context: PlaceContext, location: Location) {
+        self.gen_kill.gen(place.local);
+        self.super_place(place, context, location);
+    }
 }
+#[allow(dead_code)]
+struct RTLRvaluePlaceVisitor<'a> {
+    pub gen_kill: &'a mut BitSet<Local>,
+    pub lhs: Local,
+}
+impl<'tcx> Visitor<'tcx> for RTLRvaluePlaceVisitor<'_> {}

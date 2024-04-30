@@ -116,7 +116,7 @@ impl<'b, 'a, 'tcx, F: Fn(Ty<'tcx>) -> bool> Gatherer<'b, 'a, 'tcx, F> {
     fn move_path_for(&mut self, place: Place<'tcx>) -> MovePathResult {
         let data = &mut self.builder.data;
 
-        debug!("lookup({:?})", place);
+        //debug!("lookup({:?})", place);
         let Some(mut base) = data.rev_lookup.find_local(place.local) else {
             return MovePathResult::Error;
         };
@@ -285,6 +285,7 @@ impl<'b, 'a, 'tcx, F: Fn(Ty<'tcx>) -> bool> Gatherer<'b, 'a, 'tcx, F> {
 
 impl<'a, 'tcx, F> MoveDataBuilder<'a, 'tcx, F> {
     fn finalize(self) -> MoveData<'tcx> {
+        /*
         debug!("{}", {
             debug!("moves for {:?}:", self.body.span);
             for (j, mo) in self.data.moves.iter_enumerated() {
@@ -296,6 +297,7 @@ impl<'a, 'tcx, F> MoveDataBuilder<'a, 'tcx, F> {
             }
             "done dumping moves"
         });
+        */
 
         self.data
     }
@@ -334,7 +336,7 @@ impl<'a, 'tcx, F: Fn(Ty<'tcx>) -> bool> MoveDataBuilder<'a, 'tcx, F> {
                     location: InitLocation::Argument(arg),
                 });
 
-                debug!("gather_args: adding init {:?} of {:?} for argument {:?}", init, path, arg);
+                //debug!("gather_args: adding init {:?} of {:?} for argument {:?}", init, path, arg);
 
                 self.data.init_path_map[path].push(init);
             }
@@ -342,12 +344,12 @@ impl<'a, 'tcx, F: Fn(Ty<'tcx>) -> bool> MoveDataBuilder<'a, 'tcx, F> {
     }
 
     fn gather_statement(&mut self, loc: Location, stmt: &Statement<'tcx>) {
-        debug!("gather_statement({:?}, {:?})", loc, stmt);
+        //debug!("gather_statement({:?}, {:?})", loc, stmt);
         (Gatherer { builder: self, loc }).gather_statement(stmt);
     }
 
     fn gather_terminator(&mut self, loc: Location, term: &Terminator<'tcx>) {
-        debug!("gather_terminator({:?}, {:?})", loc, term);
+        //debug!("gather_terminator({:?}, {:?})", loc, term);
         (Gatherer { builder: self, loc }).gather_terminator(term);
     }
 }
@@ -533,7 +535,7 @@ impl<'b, 'a, 'tcx, F: Fn(Ty<'tcx>) -> bool> Gatherer<'b, 'a, 'tcx, F> {
     }
 
     fn gather_move(&mut self, place: Place<'tcx>) {
-        debug!("gather_move({:?}, {:?})", self.loc, place);
+        //debug!("gather_move({:?}, {:?})", self.loc, place);
         if let [ref base @ .., ProjectionElem::Subslice { from, to, from_end: false }] =
             **place.projection
         {
@@ -576,18 +578,20 @@ impl<'b, 'a, 'tcx, F: Fn(Ty<'tcx>) -> bool> Gatherer<'b, 'a, 'tcx, F> {
         }
     }
 
-    fn record_move(&mut self, place: Place<'tcx>, path: MovePathIndex) {
+    fn record_move(&mut self, _place: Place<'tcx>, path: MovePathIndex) {
         let move_out = self.builder.data.moves.push(MoveOut { path, source: self.loc });
+        /*
         debug!(
             "gather_move({:?}, {:?}): adding move {:?} of {:?}",
             self.loc, place, move_out, path
         );
+        */
         self.builder.data.path_map[path].push(move_out);
         self.builder.data.loc_map[self.loc].push(move_out);
     }
 
     fn gather_init(&mut self, place: PlaceRef<'tcx>, kind: InitKind) {
-        debug!("gather_init({:?}, {:?})", self.loc, place);
+        //debug!("gather_init({:?}, {:?})", self.loc, place);
 
         let mut place = place;
 
@@ -605,11 +609,12 @@ impl<'b, 'a, 'tcx, F: Fn(Ty<'tcx>) -> bool> Gatherer<'b, 'a, 'tcx, F> {
                 path,
                 kind,
             });
-
+            /*
             debug!(
                 "gather_init({:?}, {:?}): adding init {:?} of {:?}",
                 self.loc, place, init, path
             );
+            */
 
             self.builder.data.init_path_map[path].push(init);
             self.builder.data.init_loc_map[self.loc].push(init);

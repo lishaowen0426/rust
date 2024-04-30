@@ -93,12 +93,12 @@ pub fn drop_flag_effects_for_location<'tcx, F>(
     F: FnMut(MovePathIndex, DropFlagState),
 {
     let move_data = &ctxt.move_data;
-    debug!("drop_flag_effects_for_location({:?})", loc);
+    //debug!("drop_flag_effects_for_location({:?})", loc);
 
     // first, move out of the RHS
     for mi in &move_data.loc_map[loc] {
         let path = mi.move_path_index(move_data);
-        debug!("moving out of path {:?}", move_data.move_paths[path]);
+        //debug!("moving out of path {:?}", move_data.move_paths[path]);
 
         on_all_children_bits(move_data, path, |mpi| callback(mpi, DropFlagState::Absent))
     }
@@ -112,7 +112,7 @@ pub fn drop_flag_effects_for_location<'tcx, F>(
         }
     }
 
-    debug!("drop_flag_effects: assignment for location({:?})", loc);
+    //debug!("drop_flag_effects: assignment for location({:?})", loc);
 
     for_location_inits(move_data, loc, |mpi| callback(mpi, DropFlagState::Present));
 }
