@@ -685,10 +685,12 @@ impl<'tcx> GenKillAnalysis<'tcx> for EverInitializedPlaces<'_, 'tcx> {
             // End inits for StorageDead, so that an immutable variable can
             // be reinitialized on the next iteration of the loop.
             if let Some(move_path_index) = rev_lookup.find_local(local) {
+                /*
                 debug!(
                     "clears the ever initialized status of {:?}",
                     init_path_map[move_path_index]
                 );
+                */
                 trans.kill_all(init_path_map[move_path_index].iter().copied());
             }
         }
@@ -702,10 +704,10 @@ impl<'tcx> GenKillAnalysis<'tcx> for EverInitializedPlaces<'_, 'tcx> {
         location: Location,
     ) -> TerminatorEdges<'mir, 'tcx> {
         let (body, move_data) = (self.body, self.move_data());
-        let term = body[location.block].terminator();
+        let _term = body[location.block].terminator();
         let init_loc_map = &move_data.init_loc_map;
-        debug!(?term);
-        debug!("initializes move_indexes {:?}", init_loc_map[location]);
+        //debug!(?term);
+        //debug!("initializes move_indexes {:?}", init_loc_map[location]);
         trans.gen_all(
             init_loc_map[location]
                 .iter()

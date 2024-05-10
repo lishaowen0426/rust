@@ -11,8 +11,10 @@ impl<'tcx> MirPass<'tcx> for SafetyProp {
 
     #[instrument(level = "debug", skip_all)]
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
-        let mut unsafe_locals =
-            SafetyLocals.into_engine(tcx, body).iterate_to_fixpoint().into_results_cursor(body);
+        let mut unsafe_locals = SafetyLocals { local_decls: body.local_decls.clone() }
+            .into_engine(tcx, body)
+            .iterate_to_fixpoint()
+            .into_results_cursor(body);
         for (bb, _bb_data) in body.basic_blocks.iter_enumerated() {
             unsafe_locals.seek_to_block_start(bb);
             let state = unsafe_locals.get();

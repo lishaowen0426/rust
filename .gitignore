@@ -82,3 +82,4 @@ tests/rustdoc-gui/src/**.lock
 
 # ice dump file
 rustc-ice-*
+
