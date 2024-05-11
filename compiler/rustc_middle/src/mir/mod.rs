@@ -350,6 +350,11 @@ pub struct Body<'tcx> {
     /// variables and temporaries.
     pub local_decls: IndexVec<Local, LocalDecl<'tcx>>,
 
+    /// Safety of locals
+    /// This is available after the safety_prop.rs optimization pass
+    /// unsafe_locals[local] == true means unsafe
+    pub unsafe_locals: IndexVec<Local, bool>,
+
     /// User type annotations.
     pub user_type_annotations: ty::CanonicalUserTypeAnnotations<'tcx>,
 
@@ -441,6 +446,7 @@ impl<'tcx> Body<'tcx> {
             source_scopes,
             coroutine,
             local_decls,
+            unsafe_locals: IndexVec::new(),
             user_type_annotations,
             arg_count,
             spread_arg: None,
@@ -470,6 +476,7 @@ impl<'tcx> Body<'tcx> {
             source_scopes: IndexVec::new(),
             coroutine: None,
             local_decls: IndexVec::new(),
+            unsafe_locals: IndexVec::new(),
             user_type_annotations: IndexVec::new(),
             arg_count: 0,
             spread_arg: None,
@@ -674,6 +681,14 @@ impl<'tcx> Body<'tcx> {
 
         // No inlined `SourceScope`s, or all of them were `#[track_caller]`.
         caller_location.unwrap_or_else(|| from_span(source_info.span))
+    }
+
+    pub fn initialize_unsafe_locals(&mut self, n: usize) {
+        self.unsafe_locals = IndexVec::from_elem_n(false, n);
+    }
+
+    pub fn set_unsafe_local(&mut self, loc: Local) {
+        self.unsafe_locals[loc] = true;
     }
 }
 

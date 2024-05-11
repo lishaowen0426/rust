@@ -50,6 +50,7 @@ pub(super) fn build_custom_mir<'tcx>(
         source_scopes: IndexVec::new(),
         coroutine: None,
         local_decls: IndexVec::new(),
+        unsafe_locals: IndexVec::new(),
         user_type_annotations: IndexVec::new(),
         arg_count: params.len(),
         spread_arg: None,

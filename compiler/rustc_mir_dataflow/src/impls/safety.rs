@@ -35,7 +35,7 @@ impl<'tcx> Analysis<'tcx> for SafetyLocals<'tcx> {
         statement: &Statement<'tcx>,
         location: Location,
     ) {
-        debug!(?statement);
+        //debug!(?statement);
         let local_decls = self.local_decls.as_slice();
         TransferFunction { state, safety: statement.safety, local_decls }
             .visit_statement(statement, location);
