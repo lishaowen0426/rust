@@ -12,6 +12,7 @@ use crate::debuginfo;
 use crate::llvm::{self, Context, False, Module, True, Type};
 use crate::ModuleLlvm;
 
+#[instrument(level = "debug", skip(tcx, module_llvm))]
 pub(crate) unsafe fn codegen(
     tcx: TyCtxt<'_>,
     module_llvm: &mut ModuleLlvm,
@@ -98,6 +99,7 @@ pub(crate) unsafe fn codegen(
     }
 }
 
+#[instrument(level = "debug", skip(tcx, llcx, llmod, args, output, no_return))]
 fn create_wrapper_function(
     tcx: TyCtxt<'_>,
     llcx: &Context,

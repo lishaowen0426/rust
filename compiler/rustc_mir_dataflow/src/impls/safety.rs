@@ -79,33 +79,38 @@ impl<'tcx> Visitor<'tcx> for TransferFunction<'_, '_, BitSet<Local>> {
     }
 
     fn visit_terminator(&mut self, terminator: &Terminator<'tcx>, location: Location) {
-        match &terminator.kind {
-            TerminatorKind::Call {
-                func,
-                args,
-                destination,
-                target,
-                unwind,
-                call_source,
-                fn_span,
-            } => {
-                for op in args {
-                    if let Operand::Copy(p) | Operand::Move(p) = &op.node {
-                        match self.local_decls[p.local].ty.kind() {
-                            ty::Ref(..) | ty::RawPtr(..) => {
-                                self.state.gen(p.local);
+        if let StatementSafety::Safe = self.safety {
+            return;
+        } else {
+            match &terminator.kind {
+                TerminatorKind::Call {
+                    func,
+                    args,
+                    destination,
+                    target,
+                    unwind,
+                    call_source,
+                    fn_span,
+                } => {
+                    self.state.gen(destination.local);
+                    for op in args {
+                        if let Operand::Copy(p) | Operand::Move(p) = &op.node {
+                            match self.local_decls[p.local].ty.kind() {
+                                ty::Ref(..) | ty::RawPtr(..) => {
+                                    self.state.gen(p.local);
+                                }
+                                _ => {
+                                    return;
+                                }
                             }
-                            _ => {
-                                return;
-                            }
+                        } else {
+                            return;
                         }
-                    } else {
-                        return;
                     }
                 }
-            }
-            _ => {
-                return;
+                _ => {
+                    return;
+                }
             }
         }
     }

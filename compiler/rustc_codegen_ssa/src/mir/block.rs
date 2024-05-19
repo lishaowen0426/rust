@@ -1160,7 +1160,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         loop {
             let data = &mir[bb];
 
-            debug!("codegen_block({:?}={:?})", bb, data);
+            //debug!("codegen_block({:?}={:?})", bb, data);
 
             for statement in &data.statements {
                 self.codegen_statement(bx, statement);
@@ -1192,7 +1192,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         bb: mir::BasicBlock,
         terminator: &'tcx mir::Terminator<'tcx>,
     ) -> MergingSucc {
-        debug!("codegen_terminator: {:?}", terminator);
+        //debug!("codegen_terminator: {:?}", terminator);
 
         let helper = TerminatorCodegenHelper { bb, terminator };
 

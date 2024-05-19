@@ -571,6 +571,7 @@ pub fn allocator_kind_for_codegen(tcx: TyCtxt<'_>) -> Option<AllocatorKind> {
     if any_dynamic_crate { None } else { tcx.allocator_kind(()) }
 }
 
+#[instrument(level = "debug", skip(backend, tcx, metadata))]
 pub fn codegen_crate<B: ExtraBackendMethods>(
     backend: B,
     tcx: TyCtxt<'_>,
@@ -594,6 +595,9 @@ pub fn codegen_crate<B: ExtraBackendMethods>(
     // Run the monomorphization collector and partition the collected items into
     // codegen units.
     let codegen_units = tcx.collect_and_partition_mono_items(()).1;
+    for cgu in codegen_units.iter() {
+        debug!("cgu name: {}", cgu.name());
+    }
 
     // Force all codegen_unit queries so they are already either red or green
     // when compile_codegen_unit accesses them. We are not able to re-execute

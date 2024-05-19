@@ -460,6 +460,7 @@ pub fn start_async_codegen<B: ExtraBackendMethods>(
     let crate_attrs = tcx.hir().attrs(rustc_hir::CRATE_HIR_ID);
     let no_builtins = attr::contains_name(crate_attrs, sym::no_builtins);
     let is_compiler_builtins = attr::contains_name(crate_attrs, sym::compiler_builtins);
+    debug!(no_builtins, is_compiler_builtins);
 
     let crate_info = CrateInfo::new(tcx, target_cpu);
 
@@ -1036,6 +1037,21 @@ enum MainThreadState {
     Lending,
 }
 
+#[instrument(
+    level = "debug",
+    skip(
+        backend,
+        tcx,
+        shared_emitter,
+        codegen_worker_send,
+        coordinator_receive,
+        jobserver,
+        regular_config,
+        metadata_config,
+        allocator_config,
+        tx_to_llvm_workers
+    )
+)]
 fn start_executing_work<B: ExtraBackendMethods>(
     backend: B,
     tcx: TyCtxt<'_>,

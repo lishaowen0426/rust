@@ -436,7 +436,6 @@ fn run_compiler(
             }
 
             queries.global_ctxt()?.enter(|tcx| tcx.analysis(()))?;
-            debug!("after tcx.analysis");
 
             if callbacks.after_analysis(compiler, queries) == Compilation::Stop {
                 return early_exit();

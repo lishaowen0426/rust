@@ -113,6 +113,7 @@ impl Drop for TimeTraceProfiler {
 }
 
 impl ExtraBackendMethods for LlvmCodegenBackend {
+    #[instrument(level = "debug", skip(self, tcx))]
     fn codegen_allocator<'tcx>(
         &self,
         tcx: TyCtxt<'tcx>,

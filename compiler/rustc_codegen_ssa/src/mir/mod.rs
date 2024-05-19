@@ -117,7 +117,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
     where
         T: Copy + TypeFoldable<TyCtxt<'tcx>>,
     {
-        debug!("monomorphize: self.instance={:?}", self.instance);
+        //debug!("monomorphize: self.instance={:?}", self.instance);
         self.instance.instantiate_mir_and_normalize_erasing_regions(
             self.cx.tcx(),
             ty::ParamEnv::reveal_all(),
@@ -164,6 +164,12 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
     let llfn = cx.get_fn(instance);
 
     let mir = cx.tcx().instance_mir(instance.def);
+    debug!("codegen_mir with unsafe locals: {:?}", mir.unsafe_locals);
+    for (lo, is_unsafe) in mir.unsafe_locals.iter().enumerate() {
+        if *is_unsafe {
+            debug!("{:?}", mir.local_decls[lo.into()]);
+        }
+    }
 
     let fn_abi = cx.fn_abi_of_instance(instance, ty::List::empty());
     debug!("fn_abi: {:?}", fn_abi);
@@ -227,20 +233,20 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             assert!(!layout.ty.has_erasable_regions());
 
             if local == mir::RETURN_PLACE && fx.fn_abi.ret.is_indirect() {
-                debug!("alloc: {:?} (return place) -> place", local);
+                //debug!("alloc: {:?} (return place) -> place", local);
                 let llretptr = start_bx.get_param(0);
                 return LocalRef::Place(PlaceRef::new_sized(llretptr, layout));
             }
 
             if memory_locals.contains(local) {
-                debug!("alloc: {:?} -> place", local);
+                //debug!("alloc: {:?} -> place", local);
                 if layout.is_unsized() {
                     LocalRef::UnsizedPlace(PlaceRef::alloca_unsized_indirect(&mut start_bx, layout))
                 } else {
                     LocalRef::Place(PlaceRef::alloca(&mut start_bx, layout))
                 }
             } else {
-                debug!("alloc: {:?} -> operand", local);
+                //debug!("alloc: {:?} -> operand", local);
                 LocalRef::new_operand(layout)
             }
         };
