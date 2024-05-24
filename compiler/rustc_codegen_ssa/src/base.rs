@@ -640,6 +640,7 @@ pub fn codegen_crate<B: ExtraBackendMethods>(
 
     // Codegen an allocator shim, if necessary.
     if let Some(kind) = allocator_kind_for_codegen(tcx) {
+        debug!("code gen allocator module");
         let llmod_id =
             cgu_name_builder.build_cgu_name(LOCAL_CRATE, &["crate"], Some("allocator")).to_string();
         let module_llvm = tcx.sess.time("write_allocator_module", || {
@@ -664,6 +665,8 @@ pub fn codegen_crate<B: ExtraBackendMethods>(
             ModuleCodegen { name: llmod_id, module_llvm, kind: ModuleKind::Allocator },
             cost,
         );
+    } else {
+        debug!("dont code gen allocator module");
     }
 
     // For better throughput during parallel processing by LLVM, we used to sort

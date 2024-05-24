@@ -251,7 +251,7 @@ impl Evaluator<'_> {
         destination: Interval,
     ) -> Result<()> {
         match alloc_fn {
-            "rustc_allocator_zeroed" | "rustc_allocator" => {
+            "rustc_allocator_zeroed" | "rustc_allocator"  => {
                 let [size, align] = args else {
                     return Err(MirEvalError::InternalError(
                         "rustc_allocator args are not provided".into(),

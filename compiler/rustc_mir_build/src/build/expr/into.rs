@@ -262,8 +262,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
                 this.record_operands_moved(&args);
 
-                debug!("expr_into_dest: fn_span={:?}", fn_span);
-
                 this.cfg.terminate(
                     block,
                     source_info,

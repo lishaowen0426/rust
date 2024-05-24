@@ -147,6 +147,21 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
 
     /// Call `fn_ptr` of `fn_abi` with the arguments `llargs`, the optional
     /// return destination `destination` and the unwind action `unwind`.
+    #[instrument(
+        level = "debug",
+        skip(
+            self,
+            fx,
+            bx,
+            fn_abi,
+            fn_ptr,
+            llargs,
+            destination,
+            unwind,
+            copied_constant_arguments,
+            mergeable_succ
+        )
+    )]
     fn do_call<Bx: BuilderMethods<'a, 'tcx>>(
         &self,
         fx: &mut FunctionCx<'a, 'tcx, Bx>,
@@ -158,7 +173,9 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
         mut unwind: mir::UnwindAction,
         copied_constant_arguments: &[PlaceRef<'tcx, <Bx as BackendTypes>::Value>],
         mergeable_succ: bool,
+        is_destination_unsafe: bool,
     ) -> MergingSucc {
+        debug!("call function instance: {:?}", fx.instance);
         // If there is a cleanup block and the function we're calling can unwind, then
         // do an invoke, otherwise do a call.
         let fn_ty = bx.fn_decl_backend_type(fn_abi);
@@ -196,6 +213,7 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
         };
 
         if let Some(unwind_block) = unwind_block {
+            debug!("unwind block");
             let ret_llbb = if let Some((_, target)) = destination {
                 fx.llbb(target)
             } else {
@@ -225,6 +243,7 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
             }
             MergingSucc::False
         } else {
+            debug!("no unwind block");
             let llret = bx.call(fn_ty, fn_attrs, Some(fn_abi), fn_ptr, llargs, self.funclet(fx));
             if fx.mir[self.bb].is_cleanup {
                 bx.apply_attrs_to_cleanup_callsite(llret);
@@ -564,6 +583,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             unwind,
             &[],
             mergeable_succ,
+            false,
         )
     }
 
@@ -642,7 +662,8 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         let (fn_abi, llfn) = common::build_langcall(bx, Some(span), lang_item);
 
         // Codegen the actual panic invoke/call.
-        let merging_succ = helper.do_call(self, bx, fn_abi, llfn, &args, None, unwind, &[], false);
+        let merging_succ =
+            helper.do_call(self, bx, fn_abi, llfn, &args, None, unwind, &[], false, false);
         assert_eq!(merging_succ, MergingSucc::False);
         MergingSucc::False
     }
@@ -670,6 +691,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             None,
             mir::UnwindAction::Unreachable,
             &[],
+            false,
             false,
         );
         assert_eq!(merging_succ, MergingSucc::False);
@@ -733,6 +755,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     unwind,
                     &[],
                     mergeable_succ,
+                    false,
                 )
             } else {
                 // a NOP
@@ -759,6 +782,12 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
     ) -> MergingSucc {
         let source_info = terminator.source_info;
         let span = source_info.span;
+
+        let is_destination_unsafe = if self.mir.unsafe_locals.len() == 0 {
+            false
+        } else {
+            self.mir.unsafe_locals[destination.local]
+        };
 
         // Create the callee. This is a fn ptr or zero-sized and hence a kind of scalar.
         let callee = self.codegen_operand(bx, func);
@@ -1063,6 +1092,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             unwind,
             &copied_constant_arguments,
             mergeable_succ,
+            is_destination_unsafe,
         )
     }
 
@@ -1186,6 +1216,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         }
     }
 
+    #[instrument(level = "debug", skip(self, bx, bb))]
     fn codegen_terminator(
         &mut self,
         bx: &mut Bx,

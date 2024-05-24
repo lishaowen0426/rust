@@ -607,6 +607,8 @@ declare_features! (
     (unstable, unix_sigpipe, "1.65.0", Some(97889)),
     /// Allows unnamed fields of struct and union type
     (incomplete, unnamed_fields, "1.74.0", Some(49804)),
+    // Unsafe alloc
+    (unstable, unsafe_alloc, "1.78.0", None),
     /// Allows unsized fn parameters.
     (unstable, unsized_fn_params, "1.49.0", Some(48055)),
     /// Allows unsized rvalues at arguments and parameters.

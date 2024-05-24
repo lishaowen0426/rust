@@ -461,6 +461,12 @@ fn construct_fn<'tcx>(
     expr: ExprId,
     fn_sig: ty::FnSig<'tcx>,
 ) -> Body<'tcx> {
+    if tcx.features().unsafe_alloc {
+        debug!("unsafe alloc feature enabled");
+    } else {
+        debug!("unsafe alloc feature disabled");
+    }
+
     let span = tcx.def_span(fn_def);
     let fn_id = tcx.local_def_id_to_hir_id(fn_def);
 
