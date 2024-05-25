@@ -588,6 +588,11 @@ pub const BUILTIN_ATTRIBUTES: &[BuiltinAttribute] = &[
         rustc_allocator, Normal, template!(Word), WarnFollowing,
         @only_local: true, IMPL_DETAIL
     ),
+
+    rustc_attr!(
+        rustc_allocator_unsafe, Normal, template!(Word), WarnFollowing,
+        @only_local: true, IMPL_DETAIL
+    ),
     
     rustc_attr!(
         rustc_nounwind, Normal, template!(Word), WarnFollowing,
@@ -599,6 +604,10 @@ pub const BUILTIN_ATTRIBUTES: &[BuiltinAttribute] = &[
     ),
     rustc_attr!(
         rustc_deallocator, Normal, template!(Word), WarnFollowing,
+        @only_local: true, IMPL_DETAIL
+    ),
+    rustc_attr!(
+        rustc_deallocator_unsafe, Normal, template!(Word), WarnFollowing,
         @only_local: true, IMPL_DETAIL
     ),
     rustc_attr!(

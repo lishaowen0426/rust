@@ -458,9 +458,9 @@ pub(crate) fn inline_asm_call<'ll>(
             );
 
             let call = if let Some((dest, catch, funclet)) = dest_catch_funclet {
-                bx.invoke(fty, None, None, v, inputs, dest, catch, funclet)
+                bx.invoke(fty, None, None, v, inputs, dest, catch, funclet, false)
             } else {
-                bx.call(fty, None, None, v, inputs, None)
+                bx.call(fty, None, None, v, inputs, None, false)
             };
 
             // Store mark in a metadata node so we can map LLVM errors

@@ -114,6 +114,7 @@ impl<'ll, 'tcx> IntrinsicCallMethods<'tcx> for Builder<'_, 'll, 'tcx> {
                     simple_fn,
                     &args.iter().map(|arg| arg.immediate()).collect::<Vec<_>>(),
                     None,
+                    false,
                 )
             }
             sym::likely => {
@@ -470,7 +471,7 @@ fn catch_unwind_intrinsic<'ll>(
 ) {
     if bx.sess().panic_strategy() == PanicStrategy::Abort {
         let try_func_ty = bx.type_func(&[bx.type_ptr()], bx.type_void());
-        bx.call(try_func_ty, None, None, try_func, &[data], None);
+        bx.call(try_func_ty, None, None, try_func, &[data], None, false);
         // Return 0 unconditionally from the intrinsic call;
         // we can never unwind.
         let ret_align = bx.tcx().data_layout.i32_align.abi;
@@ -571,7 +572,7 @@ fn codegen_msvc_try<'ll>(
         let ptr_align = bx.tcx().data_layout.pointer_align.abi;
         let slot = bx.alloca(bx.type_ptr(), ptr_align);
         let try_func_ty = bx.type_func(&[bx.type_ptr()], bx.type_void());
-        bx.invoke(try_func_ty, None, None, try_func, &[data], normal, catchswitch, None);
+        bx.invoke(try_func_ty, None, None, try_func, &[data], normal, catchswitch, None, false);
 
         bx.switch_to_block(normal);
         bx.ret(bx.const_i32(0));
@@ -615,7 +616,7 @@ fn codegen_msvc_try<'ll>(
         let funclet = bx.catch_pad(cs, &[tydesc, flags, slot]);
         let ptr = bx.load(bx.type_ptr(), slot, ptr_align);
         let catch_ty = bx.type_func(&[bx.type_ptr(), bx.type_ptr()], bx.type_void());
-        bx.call(catch_ty, None, None, catch_func, &[data, ptr], Some(&funclet));
+        bx.call(catch_ty, None, None, catch_func, &[data, ptr], Some(&funclet), false);
         bx.catch_ret(&funclet, caught);
 
         // The flag value of 64 indicates a "catch-all".
@@ -623,7 +624,7 @@ fn codegen_msvc_try<'ll>(
         let flags = bx.const_i32(64);
         let null = bx.const_null(bx.type_ptr());
         let funclet = bx.catch_pad(cs, &[null, flags, null]);
-        bx.call(catch_ty, None, None, catch_func, &[data, null], Some(&funclet));
+        bx.call(catch_ty, None, None, catch_func, &[data, null], Some(&funclet), false);
         bx.catch_ret(&funclet, caught);
 
         bx.switch_to_block(caught);
@@ -632,7 +633,7 @@ fn codegen_msvc_try<'ll>(
 
     // Note that no invoke is used here because by definition this function
     // can't panic (that's what it's catching).
-    let ret = bx.call(llty, None, None, llfn, &[try_func, data, catch_func], None);
+    let ret = bx.call(llty, None, None, llfn, &[try_func, data, catch_func], None, false);
     let i32_align = bx.tcx().data_layout.i32_align.abi;
     bx.store(ret, dest, i32_align);
 }
@@ -681,7 +682,7 @@ fn codegen_wasm_try<'ll>(
         //   }
         //
         let try_func_ty = bx.type_func(&[bx.type_ptr()], bx.type_void());
-        bx.invoke(try_func_ty, None, None, try_func, &[data], normal, catchswitch, None);
+        bx.invoke(try_func_ty, None, None, try_func, &[data], normal, catchswitch, None, false);
 
         bx.switch_to_block(normal);
         bx.ret(bx.const_i32(0));
@@ -697,7 +698,7 @@ fn codegen_wasm_try<'ll>(
         let _sel = bx.call_intrinsic("llvm.wasm.get.ehselector", &[funclet.cleanuppad()]);
 
         let catch_ty = bx.type_func(&[bx.type_ptr(), bx.type_ptr()], bx.type_void());
-        bx.call(catch_ty, None, None, catch_func, &[data, ptr], Some(&funclet));
+        bx.call(catch_ty, None, None, catch_func, &[data, ptr], Some(&funclet), false);
         bx.catch_ret(&funclet, caught);
 
         bx.switch_to_block(caught);
@@ -706,7 +707,7 @@ fn codegen_wasm_try<'ll>(
 
     // Note that no invoke is used here because by definition this function
     // can't panic (that's what it's catching).
-    let ret = bx.call(llty, None, None, llfn, &[try_func, data, catch_func], None);
+    let ret = bx.call(llty, None, None, llfn, &[try_func, data, catch_func], None, false);
     let i32_align = bx.tcx().data_layout.i32_align.abi;
     bx.store(ret, dest, i32_align);
 }
@@ -749,7 +750,7 @@ fn codegen_gnu_try<'ll>(
         let data = llvm::get_param(bx.llfn(), 1);
         let catch_func = llvm::get_param(bx.llfn(), 2);
         let try_func_ty = bx.type_func(&[bx.type_ptr()], bx.type_void());
-        bx.invoke(try_func_ty, None, None, try_func, &[data], then, catch, None);
+        bx.invoke(try_func_ty, None, None, try_func, &[data], then, catch, None, false);
 
         bx.switch_to_block(then);
         bx.ret(bx.const_i32(0));
@@ -767,13 +768,13 @@ fn codegen_gnu_try<'ll>(
         bx.add_clause(vals, tydesc);
         let ptr = bx.extract_value(vals, 0);
         let catch_ty = bx.type_func(&[bx.type_ptr(), bx.type_ptr()], bx.type_void());
-        bx.call(catch_ty, None, None, catch_func, &[data, ptr], None);
+        bx.call(catch_ty, None, None, catch_func, &[data, ptr], None, false);
         bx.ret(bx.const_i32(1));
     });
 
     // Note that no invoke is used here because by definition this function
     // can't panic (that's what it's catching).
-    let ret = bx.call(llty, None, None, llfn, &[try_func, data, catch_func], None);
+    let ret = bx.call(llty, None, None, llfn, &[try_func, data, catch_func], None, false);
     let i32_align = bx.tcx().data_layout.i32_align.abi;
     bx.store(ret, dest, i32_align);
 }
@@ -813,7 +814,7 @@ fn codegen_emcc_try<'ll>(
         let data = llvm::get_param(bx.llfn(), 1);
         let catch_func = llvm::get_param(bx.llfn(), 2);
         let try_func_ty = bx.type_func(&[bx.type_ptr()], bx.type_void());
-        bx.invoke(try_func_ty, None, None, try_func, &[data], then, catch, None);
+        bx.invoke(try_func_ty, None, None, try_func, &[data], then, catch, None, false);
 
         bx.switch_to_block(then);
         bx.ret(bx.const_i32(0));
@@ -851,13 +852,13 @@ fn codegen_emcc_try<'ll>(
         bx.store(is_rust_panic, catch_data_1, i8_align);
 
         let catch_ty = bx.type_func(&[bx.type_ptr(), bx.type_ptr()], bx.type_void());
-        bx.call(catch_ty, None, None, catch_func, &[data, catch_data], None);
+        bx.call(catch_ty, None, None, catch_func, &[data, catch_data], None, false);
         bx.ret(bx.const_i32(1));
     });
 
     // Note that no invoke is used here because by definition this function
     // can't panic (that's what it's catching).
-    let ret = bx.call(llty, None, None, llfn, &[try_func, data, catch_func], None);
+    let ret = bx.call(llty, None, None, llfn, &[try_func, data, catch_func], None, false);
     let i32_align = bx.tcx().data_layout.i32_align.abi;
     bx.store(ret, dest, i32_align);
 }
@@ -1370,6 +1371,7 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
             f,
             &args.iter().map(|arg| arg.immediate()).collect::<Vec<_>>(),
             None,
+            false,
         );
         Ok(c)
     }
@@ -1538,6 +1540,7 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
             f,
             &[args[1].immediate(), alignment, mask, args[0].immediate()],
             None,
+            false,
         );
         return Ok(v);
     }
@@ -1637,6 +1640,7 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
             f,
             &[args[1].immediate(), alignment, mask, args[2].immediate()],
             None,
+            false,
         );
         return Ok(v);
     }
@@ -1730,6 +1734,7 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
             f,
             &[args[2].immediate(), args[1].immediate(), alignment, mask],
             None,
+            false,
         );
         return Ok(v);
     }
@@ -1835,6 +1840,7 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
             f,
             &[args[0].immediate(), args[1].immediate(), alignment, mask],
             None,
+            false,
         );
         return Ok(v);
     }
@@ -2283,11 +2289,12 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
                 f,
                 &[args[0].immediate(), bx.const_int(bx.type_i1(), 0)],
                 None,
+                false,
             ))
         } else {
             let fn_ty = bx.type_func(&[vec_ty], vec_ty);
             let f = bx.declare_cfn(llvm_intrinsic, llvm::UnnamedAddr::No, fn_ty);
-            Ok(bx.call(fn_ty, None, None, f, &[args[0].immediate()], None))
+            Ok(bx.call(fn_ty, None, None, f, &[args[0].immediate()], None, false))
         };
     }
 
@@ -2340,7 +2347,7 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
 
         let fn_ty = bx.type_func(&[vec_ty, vec_ty], vec_ty);
         let f = bx.declare_cfn(llvm_intrinsic, llvm::UnnamedAddr::No, fn_ty);
-        let v = bx.call(fn_ty, None, None, f, &[lhs, rhs], None);
+        let v = bx.call(fn_ty, None, None, f, &[lhs, rhs], None, false);
         return Ok(v);
     }
 

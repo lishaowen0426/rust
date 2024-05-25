@@ -1468,9 +1468,11 @@ extern "C" LLVMValueRef LLVMRustBuildCall(LLVMBuilderRef B, LLVMTypeRef Ty,
                                           LLVMValueRef Fn, LLVMValueRef *Args,
                                           unsigned NumArgs,
                                           OperandBundleDef **OpBundles,
-                                          unsigned NumOpBundles) {
+                                          unsigned NumOpBundles,
+                                          unsigned IsUnsafe) {
   Value *Callee = unwrap(Fn);
   FunctionType *FTy = unwrap<FunctionType>(Ty);
+
   return wrap(unwrap(B)->CreateCall(
       FTy, Callee, ArrayRef<Value *>(unwrap(Args), NumArgs),
       ArrayRef<OperandBundleDef>(*OpBundles, NumOpBundles)));
@@ -1509,10 +1511,12 @@ extern "C" LLVMValueRef LLVMRustBuildMemSet(LLVMBuilderRef B, LLVMValueRef Dst,
                                       MaybeAlign(DstAlign), IsVolatile));
 }
 
-extern "C" LLVMValueRef LLVMRustBuildInvoke(
-    LLVMBuilderRef B, LLVMTypeRef Ty, LLVMValueRef Fn, LLVMValueRef *Args,
-    unsigned NumArgs, LLVMBasicBlockRef Then, LLVMBasicBlockRef Catch,
-    OperandBundleDef **OpBundles, unsigned NumOpBundles, const char *Name) {
+extern "C" LLVMValueRef
+LLVMRustBuildInvoke(LLVMBuilderRef B, LLVMTypeRef Ty, LLVMValueRef Fn,
+                    LLVMValueRef *Args, unsigned NumArgs,
+                    LLVMBasicBlockRef Then, LLVMBasicBlockRef Catch,
+                    OperandBundleDef **OpBundles, unsigned NumOpBundles,
+                    const char *Name, unsigned IsUnsafe) {
   Value *Callee = unwrap(Fn);
   FunctionType *FTy = unwrap<FunctionType>(Ty);
   return wrap(unwrap(B)->CreateInvoke(

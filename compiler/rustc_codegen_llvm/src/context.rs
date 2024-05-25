@@ -101,8 +101,9 @@ pub struct CodegenCx<'ll, 'tcx> {
     /// `codegen_static` will sometimes create a second global variable with a
     /// different type and clear the symbol name of the original global.
     /// `global_asm!` needs to be able to find this new global so that it can
-    /// compute the correct mangled symbol name to insert into the asm.
     pub renamed_statics: RefCell<FxHashMap<DefId, &'ll Value>>,
+
+    pub in_unsafe_call: bool,
 }
 
 pub struct TypeLowering<'ll> {
@@ -485,6 +486,7 @@ impl<'ll, 'tcx> CodegenCx<'ll, 'tcx> {
             intrinsics: Default::default(),
             local_gen_sym_counter: Cell::new(0),
             renamed_statics: Default::default(),
+            in_unsafe_call: false,
         }
     }
 

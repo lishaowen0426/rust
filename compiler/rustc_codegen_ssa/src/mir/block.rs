@@ -228,6 +228,7 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
                 ret_llbb,
                 unwind_block,
                 self.funclet(fx),
+                is_destination_unsafe,
             );
             if fx.mir[self.bb].is_cleanup {
                 bx.apply_attrs_to_cleanup_callsite(invokeret);
@@ -244,7 +245,15 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
             MergingSucc::False
         } else {
             debug!("no unwind block");
-            let llret = bx.call(fn_ty, fn_attrs, Some(fn_abi), fn_ptr, llargs, self.funclet(fx));
+            let llret = bx.call(
+                fn_ty,
+                fn_attrs,
+                Some(fn_abi),
+                fn_ptr,
+                llargs,
+                self.funclet(fx),
+                is_destination_unsafe,
+            );
             if fx.mir[self.bb].is_cleanup {
                 bx.apply_attrs_to_cleanup_callsite(llret);
             }
@@ -1216,7 +1225,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         }
     }
 
-    #[instrument(level = "debug", skip(self, bx, bb))]
+    //#[instrument(level = "debug", skip(self, bx, bb))]
     fn codegen_terminator(
         &mut self,
         bx: &mut Bx,
@@ -1637,7 +1646,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         let (fn_abi, fn_ptr) = common::build_langcall(&bx, None, reason.lang_item());
         let fn_ty = bx.fn_decl_backend_type(fn_abi);
 
-        let llret = bx.call(fn_ty, None, Some(fn_abi), fn_ptr, &[], funclet.as_ref());
+        let llret = bx.call(fn_ty, None, Some(fn_abi), fn_ptr, &[], funclet.as_ref(), false);
         bx.apply_attrs_to_cleanup_callsite(llret);
 
         bx.unreachable();

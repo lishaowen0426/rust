@@ -166,6 +166,7 @@ fn create_wrapper_function(
             args.len() as c_uint,
             [].as_ptr(),
             0 as c_uint,
+            0 as c_uint,
         );
         llvm::LLVMSetTailCall(ret, True);
         if output.is_some() {

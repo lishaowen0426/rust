@@ -117,7 +117,9 @@ impl Evaluator<'_> {
             .find(|it| {
                 [
                     "rustc_allocator",
+                    "rustc_allocator_unsafe",
                     "rustc_deallocator",
+                    "rustc_deallocator_unsafe",
                     "rustc_reallocator",
                     "rustc_allocator_zeroed",
                 ]
@@ -251,7 +253,7 @@ impl Evaluator<'_> {
         destination: Interval,
     ) -> Result<()> {
         match alloc_fn {
-            "rustc_allocator_zeroed" | "rustc_allocator"  => {
+            "rustc_allocator_zeroed" | "rustc_allocator" | "rustc_allocator_unnsafe"  => {
                 let [size, align] = args else {
                     return Err(MirEvalError::InternalError(
                         "rustc_allocator args are not provided".into(),
@@ -262,7 +264,7 @@ impl Evaluator<'_> {
                 let result = self.heap_allocate(size, align)?;
                 destination.write_from_bytes(self, &result.to_bytes())?;
             }
-            "rustc_deallocator" => { /* no-op for now */ }
+            "rustc_deallocator" | "rustc_deallocator_unsafe" => { /* no-op for now */ }
             "rustc_reallocator" => {
                 let [ptr, old_size, align, new_size] = args else {
                     return Err(MirEvalError::InternalError(

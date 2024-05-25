@@ -1617,6 +1617,7 @@ extern "C" {
         OpBundles: *const &OperandBundleDef<'a>,
         NumOpBundles: c_uint,
         Name: *const c_char,
+        IsUnsafe: Bool,
     ) -> &'a Value;
 
     pub fn LLVMRustSetFastMath(Instr: &Value);
@@ -1633,6 +1634,7 @@ extern "C" {
         NumArgs: c_uint,
         OpBundles: *const &OperandBundleDef<'a>,
         NumOpBundles: c_uint,
+        IsUnsafe: Bool,
     ) -> &'a Value;
     pub fn LLVMRustBuildMemCpy<'a>(
         B: &Builder<'a>,

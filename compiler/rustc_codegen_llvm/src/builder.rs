@@ -221,6 +221,7 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         then: &'ll BasicBlock,
         catch: &'ll BasicBlock,
         funclet: Option<&Funclet<'ll>>,
+        is_unsafe: bool,
     ) -> &'ll Value {
         debug!("invoke {:?} with args ({:?})", llfn, args);
 
@@ -254,6 +255,7 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
                 bundles.as_ptr(),
                 bundles.len() as c_uint,
                 UNNAMED,
+                if is_unsafe { 1 } else { 0 },
             )
         };
         if let Some(fn_abi) = fn_abi {
@@ -1222,6 +1224,7 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
                 args.len() as c_uint,
                 [].as_ptr(),
                 0 as c_uint,
+                0,
             );
         }
     }
@@ -1234,6 +1237,7 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         llfn: &'ll Value,
         args: &[&'ll Value],
         funclet: Option<&Funclet<'ll>>,
+        is_unsafe: bool,
     ) -> &'ll Value {
         debug!("call {:?} with args ({:?})", llfn, args);
 
@@ -1264,6 +1268,7 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
                 args.len() as c_uint,
                 bundles.as_ptr(),
                 bundles.len() as c_uint,
+                if is_unsafe { 1 } else { 0 },
             )
         };
         if let Some(fn_abi) = fn_abi {
@@ -1471,7 +1476,7 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
 
     pub(crate) fn call_intrinsic(&mut self, intrinsic: &str, args: &[&'ll Value]) -> &'ll Value {
         let (ty, f) = self.cx.get_intrinsic(intrinsic);
-        self.call(ty, None, None, f, args, None)
+        self.call(ty, None, None, f, args, None, false)
     }
 
     fn call_lifetime_intrinsic(&mut self, intrinsic: &str, ptr: &'ll Value, size: Size) {
@@ -1529,7 +1534,7 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
             format!("llvm.{instr}.sat.i{int_width}.f{float_width}")
         };
         let f = self.declare_cfn(&name, llvm::UnnamedAddr::No, self.type_func(&[src_ty], dest_ty));
-        self.call(self.type_func(&[src_ty], dest_ty), None, None, f, &[val], None)
+        self.call(self.type_func(&[src_ty], dest_ty), None, None, f, &[val], None, false)
     }
 
     pub(crate) fn landing_pad(
