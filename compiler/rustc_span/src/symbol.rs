@@ -369,6 +369,7 @@ symbols! {
         alloc,
         alloc_error_handler,
         alloc_layout,
+        alloc_unsafe,
         alloc_zeroed,
         allocator,
         allocator_api,

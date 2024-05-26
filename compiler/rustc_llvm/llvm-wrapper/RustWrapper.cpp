@@ -10,7 +10,9 @@
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/IntrinsicsARM.h"
 #include "llvm/IR/LLVMRemarkStreamer.h"
+#include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/Mangler.h"
+#include "llvm/IR/Metadata.h"
 #include "llvm/Object/Archive.h"
 #include "llvm/Object/COFFImportFile.h"
 #include "llvm/Object/ObjectFile.h"
@@ -1472,10 +1474,16 @@ extern "C" LLVMValueRef LLVMRustBuildCall(LLVMBuilderRef B, LLVMTypeRef Ty,
                                           unsigned IsUnsafe) {
   Value *Callee = unwrap(Fn);
   FunctionType *FTy = unwrap<FunctionType>(Ty);
-
-  return wrap(unwrap(B)->CreateCall(
+  Instruction *inst = unwrap(B)->CreateCall(
       FTy, Callee, ArrayRef<Value *>(unwrap(Args), NumArgs),
-      ArrayRef<OperandBundleDef>(*OpBundles, NumOpBundles)));
+      ArrayRef<OperandBundleDef>(*OpBundles, NumOpBundles));
+  if (IsUnsafe == 1) {
+    llvm::MDBuilder MDHelper(unwrap(B)->getContext());
+    llvm::MDString *mstr = MDHelper.createString("unsafe_call");
+    llvm::MDNode *mnode = llvm::MDTuple::get(unwrap(B)->getContext(), mstr);
+    inst->setMetadata("unsafe_rust", mnode);
+  }
+  return wrap(inst);
 }
 
 extern "C" LLVMValueRef

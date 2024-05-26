@@ -792,11 +792,12 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         let source_info = terminator.source_info;
         let span = source_info.span;
 
-        let is_destination_unsafe = if self.mir.unsafe_locals.len() == 0 {
-            false
-        } else {
-            self.mir.unsafe_locals[destination.local]
-        };
+        let is_destination_unsafe =
+            if self.mir.unsafe_locals.len() == 0 || !bx.tcx().features().unsafe_alloc {
+                false
+            } else {
+                self.mir.unsafe_locals[destination.local]
+            };
 
         // Create the callee. This is a fn ptr or zero-sized and hence a kind of scalar.
         let callee = self.codegen_operand(bx, func);

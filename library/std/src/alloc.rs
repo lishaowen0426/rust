@@ -426,4 +426,11 @@ pub mod __default_lib_allocator {
             System.alloc_zeroed(layout)
         }
     }
+    #[rustc_std_internal_symbol]
+    pub unsafe extern "C" fn __rdl_alloc_unsafe(size: usize, align: usize) -> *mut u8 {
+        unsafe {
+            let layout = Layout::from_size_align_unchecked(size, align);
+            System.alloc_zeroed(layout)
+        }
+    }
 }

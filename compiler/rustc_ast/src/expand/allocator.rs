@@ -70,4 +70,9 @@ pub static ALLOCATOR_METHODS: &[AllocatorMethod] = &[
         inputs: &[AllocatorMethodInput { name: "layout", ty: AllocatorTy::Layout }],
         output: AllocatorTy::ResultPtr,
     },
+    AllocatorMethod {
+        name: sym::alloc_unsafe,
+        inputs: &[AllocatorMethodInput { name: "layout", ty: AllocatorTy::Layout }],
+        output: AllocatorTy::ResultPtr,
+    },
 ];
