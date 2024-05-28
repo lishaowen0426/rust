@@ -1,0 +1,39 @@
+{
+    "configurations": [
+        {
+            "name": "rust",
+            "intelliSenseMode": "linux-gcc-x64",
+            "compilerPath": "/usr/bin/c++",
+            "cppStandard": "c++17",
+            "defines": [
+                "_GNU_SOURCE",
+                "_DEBUG",
+                "_GLIBCXX_ASSERTIONS",
+                "__STDC_CONSTANT_MACROS",
+                "__STDC_FORMAT_MACROS",
+                "__STDC_LIMIT_MACROS",
+                "LLVM_COMPONENT_AARCH64",
+                "LLVM_COMPONENT_ASMPARSER",
+                "LLVM_COMPONENT_AVR",
+                "LLVM_COMPONENT_BITREADER",
+                "LLVM_COMPONENT_BITWRITER",
+                "LLVM_COMPONENT_COVERAGE",
+                "LLVM_COMPONENT_CSKY",
+                "LLVM_COMPONENT_INSTRUMENTATION",
+                "LLVM_COMPONENT_IPO",
+                "LLVM_COMPONENT_LINKER",
+                "LLVM_COMPONENT_LTO",
+                "LLVM_COMPONENT_M68K",
+                "LLVM_COMPONENT_WEBASSMEBLY",
+                "LLVM_COMPONENT_X86",
+                "LLVM_RUSTLLVM"
+            ],
+            "includePath": [
+                "${workspaceFolder}/build/x86_64-unknown-linux-gnu/llvm/include",
+                "${workspaceFolder}/compiler/rustc_llvm/llvm-wrapper",
+            ],
+        }
+    ],
+    "version": 4,
+    "enableConfigurationSquiggles": true
+}

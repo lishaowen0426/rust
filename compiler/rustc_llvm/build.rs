@@ -230,7 +230,10 @@ fn main() {
         .cpp_link_stdlib(None) // we handle this below
         .compile("llvm-wrapper");
 
+    println!("libllvm-wrapper.a generated");
+
     let (llvm_kind, llvm_link_arg) = detect_llvm_link();
+    println!("{}, {}", llvm_kind, llvm_link_arg);
 
     // Link in all LLVM libraries, if we're using the "wrong" llvm-config then
     // we don't pick up system libs because unfortunately they're for the host
