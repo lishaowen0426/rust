@@ -30,8 +30,8 @@
             ],
             "includePath": [
                 "${workspaceFolder}/build/x86_64-unknown-linux-gnu/llvm/include",
-                "${workspaceFolder}/compiler/rustc_llvm/llvm-wrapper",
-            ],
+                "${workspaceFolder}/compiler/rustc_llvm/llvm-wrapper"
+            ]
         }
     ],
     "version": 4,

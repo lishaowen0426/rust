@@ -119,6 +119,11 @@ pub struct ModuleConfig {
     pub inline_threshold: Option<u32>,
     pub emit_lifetime_markers: bool,
     pub llvm_plugins: Vec<String>,
+
+    // whether the unsafe_alloc feature is enabled
+    // we currently disable this when compiling std and rustc
+    // e.g., #![feature(unsafe_alloc)]
+    pub in_unsafe_alloc_mode: bool,
 }
 
 impl ModuleConfig {
@@ -127,6 +132,7 @@ impl ModuleConfig {
         tcx: TyCtxt<'_>,
         no_builtins: bool,
         is_compiler_builtins: bool,
+        in_unsafe_alloc_mode: bool,
     ) -> ModuleConfig {
         // If it's a regular module, use `$regular`, otherwise use `$other`.
         // `$regular` and `$other` are evaluated lazily.
@@ -271,6 +277,7 @@ impl ModuleConfig {
             inline_threshold: sess.opts.cg.inline_threshold,
             emit_lifetime_markers: sess.emit_lifetime_markers(),
             llvm_plugins: if_regular!(sess.opts.unstable_opts.llvm_plugins.clone(), vec![]),
+            in_unsafe_alloc_mode,
         }
     }
 
@@ -461,15 +468,31 @@ pub fn start_async_codegen<B: ExtraBackendMethods>(
     let no_builtins = attr::contains_name(crate_attrs, sym::no_builtins);
     let is_compiler_builtins = attr::contains_name(crate_attrs, sym::compiler_builtins);
     debug!(no_builtins, is_compiler_builtins);
+    let in_unsafe_alloc_mode = tcx.features().unsafe_alloc;
 
     let crate_info = CrateInfo::new(tcx, target_cpu);
 
-    let regular_config =
-        ModuleConfig::new(ModuleKind::Regular, tcx, no_builtins, is_compiler_builtins);
-    let metadata_config =
-        ModuleConfig::new(ModuleKind::Metadata, tcx, no_builtins, is_compiler_builtins);
-    let allocator_config =
-        ModuleConfig::new(ModuleKind::Allocator, tcx, no_builtins, is_compiler_builtins);
+    let regular_config = ModuleConfig::new(
+        ModuleKind::Regular,
+        tcx,
+        no_builtins,
+        is_compiler_builtins,
+        in_unsafe_alloc_mode,
+    );
+    let metadata_config = ModuleConfig::new(
+        ModuleKind::Metadata,
+        tcx,
+        no_builtins,
+        is_compiler_builtins,
+        in_unsafe_alloc_mode,
+    );
+    let allocator_config = ModuleConfig::new(
+        ModuleKind::Allocator,
+        tcx,
+        no_builtins,
+        is_compiler_builtins,
+        in_unsafe_alloc_mode,
+    );
 
     let (shared_emitter, shared_emitter_main) = SharedEmitter::new();
     let (codegen_worker_send, codegen_worker_receive) = channel();
@@ -835,11 +858,13 @@ pub fn compute_per_cgu_lto_type(
     }
 }
 
+#[instrument(level = "debug", skip(cgcx, module, module_config), fields(module_name=%module.name))]
 fn execute_optimize_work_item<B: ExtraBackendMethods>(
     cgcx: &CodegenContext<B>,
     module: ModuleCodegen<B::Module>,
     module_config: &ModuleConfig,
 ) -> Result<WorkItemResult<B>, FatalError> {
+    debug!("opt_level:{:?}", module_config.opt_level);
     let dcx = cgcx.create_dcx();
 
     unsafe {

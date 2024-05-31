@@ -503,6 +503,7 @@ fn get_instr_profile_output_path(config: &ModuleConfig) -> Option<CString> {
     config.instrument_coverage.then(|| CString::new("default_%m_%p.profraw").unwrap())
 }
 
+#[instrument(level = "debug", skip(cgcx, dcx, module, config, opt_stage))]
 pub(crate) unsafe fn llvm_optimize(
     cgcx: &CodegenContext<LlvmCodegenBackend>,
     dcx: &DiagCtxt,
@@ -511,6 +512,7 @@ pub(crate) unsafe fn llvm_optimize(
     opt_level: config::OptLevel,
     opt_stage: llvm::OptStage,
 ) -> Result<(), FatalError> {
+    debug!("llvm optimize module: {}", module.name);
     let unroll_loops =
         opt_level != config::OptLevel::Size && opt_level != config::OptLevel::SizeMin;
     let using_thin_buffers = opt_stage == llvm::OptStage::PreLinkThinLTO || config.bitcode_needed();
@@ -518,6 +520,12 @@ pub(crate) unsafe fn llvm_optimize(
     let pgo_use_path = get_pgo_use_path(config);
     let pgo_sample_use_path = get_pgo_sample_use_path(config);
     let is_lto = opt_stage == llvm::OptStage::ThinLTO || opt_stage == llvm::OptStage::FatLTO;
+    if is_lto {
+        debug!("llvm opt stage: LTO");
+    } else {
+        debug!("llvm opt stage: PreLTO");
+    }
+
     let instr_profile_output_path = get_instr_profile_output_path(config);
     // Sanitizer instrumentation is only inserted during the pre-link optimization stage.
     let sanitizer_options = if !is_lto {
@@ -552,6 +560,7 @@ pub(crate) unsafe fn llvm_optimize(
     let extra_passes = if !is_lto { config.passes.join(",") } else { "".to_string() };
 
     let llvm_plugins = config.llvm_plugins.join(",");
+    debug!("llvm optimize extra passes: {}, plugins: {}", extra_passes, llvm_plugins);
 
     // FIXME: NewPM doesn't provide a facility to pass custom InlineParams.
     // We would have to add upstream support for this first, before we can support
@@ -586,11 +595,13 @@ pub(crate) unsafe fn llvm_optimize(
         extra_passes.len(),
         llvm_plugins.as_ptr().cast(),
         llvm_plugins.len(),
+        config.in_unsafe_alloc_mode,
     );
     result.into_result().map_err(|()| llvm_err(dcx, LlvmError::RunLlvmPasses))
 }
 
 // Unsafe due to LLVM calls.
+#[instrument(level = "debug", skip(cgcx, dcx, module, config), fields(module_name=%module.name))]
 pub(crate) unsafe fn optimize(
     cgcx: &CodegenContext<LlvmCodegenBackend>,
     dcx: &DiagCtxt,

@@ -587,6 +587,7 @@ fn thin_lto(
     }
 }
 
+#[instrument(level="debug", skip(cgcx, dcx, module, thin), fields(module_name=%module.name))]
 pub(crate) fn run_pass_manager(
     cgcx: &CodegenContext<LlvmCodegenBackend>,
     dcx: &DiagCtxt,

@@ -2222,6 +2222,7 @@ extern "C" {
         ExtraPassesLen: size_t,
         LLVMPlugins: *const c_char,
         LLVMPluginsLen: size_t,
+        is_unsafe_alloc_mode: bool,
     ) -> LLVMRustResult;
     pub fn LLVMRustPrintModule(
         M: &Module,
