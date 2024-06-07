@@ -1,5 +1,4 @@
 //! Memory allocation APIs
-
 #![stable(feature = "alloc_module", since = "1.28.0")]
 
 #[cfg(not(test))]
@@ -41,6 +40,8 @@ extern "Rust" {
     fn __rust_alloc_zeroed(size: usize, align: usize) -> *mut u8;
 
     static __rust_no_alloc_shim_is_unstable: u8;
+
+    //static mut __rust_alloc_unsafe_flag: u8;
 }
 
 /// The global memory allocator.
@@ -98,6 +99,7 @@ pub unsafe fn alloc(layout: Layout) -> *mut u8 {
         // Make sure we don't accidentally allow omitting the allocator shim in
         // stable code until it is actually stabilized.
         core::ptr::read_volatile(&__rust_no_alloc_shim_is_unstable);
+        //core::ptr::read_volatile(&__rust_alloc_unsafe_flag);
 
         __rust_alloc(layout.size(), layout.align())
     }

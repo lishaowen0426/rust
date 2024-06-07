@@ -34,6 +34,7 @@ impl<'mir, 'tcx> MiriMachine<'mir, 'tcx> {
         // "__rust_no_alloc_shim_is_unstable"
         let val = ImmTy::from_int(0, this.machine.layouts.u8);
         Self::alloc_extern_static(this, "__rust_no_alloc_shim_is_unstable", val)?;
+        Self::alloc_extern_static(this, "__rust_alloc_unsafe_flag", val)?;
 
         match this.tcx.sess.target.os.as_ref() {
             "linux" => {

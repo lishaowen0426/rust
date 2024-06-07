@@ -22,6 +22,7 @@ pub fn alloc_error_handler_name(alloc_error_handler_kind: AllocatorKind) -> &'st
 }
 
 pub const NO_ALLOC_SHIM_IS_UNSTABLE: &str = "__rust_no_alloc_shim_is_unstable";
+pub const ALLOC_IS_UNSAFE: &str = "__rust_alloc_unsafe_flag";
 
 pub enum AllocatorTy {
     Layout,

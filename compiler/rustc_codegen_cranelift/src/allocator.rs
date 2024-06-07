@@ -3,7 +3,7 @@
 
 use rustc_ast::expand::allocator::{
     alloc_error_handler_name, default_fn_name, global_fn_name, AllocatorKind, AllocatorTy,
-    ALLOCATOR_METHODS, NO_ALLOC_SHIM_IS_UNSTABLE,
+    ALLOCATOR_METHODS, NO_ALLOC_SHIM_IS_UNSTABLE
 };
 use rustc_codegen_ssa::base::allocator_kind_for_codegen;
 use rustc_session::config::OomStrategy;
@@ -101,4 +101,6 @@ fn codegen_inner(
     data.set_align(1);
     data.define(Box::new([0]));
     module.define_data(data_id, &data).unwrap();
+
+
 }

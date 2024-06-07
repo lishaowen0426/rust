@@ -3,7 +3,7 @@ use gccjit::FnAttribute;
 use gccjit::{Context, FunctionType, GlobalKind, ToRValue, Type};
 use rustc_ast::expand::allocator::{
     alloc_error_handler_name, default_fn_name, global_fn_name, AllocatorKind, AllocatorTy,
-    ALLOCATOR_METHODS, NO_ALLOC_SHIM_IS_UNSTABLE,
+    ALLOCATOR_METHODS, NO_ALLOC_SHIM_IS_UNSTABLE
 };
 use rustc_middle::bug;
 use rustc_middle::ty::TyCtxt;
@@ -73,6 +73,8 @@ pub(crate) unsafe fn codegen(tcx: TyCtxt<'_>, mods: &mut GccContext, _module_nam
     let global = context.new_global(None, GlobalKind::Exported, i8, name);
     let value = context.new_rvalue_from_int(i8, 0);
     global.global_set_initializer_rvalue(value);
+
+
 }
 
 fn create_wrapper_function(

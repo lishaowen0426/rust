@@ -26,7 +26,8 @@
                 "LLVM_COMPONENT_M68K",
                 "LLVM_COMPONENT_WEBASSMEBLY",
                 "LLVM_COMPONENT_X86",
-                "LLVM_RUSTLLVM"
+                "LLVM_RUSTLLVM",
+                "SPDLOG_USE_STD_FORMAT"
             ],
             "includePath": [
                 "${workspaceFolder}/build/x86_64-unknown-linux-gnu/llvm/include",

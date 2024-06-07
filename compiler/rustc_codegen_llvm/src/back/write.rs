@@ -658,6 +658,7 @@ pub(crate) fn link(
     Ok(modules.remove(0))
 }
 
+#[instrument(level = "debug", skip(cgcx, dcx, module, config))]
 pub(crate) unsafe fn codegen(
     cgcx: &CodegenContext<LlvmCodegenBackend>,
     dcx: &DiagCtxt,

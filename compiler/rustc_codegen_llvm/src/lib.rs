@@ -24,6 +24,7 @@ use back::owned_target_machine::OwnedTargetMachine;
 use back::write::{create_informational_target_machine, create_target_machine};
 
 use errors::ParseTargetMachineConfig;
+use libc::{c_char, size_t};
 pub use llvm_util::target_features;
 use rustc_ast::expand::allocator::AllocatorKind;
 use rustc_codegen_ssa::back::lto::{LtoModuleCodegen, SerializedModule, ThinModule};
@@ -35,6 +36,7 @@ use rustc_codegen_ssa::ModuleCodegen;
 use rustc_codegen_ssa::{CodegenResults, CompiledModule};
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_errors::{DiagCtxt, ErrorGuaranteed, FatalError};
+use rustc_fs_util::path_to_c_string;
 use rustc_metadata::EncodedMetadata;
 use rustc_middle::dep_graph::{WorkProduct, WorkProductId};
 use rustc_middle::ty::TyCtxt;
@@ -45,8 +47,12 @@ use rustc_span::symbol::Symbol;
 
 use std::any::Any;
 use std::ffi::CStr;
+use std::io;
 use std::io::Write;
 use std::mem::ManuallyDrop;
+use std::path::PathBuf;
+use std::slice;
+use std::str;
 
 mod back {
     pub mod archive;
@@ -124,6 +130,49 @@ impl ExtraBackendMethods for LlvmCodegenBackend {
         let mut module_llvm = ModuleLlvm::new_metadata(tcx, module_name);
         unsafe {
             allocator::codegen(tcx, &mut module_llvm, module_name, kind, alloc_error_handler_kind);
+        }
+
+        if !tcx.sess.opts.unstable_opts.dump_allocator_llvm_ir.is_empty() {
+            extern "C" fn demangle_callback(
+                input_ptr: *const c_char,
+                input_len: size_t,
+                output_ptr: *mut c_char,
+                output_len: size_t,
+            ) -> size_t {
+                let input =
+                    unsafe { slice::from_raw_parts(input_ptr as *const u8, input_len as usize) };
+
+                let Ok(input) = str::from_utf8(input) else { return 0 };
+
+                let output = unsafe {
+                    slice::from_raw_parts_mut(output_ptr as *mut u8, output_len as usize)
+                };
+                let mut cursor = io::Cursor::new(output);
+
+                let Ok(demangled) = rustc_demangle::try_demangle(input) else { return 0 };
+
+                if write!(cursor, "{demangled:#}").is_err() {
+                    // Possible only if provided buffer is not big enough
+                    return 0;
+                }
+
+                cursor.position() as size_t
+            }
+            unsafe {
+                let output_c = path_to_c_string(
+                    PathBuf::from(tcx.sess.opts.unstable_opts.dump_allocator_llvm_ir.as_str())
+                        .as_path(),
+                );
+                debug!("dump allocator ir to {:?}", output_c);
+                let result = llvm::LLVMRustPrintModule(
+                    module_llvm.llmod(),
+                    output_c.as_ptr(),
+                    demangle_callback,
+                );
+                if let llvm::LLVMRustResult::Failure = result {
+                    panic!("dump allocator failed");
+                }
+            }
         }
         module_llvm
     }

@@ -242,7 +242,7 @@ fn exported_symbols_provider_local(
                 kind: SymbolExportKind::Data,
                 used: false,
             },
-        ))
+        ));
     }
 
     if tcx.sess.instrument_coverage() || tcx.sess.opts.cg.profile_generate.enabled() {

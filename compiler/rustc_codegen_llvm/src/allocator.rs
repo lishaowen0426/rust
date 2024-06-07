@@ -2,7 +2,7 @@ use crate::attributes;
 use libc::c_uint;
 use rustc_ast::expand::allocator::{
     alloc_error_handler_name, default_fn_name, global_fn_name, AllocatorKind, AllocatorTy,
-    ALLOCATOR_METHODS, NO_ALLOC_SHIM_IS_UNSTABLE,
+    ALLOCATOR_METHODS, ALLOC_IS_UNSAFE, NO_ALLOC_SHIM_IS_UNSTABLE,
 };
 use rustc_middle::bug;
 use rustc_middle::ty::TyCtxt;
@@ -89,6 +89,13 @@ pub(crate) unsafe fn codegen(
     if tcx.sess.default_hidden_visibility() {
         llvm::LLVMRustSetVisibility(ll_g, llvm::Visibility::Hidden);
     }
+
+    let name = ALLOC_IS_UNSAFE;
+    let ll_g = llvm::LLVMRustGetOrInsertGlobal(llmod, name.as_ptr().cast(), name.len(), i8);
+    if tcx.sess.default_hidden_visibility() {
+        llvm::LLVMRustSetVisibility(ll_g, llvm::Visibility::Hidden);
+    }
+
     let llval = llvm::LLVMConstInt(i8, 0, False);
     llvm::LLVMSetInitializer(ll_g, llval);
 

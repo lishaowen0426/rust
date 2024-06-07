@@ -1579,6 +1579,7 @@ options! {
         "Direct or use GOT indirect to reference external data symbols"),
     dual_proc_macros: bool = (false, parse_bool, [TRACKED],
         "load proc macros for both target and host, but only link to the target (default: no)"),
+    dump_allocator_llvm_ir: String = (String::new(), parse_string, [UNTRACKED], "dump the llvm IR for the allocator module"),
     dump_dep_graph: bool = (false, parse_bool, [UNTRACKED],
         "dump the dependency graph to $RUST_DEP_GRAPH (default: /tmp/dep_graph.gv) \
         (default: no)"),

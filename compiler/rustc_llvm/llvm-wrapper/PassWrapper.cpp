@@ -825,7 +825,10 @@ extern "C" LLVMRustResult LLVMRustOptimize(
       OptimizerLastEPCallbacks;
 
   if (IsUnsafeAllocMode) {
-    MPM.addPass(createModuleToFunctionPassAdaptor(UnsafeAllocPass()));
+    PipelineStartEPCallbacks.push_back(
+        [](ModulePassManager &MPM, OptimizationLevel Level) {
+          MPM.addPass(createModuleToFunctionPassAdaptor(UnsafeAllocPass()));
+        });
   }
 
   if (!IsLinkerPluginLTO && SanitizerOptions && SanitizerOptions->SanitizeCFI &&

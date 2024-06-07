@@ -17,7 +17,7 @@ use rustc_middle::ty::layout::{HasTyCtxt, LayoutOf, ValidityRequirement};
 use rustc_middle::ty::print::{with_no_trimmed_paths, with_no_visible_paths};
 use rustc_middle::ty::{self, Instance, Ty};
 use rustc_session::config::OptLevel;
-use rustc_span::{source_map::Spanned, sym, Span, Symbol};
+use rustc_span::{source_map::Spanned, sym, FileName, RealFileName, Span, Symbol};
 use rustc_target::abi::call::{ArgAbi, FnAbi, PassMode, Reg};
 use rustc_target::abi::{self, HasDataLayout, WrappingRange};
 use rustc_target::spec::abi::Abi;
@@ -789,11 +789,25 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         fn_span: Span,
         mergeable_succ: bool,
     ) -> MergingSucc {
+        let source_map = bx.tcx().sess.source_map();
         let source_info = terminator.source_info;
         let span = source_info.span;
+        let current_source_file = source_map.lookup_source_file(span.data().lo);
+        let from_std = if let FileName::Real(name) = &current_source_file.name {
+            if let RealFileName::LocalPath(p) = name {
+                if p.starts_with("/home/swli/inprocess/rust/library/") { true } else { false }
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        debug!("source file name {:?}, from_std {}", current_source_file.name, from_std);
+        debug!("sysroot: {}", bx.tcx().sess.sysroot.as_path().display());
+        debug!("is unsafe alloc enable {}", bx.tcx().features().unsafe_alloc);
 
         let is_destination_unsafe =
-            if self.mir.unsafe_locals.len() == 0 || !bx.tcx().features().unsafe_alloc {
+            if from_std || self.mir.unsafe_locals.len() == 0 || !bx.tcx().features().unsafe_alloc {
                 false
             } else {
                 self.mir.unsafe_locals[destination.local]
