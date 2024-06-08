@@ -190,6 +190,13 @@ extern "C" LLVMValueRef LLVMRustGetOrInsertGlobal(LLVMModuleRef M,
   return wrap(GV);
 }
 
+extern "C" LLVMValueRef LLVMRustSetGlobalConst(LLVMValueRef global,
+                                               unsigned IsConst) {
+  GlobalVariable *gv = unwrap<GlobalVariable>(global);
+  gv->setConstant(IsConst == 1);
+  return wrap(gv);
+}
+
 extern "C" LLVMValueRef LLVMRustInsertPrivateGlobal(LLVMModuleRef M,
                                                     LLVMTypeRef Ty) {
   return wrap(new GlobalVariable(*unwrap(M), unwrap(Ty), false,
@@ -497,6 +504,25 @@ extern "C" LLVMValueRef LLVMRustBuildAtomicStore(LLVMBuilderRef B,
                                                  LLVMAtomicOrdering Order) {
   StoreInst *SI = unwrap(B)->CreateStore(unwrap(V), unwrap(Target));
   SI->setAtomic(fromRust(Order));
+  return wrap(SI);
+}
+
+extern "C" LLVMValueRef LLVMRustBuildGlobalNonatomicLoad(LLVMBuilderRef B,
+                                                         LLVMTypeRef Ty,
+                                                         LLVMValueRef Source,
+                                                         const char *Name,
+                                                         unsigned IsVolatile) {
+  Value *Ptr = unwrap(Source);
+  LoadInst *LI = unwrap(B)->CreateLoad(unwrap(Ty), Ptr, IsVolatile == 1, Name);
+  return wrap(LI);
+}
+
+extern "C" LLVMValueRef
+LLVMRustBuildGlobalNonatomicStore(LLVMBuilderRef B, LLVMValueRef ToStore,
+                                  LLVMValueRef Destination,
+                                  unsigned IsVolatile) {
+  Value *Ptr = unwrap(Destination);
+  StoreInst *SI = unwrap(B)->CreateStore(unwrap(ToStore), Ptr, IsVolatile == 1);
   return wrap(SI);
 }
 

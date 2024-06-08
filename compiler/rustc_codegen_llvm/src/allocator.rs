@@ -12,6 +12,9 @@ use crate::debuginfo;
 use crate::llvm::{self, Context, False, Module, True, Type};
 use crate::ModuleLlvm;
 
+const GET_UNSAFE_ALLOC_FLAG_FUNC: &str = "__get_alloc_is_unsafe";
+const SET_UNSAFE_ALLOC_FLAG_FUNC: &str = "__set_alloc_is_unsafe";
+
 #[instrument(level = "debug", skip(tcx, module_llvm))]
 pub(crate) unsafe fn codegen(
     tcx: TyCtxt<'_>,
@@ -30,6 +33,22 @@ pub(crate) unsafe fn codegen(
     };
     let i8 = llvm::LLVMInt8TypeInContext(llcx);
     let i8p = llvm::LLVMPointerTypeInContext(llcx, 0);
+
+    {
+        // allocate global flag for unsafe allocation
+        let name = ALLOC_IS_UNSAFE;
+        let ll_g = llvm::LLVMRustGetOrInsertGlobal(llmod, name.as_ptr().cast(), name.len(), i8);
+        if tcx.sess.default_hidden_visibility() {
+            llvm::LLVMRustSetVisibility(ll_g, llvm::Visibility::Hidden);
+        }
+        llvm::LLVMRustSetGlobalConst(ll_g, 0);
+        let llval = llvm::LLVMConstInt(i8, 0, False);
+        llvm::LLVMSetInitializer(ll_g, llval);
+    }
+    {
+        // create set/get functions for the global flag
+        create_alloc_unsafe_flag_function(tcx, llcx, llmod);
+    }
 
     if kind == AllocatorKind::Default {
         for method in ALLOCATOR_METHODS {
@@ -83,21 +102,15 @@ pub(crate) unsafe fn codegen(
     let val = tcx.sess.opts.unstable_opts.oom.should_panic();
     let llval = llvm::LLVMConstInt(i8, val as u64, False);
     llvm::LLVMSetInitializer(ll_g, llval);
-
-    let name = NO_ALLOC_SHIM_IS_UNSTABLE;
-    let ll_g = llvm::LLVMRustGetOrInsertGlobal(llmod, name.as_ptr().cast(), name.len(), i8);
-    if tcx.sess.default_hidden_visibility() {
-        llvm::LLVMRustSetVisibility(ll_g, llvm::Visibility::Hidden);
+    {
+        let name = NO_ALLOC_SHIM_IS_UNSTABLE;
+        let ll_g = llvm::LLVMRustGetOrInsertGlobal(llmod, name.as_ptr().cast(), name.len(), i8);
+        if tcx.sess.default_hidden_visibility() {
+            llvm::LLVMRustSetVisibility(ll_g, llvm::Visibility::Hidden);
+        }
+        let llval = llvm::LLVMConstInt(i8, 0, False);
+        llvm::LLVMSetInitializer(ll_g, llval);
     }
-
-    let name = ALLOC_IS_UNSAFE;
-    let ll_g = llvm::LLVMRustGetOrInsertGlobal(llmod, name.as_ptr().cast(), name.len(), i8);
-    if tcx.sess.default_hidden_visibility() {
-        llvm::LLVMRustSetVisibility(ll_g, llvm::Visibility::Hidden);
-    }
-
-    let llval = llvm::LLVMConstInt(i8, 0, False);
-    llvm::LLVMSetInitializer(ll_g, llval);
 
     if tcx.sess.opts.debuginfo != DebugInfo::None {
         let dbg_cx = debuginfo::CodegenUnitDebugContext::new(llmod);
@@ -181,6 +194,93 @@ fn create_wrapper_function(
         } else {
             llvm::LLVMBuildRetVoid(llbuilder);
         }
+        llvm::LLVMDisposeBuilder(llbuilder);
+    }
+}
+
+#[instrument(level = "debug", skip(tcx, llcx, llmod))]
+fn create_alloc_unsafe_flag_function(tcx: TyCtxt<'_>, llcx: &Context, llmod: &Module) {
+    //get
+    unsafe {
+        let i8 = llvm::LLVMInt8TypeInContext(llcx);
+        let args = Vec::new();
+        let func_name = GET_UNSAFE_ALLOC_FLAG_FUNC;
+        //args.push(llvm::LLVMVoidTypeInContext(llcx));
+        let ty = llvm::LLVMFunctionType(i8, args.as_ptr(), args.len() as c_uint, False);
+        let llfn = llvm::LLVMRustGetOrInsertFunction(
+            llmod,
+            func_name.as_ptr().cast(),
+            func_name.len(),
+            ty,
+        );
+        if tcx.sess.default_hidden_visibility() {
+            llvm::LLVMRustSetVisibility(llfn, llvm::Visibility::Hidden);
+        }
+        if tcx.sess.must_emit_unwind_tables() {
+            let uwtable =
+                attributes::uwtable_attr(llcx, tcx.sess.opts.unstable_opts.use_sync_unwind);
+            attributes::apply_to_llfn(llfn, llvm::AttributePlace::Function, &[uwtable]);
+        }
+        let llbb = llvm::LLVMAppendBasicBlockInContext(llcx, llfn, c"entry".as_ptr().cast());
+
+        let llbuilder = llvm::LLVMCreateBuilderInContext(llcx);
+        llvm::LLVMPositionBuilderAtEnd(llbuilder, llbb);
+
+        let name = ALLOC_IS_UNSAFE;
+        let ll_g = llvm::LLVMRustGetOrInsertGlobal(llmod, name.as_ptr().cast(), name.len(), i8);
+        let load_inst = llvm::LLVMRustBuildGlobalNonatomicLoad(
+            &llbuilder,
+            i8,
+            ll_g,
+            "%unsafe_flag".as_ptr().cast(),
+            1, /*Volatile */
+        );
+        llvm::LLVMBuildRet(llbuilder, load_inst);
+
+        llvm::LLVMDisposeBuilder(llbuilder);
+    }
+    //set
+    unsafe {
+        let i8 = llvm::LLVMInt8TypeInContext(llcx);
+        let mut args = Vec::with_capacity(1);
+        let func_name = SET_UNSAFE_ALLOC_FLAG_FUNC;
+        args.push(i8);
+        let ty = llvm::LLVMFunctionType(
+            llvm::LLVMVoidTypeInContext(llcx),
+            args.as_ptr(),
+            args.len() as c_uint,
+            False,
+        );
+        let llfn = llvm::LLVMRustGetOrInsertFunction(
+            llmod,
+            func_name.as_ptr().cast(),
+            func_name.len(),
+            ty,
+        );
+        if tcx.sess.default_hidden_visibility() {
+            llvm::LLVMRustSetVisibility(llfn, llvm::Visibility::Hidden);
+        }
+        if tcx.sess.must_emit_unwind_tables() {
+            let uwtable =
+                attributes::uwtable_attr(llcx, tcx.sess.opts.unstable_opts.use_sync_unwind);
+            attributes::apply_to_llfn(llfn, llvm::AttributePlace::Function, &[uwtable]);
+        }
+        let llbb = llvm::LLVMAppendBasicBlockInContext(llcx, llfn, c"entry".as_ptr().cast());
+
+        let llbuilder = llvm::LLVMCreateBuilderInContext(llcx);
+        llvm::LLVMPositionBuilderAtEnd(llbuilder, llbb);
+
+        let name = ALLOC_IS_UNSAFE;
+        let ll_g = llvm::LLVMRustGetOrInsertGlobal(llmod, name.as_ptr().cast(), name.len(), i8);
+
+        llvm::LLVMRustBuildGlobalNonatomicStore(
+            &llbuilder,
+            llvm::LLVMGetParam(llfn, 0),
+            ll_g,
+            1, /*Volatile */
+        );
+        llvm::LLVMBuildRetVoid(llbuilder);
+
         llvm::LLVMDisposeBuilder(llbuilder);
     }
 }

@@ -1563,6 +1563,8 @@ extern "C" {
         NameLen: size_t,
         T: &'a Type,
     ) -> &'a Value;
+
+    pub fn LLVMRustSetGlobalConst(Global: &Value, IsConst: Bool);
     pub fn LLVMRustInsertPrivateGlobal<'a>(M: &'a Module, T: &'a Type) -> &'a Value;
     pub fn LLVMRustGetNamedValue(
         M: &Module,
@@ -1718,6 +1720,20 @@ extern "C" {
         Order: AtomicOrdering,
     ) -> &'a Value;
 
+    pub fn LLVMRustBuildGlobalNonatomicLoad<'a>(
+        B: &Builder<'a>,
+        ElementType: &'a Type,
+        PointerVal: &'a Value,
+        Name: *const c_char,
+        IsVolatile: Bool,
+    ) -> &'a Value;
+
+    pub fn LLVMRustBuildGlobalNonatomicStore<'a>(
+        B: &Builder<'a>,
+        ToStore: &'a Value,
+        Destination: &'a Value,
+        IsVolatile: Bool,
+    ) -> &'a Value;
     pub fn LLVMRustTimeTraceProfilerInitialize();
 
     pub fn LLVMRustTimeTraceProfilerFinishThread();
