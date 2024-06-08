@@ -7,6 +7,7 @@ use rustc_ast::expand::allocator::{
 use rustc_middle::bug;
 use rustc_middle::ty::TyCtxt;
 use rustc_session::config::{DebugInfo, OomStrategy};
+use rustc_span::symbol::{sym, Symbol};
 
 use crate::debuginfo;
 use crate::llvm::{self, Context, False, Module, True, Type};
@@ -50,6 +51,20 @@ pub(crate) unsafe fn codegen(
         create_alloc_unsafe_flag_function(tcx, llcx, llmod);
     }
 
+    // in dev, we first test only the alloc_unsafe function
+    // to check if we can generate correct llvm IR
+    /*
+    let is_alloc_func = |s: Symbol| {
+        return s == sym::alloc
+            || s == sym::realloc
+            || s == sym::alloc_zeroed
+            || s == sym::alloc_unsafe;
+    };
+     */
+    let is_alloc_func = |s: Symbol| {
+        return s == sym::alloc_unsafe;
+    };
+
     if kind == AllocatorKind::Default {
         for method in ALLOCATOR_METHODS {
             let mut args = Vec::with_capacity(method.inputs.len());
@@ -77,7 +92,15 @@ pub(crate) unsafe fn codegen(
             let from_name = global_fn_name(method.name);
             let to_name = default_fn_name(method.name);
 
-            create_wrapper_function(tcx, llcx, llmod, &from_name, &to_name, &args, output, false);
+            if is_alloc_func(method.name) {
+                create_wrapper_function_with_unsafe_flag(
+                    tcx, llcx, llmod, &from_name, &to_name, &args, output, false,
+                );
+            } else {
+                create_wrapper_function(
+                    tcx, llcx, llmod, &from_name, &to_name, &args, output, false,
+                );
+            }
         }
     }
 
@@ -173,6 +196,7 @@ fn create_wrapper_function(
 
         let llbuilder = llvm::LLVMCreateBuilderInContext(llcx);
         llvm::LLVMPositionBuilderAtEnd(llbuilder, llbb);
+
         let args = args
             .iter()
             .enumerate()
@@ -194,6 +218,137 @@ fn create_wrapper_function(
         } else {
             llvm::LLVMBuildRetVoid(llbuilder);
         }
+
+        llvm::LLVMDisposeBuilder(llbuilder);
+    }
+}
+#[instrument(level = "debug", skip(tcx, llcx, llmod, args, output, no_return))]
+
+fn create_wrapper_function_with_unsafe_flag(
+    tcx: TyCtxt<'_>,
+    llcx: &Context,
+    llmod: &Module,
+    from_name: &str,
+    to_name: &str,
+    args: &[&Type],
+    output: Option<&Type>,
+    no_return: bool,
+) {
+    unsafe {
+        let ty = llvm::LLVMFunctionType(
+            output.unwrap_or_else(|| llvm::LLVMVoidTypeInContext(llcx)),
+            args.as_ptr(),
+            args.len() as c_uint,
+            False,
+        );
+
+        /*
+            pub unsafe extern "C" fn __rdl_alloc_unsafe(
+            size: usize,
+            align: usize,
+            is_unsafe: i8,
+        ) -> *mut u8 ;
+             */
+        let flag_ty = llvm::LLVMInt8TypeInContext(llcx);
+        let allocator_callee_arg_types = [args, &[&flag_ty]].concat();
+        let allocator_callee_ty = llvm::LLVMFunctionType(
+            output.unwrap_or_else(|| llvm::LLVMVoidTypeInContext(llcx)),
+            allocator_callee_arg_types.as_ptr(),
+            allocator_callee_arg_types.len() as c_uint,
+            False,
+        );
+
+        let get_flag_callee_arg_types = vec![];
+        let get_flag_callee_ty = llvm::LLVMFunctionType(
+            flag_ty,
+            get_flag_callee_arg_types.as_ptr(),
+            get_flag_callee_arg_types.len() as c_uint,
+            False,
+        );
+        let get_flag_callee_fn = llvm::LLVMRustGetOrInsertFunction(
+            llmod,
+            GET_UNSAFE_ALLOC_FLAG_FUNC.as_ptr().cast(),
+            GET_UNSAFE_ALLOC_FLAG_FUNC.len(),
+            get_flag_callee_ty,
+        );
+
+        let llfn = llvm::LLVMRustGetOrInsertFunction(
+            llmod,
+            from_name.as_ptr().cast(),
+            from_name.len(),
+            ty,
+        );
+        let no_return = if no_return {
+            // -> ! DIFlagNoReturn
+            let no_return = llvm::AttributeKind::NoReturn.create_attr(llcx);
+            attributes::apply_to_llfn(llfn, llvm::AttributePlace::Function, &[no_return]);
+            Some(no_return)
+        } else {
+            None
+        };
+
+        if tcx.sess.default_hidden_visibility() {
+            llvm::LLVMRustSetVisibility(llfn, llvm::Visibility::Hidden);
+        }
+        if tcx.sess.must_emit_unwind_tables() {
+            let uwtable =
+                attributes::uwtable_attr(llcx, tcx.sess.opts.unstable_opts.use_sync_unwind);
+            attributes::apply_to_llfn(llfn, llvm::AttributePlace::Function, &[uwtable]);
+        }
+
+        let callee = llvm::LLVMRustGetOrInsertFunction(
+            llmod,
+            to_name.as_ptr().cast(),
+            to_name.len(),
+            allocator_callee_ty,
+        );
+        if let Some(no_return) = no_return {
+            // -> ! DIFlagNoReturn
+            attributes::apply_to_llfn(callee, llvm::AttributePlace::Function, &[no_return]);
+        }
+        llvm::LLVMRustSetVisibility(callee, llvm::Visibility::Hidden);
+
+        let llbb = llvm::LLVMAppendBasicBlockInContext(llcx, llfn, c"entry".as_ptr().cast());
+
+        let llbuilder = llvm::LLVMCreateBuilderInContext(llcx);
+        llvm::LLVMPositionBuilderAtEnd(llbuilder, llbb);
+
+        // get flag
+        let flag_value = llvm::LLVMRustBuildCall(
+            &llbuilder,
+            get_flag_callee_ty,
+            get_flag_callee_fn,
+            [].as_ptr(),
+            0 as c_uint,
+            [].as_ptr(),
+            0 as c_uint,
+            False,
+        );
+
+        let mut args = args
+            .iter()
+            .enumerate()
+            .map(|(i, _)| llvm::LLVMGetParam(llfn, i as c_uint))
+            .collect::<Vec<_>>();
+        args.push(flag_value);
+
+        let ret = llvm::LLVMRustBuildCall(
+            llbuilder,
+            allocator_callee_ty,
+            callee,
+            args.as_ptr(),
+            args.len() as c_uint,
+            [].as_ptr(),
+            0 as c_uint,
+            0 as c_uint,
+        );
+        llvm::LLVMSetTailCall(ret, True);
+        if output.is_some() {
+            llvm::LLVMBuildRet(llbuilder, ret);
+        } else {
+            llvm::LLVMBuildRetVoid(llbuilder);
+        }
+
         llvm::LLVMDisposeBuilder(llbuilder);
     }
 }
