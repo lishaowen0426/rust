@@ -23,6 +23,7 @@ profiler_builtins = { path = "../profiler_builtins", optional = true }
 unwind = { path = "../unwind" }
 hashbrown = { version = "0.14", default-features = false, features = ['rustc-dep-of-std'] }
 std_detect = { path = "../stdarch/crates/std_detect", default-features = false, features = ['rustc-dep-of-std'] }
+mimalloc-rs = { path = "/home/swli/inprocess/mimalloc-rs", features = ['rustc-dep-of-std'] }
 
 # Dependencies of the `backtrace` crate
 rustc-demangle = { version = "0.1.21", features = ['rustc-dep-of-std'] }
@@ -40,6 +41,8 @@ object = { version = "0.32.0", default-features = false, optional = true, featur
 [dev-dependencies]
 rand = { version = "0.8.5", default-features = false, features = ["alloc"] }
 rand_xorshift = "0.3.0"
+
+
 
 [target.'cfg(any(all(target_family = "wasm", target_os = "unknown"), target_os = "xous", all(target_vendor = "fortanix", target_env = "sgx")))'.dependencies]
 dlmalloc = { version = "0.2.4", features = ['rustc-dep-of-std'] }

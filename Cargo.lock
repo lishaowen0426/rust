@@ -2384,6 +2384,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mimalloc-rs"
+version = "0.1.0"
+dependencies = [
+ "compiler_builtins",
+ "libc",
+ "rustc-std-workspace-core",
+]
+
+[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5134,6 +5143,7 @@ dependencies = [
  "hashbrown",
  "hermit-abi",
  "libc",
+ "mimalloc-rs",
  "miniz_oxide",
  "object",
  "panic_abort",
