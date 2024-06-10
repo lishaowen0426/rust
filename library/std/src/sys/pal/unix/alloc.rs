@@ -1,24 +1,6 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 use crate::alloc::{GlobalAlloc, Layout, System};
-use crate::marker::{PhantomData, PhantomPinned};
 use crate::ptr;
 use crate::sys::common::alloc::{realloc_fallback, MIN_ALIGN};
-use libc::{c_void, size_t};
-
-/*
-#[repr(C)]
-pub struct MiHeap {
-    _data: [u8; 0],
-    _marker: PhantomData<(*mut u8, PhantomPinned)>,
-}
-#[link(name = "mimalloc", kind = "static")]
-extern "C" {
-    fn mi_calloc(count: size_t, size: size_t) -> *mut c_void;
-    fn mi_heap_new() -> *mut MiHeap;
-
-}
-*/
 
 #[stable(feature = "alloc_system_type", since = "1.28.0")]
 unsafe impl GlobalAlloc for System {

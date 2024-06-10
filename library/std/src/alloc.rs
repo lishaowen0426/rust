@@ -52,14 +52,18 @@
 //!
 //! The `#[global_allocator]` can only be used once in a crate
 //! or its recursive dependencies.
-
+#![allow(dead_code)]
+#![allow(unused_imports)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![stable(feature = "alloc_module", since = "1.28.0")]
 
+//use crate::marker::{Send, Sync};
+//use crate::sync::Mutex;
 use core::hint;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicPtr, Ordering};
 use core::{mem, ptr};
+//use mimalloc_rs::MiHeap;
 
 #[stable(feature = "alloc_module", since = "1.28.0")]
 #[doc(inline)]
@@ -368,6 +372,35 @@ pub fn rust_oom(layout: Layout) -> ! {
     hook(layout);
     crate::process::abort()
 }
+/*
+#[stable(feature = "alloc_system_type", since = "1.28.0")]
+#[derive(Debug)]
+#[allow(missing_docs)]
+#[allow(dead_code)]
+pub struct MiHeapRef {
+    heap: *mut MiHeap,
+}
+
+#[stable(feature = "alloc_system_type", since = "1.28.0")]
+unsafe impl Sync for MiHeapRef {}
+#[stable(feature = "alloc_system_type", since = "1.28.0")]
+unsafe impl Send for MiHeapRef {}
+
+
+#[rustc_const_stable(feature = "alloc_system_type", since = "1.28.0")]
+#[stable(feature = "alloc_system_type", since = "1.28.0")]
+#[allow(missing_docs)]
+pub const fn new_mi_heap() -> MiHeapRef {
+    MiHeapRef { heap: ptr::null_mut() }
+}
+
+#[stable(feature = "alloc_system_type", since = "1.28.0")]
+#[allow(missing_docs)]
+pub static SAFE_HEAP: Mutex<MiHeapRef> = Mutex::new(new_mi_heap());
+#[unstable(feature = "unsafe_alloc", issue = "none")]
+#[allow(missing_docs)]
+pub static UNSAFE_HEAP: Mutex<MiHeapRef> = Mutex::new(new_mi_heap());
+*/
 
 #[cfg(not(test))]
 #[doc(hidden)]
