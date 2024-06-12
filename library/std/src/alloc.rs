@@ -63,7 +63,7 @@ use core::hint;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicPtr, Ordering};
 use core::{mem, ptr};
-//use mimalloc_rs::MiHeap;
+//use mimalloc_rs;
 
 #[stable(feature = "alloc_module", since = "1.28.0")]
 #[doc(inline)]

@@ -34,7 +34,7 @@ fn build_mimalloc() {
         .args(["-B", build_dir.to_str().unwrap()])
         .args([
             "-DMI_SECURE=ON",
-            "-DMI_BUILD_SHARED=OFF",
+            "-DMI_BUILD_SHARED=ON",
             "-DMI_BUILD_OBJECT=ON",
             "-DMI_BUILD_TESTS=OFF",
             "-DMI_INSTALL_TOPLEVEL=ON",
@@ -52,7 +52,7 @@ fn build_mimalloc() {
 
     let lib_dir = install_dir.join("lib");
     println!("cargo::rustc-link-search=native={}", lib_dir.to_str().unwrap());
-    println!("cargo:rustc-link-lib=static=mimalloc");
+    //println!("cargo:rustc-link-lib=static=mimalloc");
 }
 
 fn main() {
@@ -122,6 +122,6 @@ fn main() {
         //compiler mimalloc
 
         rerun_if_changed_anything_in_dir(Path::new(MIMALLOC_SRC));
-        // build_mimalloc();
+        //build_mimalloc();
     }
 }
