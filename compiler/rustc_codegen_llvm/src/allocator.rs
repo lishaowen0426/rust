@@ -1,8 +1,9 @@
+#![allow(unused_imports)]
 use crate::attributes;
 use libc::c_uint;
 use rustc_ast::expand::allocator::{
-    alloc_error_handler_name, default_fn_name, global_fn_name, AllocatorKind, AllocatorTy,
-    ALLOCATOR_METHODS, ALLOC_IS_UNSAFE, NO_ALLOC_SHIM_IS_UNSTABLE,
+    alloc_error_handler_name, default_fn_name, global_fn_name, mimalloc_fn_name, AllocatorKind,
+    AllocatorTy, ALLOCATOR_METHODS, ALLOC_IS_UNSAFE, NO_ALLOC_SHIM_IS_UNSTABLE,
 };
 use rustc_middle::bug;
 use rustc_middle::ty::TyCtxt;
@@ -53,16 +54,9 @@ pub(crate) unsafe fn codegen(
 
     // in dev, we first test only the alloc_unsafe function
     // to check if we can generate correct llvm IR
-    /*
+
     let is_alloc_func = |s: Symbol| {
-        return s == sym::alloc
-            || s == sym::realloc
-            || s == sym::alloc_zeroed
-            || s == sym::alloc_unsafe;
-    };
-     */
-    let is_alloc_func = |s: Symbol| {
-        return s == sym::alloc_unsafe;
+        return s == sym::alloc || s == sym::realloc || s == sym::alloc_zeroed;
     };
 
     if kind == AllocatorKind::Default {
@@ -90,7 +84,8 @@ pub(crate) unsafe fn codegen(
             };
 
             let from_name = global_fn_name(method.name);
-            let to_name = default_fn_name(method.name);
+            //let to_name = default_fn_name(method.name);
+            let to_name = mimalloc_fn_name(method.name);
 
             if is_alloc_func(method.name) {
                 create_wrapper_function_with_unsafe_flag(

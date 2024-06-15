@@ -54,6 +54,7 @@
 //! or its recursive dependencies.
 #![allow(dead_code)]
 #![allow(unused_imports)]
+#![allow(unused_variables)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![stable(feature = "alloc_module", since = "1.28.0")]
 
@@ -63,7 +64,6 @@ use core::hint;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicPtr, Ordering};
 use core::{mem, ptr};
-use mimalloc::MiHeapRef;
 
 #[stable(feature = "alloc_module", since = "1.28.0")]
 #[doc(inline)]
@@ -461,11 +461,42 @@ pub mod __default_lib_allocator {
     }
     #[rustc_std_internal_symbol]
     #[allow(unused_variables)]
-    pub unsafe extern "C" fn __rdl_alloc_unsafe(
+    pub unsafe extern "C" fn __mimalloc_alloc(size: usize, align: usize, is_unsafe: i8) -> *mut u8 {
+        unsafe {
+            let layout = Layout::from_size_align_unchecked(size, align);
+            System.alloc_zeroed(layout)
+        }
+    }
+    #[rustc_std_internal_symbol]
+    pub unsafe extern "C" fn __mimalloc_dealloc(ptr: *mut u8, size: usize, align: usize) {
+        // SAFETY: see the guarantees expected by `Layout::from_size_align` and
+        // `GlobalAlloc::dealloc`.
+        unsafe { System.dealloc(ptr, Layout::from_size_align_unchecked(size, align)) }
+    }
+    #[rustc_std_internal_symbol]
+    pub unsafe extern "C" fn __mimalloc_realloc(
+        ptr: *mut u8,
+        old_size: usize,
+        align: usize,
+        new_size: usize,
+        is_unsafe: i8,
+    ) -> *mut u8 {
+        // SAFETY: see the guarantees expected by `Layout::from_size_align` and
+        // `GlobalAlloc::realloc`.
+        unsafe {
+            let old_layout = Layout::from_size_align_unchecked(old_size, align);
+            System.realloc(ptr, old_layout, new_size)
+        }
+    }
+
+    #[rustc_std_internal_symbol]
+    pub unsafe extern "C" fn __mimalloc_alloc_zeroed(
         size: usize,
         align: usize,
         is_unsafe: i8,
     ) -> *mut u8 {
+        // SAFETY: see the guarantees expected by `Layout::from_size_align` and
+        // `GlobalAlloc::alloc_zeroed`.
         unsafe {
             let layout = Layout::from_size_align_unchecked(size, align);
             System.alloc_zeroed(layout)

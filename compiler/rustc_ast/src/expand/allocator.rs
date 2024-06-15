@@ -14,6 +14,10 @@ pub fn default_fn_name(base: Symbol) -> String {
     format!("__rdl_{base}")
 }
 
+pub fn mimalloc_fn_name(base: Symbol) -> String {
+    format!("__mimalloc_{base}")
+}
+
 pub fn alloc_error_handler_name(alloc_error_handler_kind: AllocatorKind) -> &'static str {
     match alloc_error_handler_kind {
         AllocatorKind::Global => "__rg_oom",
@@ -71,9 +75,11 @@ pub static ALLOCATOR_METHODS: &[AllocatorMethod] = &[
         inputs: &[AllocatorMethodInput { name: "layout", ty: AllocatorTy::Layout }],
         output: AllocatorTy::ResultPtr,
     },
+    /*
     AllocatorMethod {
         name: sym::alloc_unsafe,
         inputs: &[AllocatorMethodInput { name: "layout", ty: AllocatorTy::Layout }],
         output: AllocatorTy::ResultPtr,
     },
+     */
 ];
