@@ -24,11 +24,12 @@ fn rerun_if_changed_anything_in_dir(dir: &Path) {
     }
 }
 
-fn build_mimalloc() {
-    println!("cargo::rustc-link-search=native=/home/swli/inprocess/mimalloc/out/secure");
+fn run() {
+    println!("cargo::rustc-link-search=native=/home/swli/inprocess/mimalloc/out/");
     println!("cargo:rustc-link-lib=static=mimalloc");
 }
 
 fn main() {
-    build_mimalloc();
+    rerun_if_changed_anything_in_dir(&Path::new(MIMALLOC_SRC));
+    run();
 }
