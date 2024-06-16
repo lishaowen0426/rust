@@ -24,9 +24,15 @@ mi_decl_export void mi_free(void *p) mi_attr_noexcept;
 
 #[link(name = "mimalloc", kind = "static")]
 extern "C" {
-    fn mi_malloc(size: usize) -> *mut c_void;
-    fn mi_malloc_unsafe(size: usize) -> *mut c_void;
-    fn mi_calloc(count: usize, size: usize) -> *mut c_void;
-    fn mi_realloc(ptr: *mut c_void, size: usize) -> *mut c_void;
-    fn mi_free(ptr: *mut c_void);
+    pub fn mi_malloc(size: usize) -> *mut c_void;
+    pub fn mi_zalloc(size: usize) -> *mut c_void;
+    pub fn mi_malloc_unsafe(size: usize) -> *mut c_void;
+    pub fn mi_calloc(count: usize, size: usize) -> *mut c_void;
+    pub fn mi_realloc(ptr: *mut c_void, size: usize) -> *mut c_void;
+    pub fn mi_free(ptr: *mut c_void);
+
+    pub fn mi_malloc_aligned(size: usize, alignment: usize) -> *mut c_void;
+    pub fn mi_zalloc_aligned(size: usize, alignment: usize) -> *mut c_void;
+    pub fn mi_realloc_aligned(ptr: *mut c_void, size: usize, alignment: usize) -> *mut c_void;
+
 }

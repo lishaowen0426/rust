@@ -84,8 +84,8 @@ pub(crate) unsafe fn codegen(
             };
 
             let from_name = global_fn_name(method.name);
-            //let to_name = default_fn_name(method.name);
-            let to_name = mimalloc_fn_name(method.name);
+            let to_name = default_fn_name(method.name);
+            //let to_name = mimalloc_fn_name(method.name);
 
             if is_alloc_func(method.name) {
                 create_wrapper_function_with_unsafe_flag(

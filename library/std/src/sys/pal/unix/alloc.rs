@@ -1,6 +1,14 @@
+#![allow(unused_imports)]
+#![allow(dead_code)]
 use crate::alloc::{GlobalAlloc, Layout, System};
+use crate::cmp;
 use crate::ptr;
 use crate::sys::common::alloc::{realloc_fallback, MIN_ALIGN};
+use libc::c_void;
+use mimalloc::{
+    mi_free, mi_malloc, mi_malloc_aligned, mi_realloc, mi_realloc_aligned, mi_zalloc,
+    mi_zalloc_aligned,
+};
 
 #[stable(feature = "alloc_system_type", since = "1.28.0")]
 unsafe impl GlobalAlloc for System {
@@ -50,6 +58,58 @@ unsafe impl GlobalAlloc for System {
             realloc_fallback(self, ptr, layout, new_size)
         }
     }
+    /*
+
+    #[inline]
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let ptr = mi_malloc_aligned(layout.size(), layout.align()) as *mut u8;
+        if ptr.is_null() {
+            panic!("null ptr");
+        } else {
+            ptr
+        }
+    }
+
+    #[inline]
+    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
+        mi_free(ptr as *mut libc::c_void)
+    }
+
+    #[inline]
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        mi_zalloc_aligned(layout.size(), layout.align()) as *mut u8
+    }
+
+    #[inline]
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        //        let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
+        //       mi_realloc_aligned(ptr as *mut c_void, new_layout.size(), new_layout.align()) as *mut u8
+        let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
+
+        let new_ptr = self.alloc(new_layout);
+        if !new_ptr.is_null() {
+            let size = cmp::min(layout.size(), new_size);
+            ptr::copy_nonoverlapping(ptr, new_ptr, size);
+            self.dealloc(ptr, layout);
+        }
+        new_ptr
+        /*
+            if layout.align() <= MIN_ALIGN && layout.align() <= new_size {
+                mi_realloc(ptr as *mut libc::c_void, new_size) as *mut u8
+            } else {
+                let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
+
+                let new_ptr = self.alloc(new_layout);
+                if !new_ptr.is_null() {
+                    let size = cmp::min(layout.size(), new_size);
+                    ptr::copy_nonoverlapping(ptr, new_ptr, size);
+                    self.dealloc(ptr, layout);
+                }
+                new_ptr
+            }
+        */
+    }
+    */
 }
 
 cfg_if::cfg_if! {
@@ -102,5 +162,12 @@ cfg_if::cfg_if! {
             let ret = libc::posix_memalign(&mut out, align, layout.size());
             if ret != 0 { ptr::null_mut() } else { out as *mut u8 }
         }
+        #[inline]
+        unsafe fn mimalloc_aligned_malloc(layout: &Layout) -> *mut u8 {
+            let align = layout.align().max(crate::mem::size_of::<usize>());
+            mi_malloc_aligned(layout.size(), align) as * mut u8
+        }
+
+
     }
 }

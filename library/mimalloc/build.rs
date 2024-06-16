@@ -6,6 +6,7 @@ use std::process::Command;
 
 const MIMALLOC_ROOT: &str = "/home/swli/inprocess/mimalloc";
 const MIMALLOC_SRC: &str = "/home/swli/inprocess/mimalloc/src";
+const MIMALLOC_OUT: &str = "/home/swli/inprocess/mimalloc/out";
 
 fn rerun_if_changed_anything_in_dir(dir: &Path) {
     let mut stack = dir
@@ -30,6 +31,6 @@ fn run() {
 }
 
 fn main() {
-    rerun_if_changed_anything_in_dir(&Path::new(MIMALLOC_SRC));
+    rerun_if_changed_anything_in_dir(&Path::new(MIMALLOC_OUT));
     run();
 }

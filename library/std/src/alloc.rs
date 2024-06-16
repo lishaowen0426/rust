@@ -60,6 +60,7 @@
 
 //use crate::marker::{Send, Sync};
 //use crate::sync::Mutex;
+use crate::sys::common::alloc::MIN_ALIGN;
 use core::hint;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicPtr, Ordering};
@@ -407,7 +408,12 @@ pub static UNSAFE_HEAP: Mutex<MiHeapRef> = Mutex::new(new_mi_heap());
 #[allow(unused_attributes)]
 #[unstable(feature = "alloc_internals", issue = "none")]
 pub mod __default_lib_allocator {
-    use super::{GlobalAlloc, Layout, System};
+    use super::{mem, ptr, GlobalAlloc, Layout, System, MIN_ALIGN};
+    use crate::cmp;
+    use libc::c_void;
+    use mimalloc::{
+        mi_calloc, mi_free, mi_malloc, mi_malloc_aligned, mi_malloc_unsafe, mi_realloc, mi_zalloc,
+    };
     // These magic symbol names are used as a fallback for implementing the
     // `__rust_alloc` etc symbols (see `src/liballoc/alloc.rs`) when there is
     // no `#[global_allocator]` attribute.
@@ -418,6 +424,54 @@ pub mod __default_lib_allocator {
     // linkage directives are provided as part of the current compiler allocator
     // ABI
 
+    struct MM;
+
+    impl MM {
+        fn aligned_malloc(&self, layout: Layout) -> *mut u8 {
+            let align = layout.align().max(mem::size_of::<usize>());
+            unsafe { mi_malloc_aligned(layout.size(), align) as *mut u8 }
+        }
+        pub unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+            unsafe {
+                if layout.align() <= MIN_ALIGN && layout.align() <= layout.size() {
+                    mi_malloc(layout.size()) as *mut u8
+                } else {
+                    self.aligned_malloc(layout)
+                }
+            }
+        }
+        pub unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+            unsafe {
+                if layout.align() <= MIN_ALIGN && layout.align() <= layout.size() {
+                    mi_zalloc(layout.size()) as *mut u8
+                } else {
+                    let p = self.alloc(layout);
+                    ptr::write_bytes(p, 0, layout.size());
+                    p
+                }
+            }
+        }
+        pub unsafe fn realloc(
+            &self,
+            ptr: *mut u8,
+            old_size: usize,
+            layout: Layout,
+            new_size: usize,
+        ) -> *mut u8 {
+            unsafe {
+                if layout.align() <= MIN_ALIGN && layout.align() <= new_size {
+                    mi_realloc(ptr as *mut c_void, new_size) as *mut u8
+                } else {
+                    let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
+                    let new_ptr = self.alloc(new_layout);
+                    let size = cmp::min(layout.size(), new_size);
+                    ptr::copy_nonoverlapping(ptr, new_ptr, size);
+                    mi_free(ptr as *mut c_void);
+                    new_ptr
+                }
+            }
+        }
+    }
     #[rustc_std_internal_symbol]
     pub unsafe extern "C" fn __rdl_alloc(size: usize, align: usize) -> *mut u8 {
         // SAFETY: see the guarantees expected by `Layout::from_size_align` and
@@ -459,22 +513,29 @@ pub mod __default_lib_allocator {
             System.alloc_zeroed(layout)
         }
     }
+    /*
     #[rustc_std_internal_symbol]
     #[allow(unused_variables)]
-    pub unsafe extern "C" fn __mimalloc_alloc(size: usize, align: usize, is_unsafe: i8) -> *mut u8 {
+    pub unsafe extern "C" fn __rdl_alloc(size: usize, align: usize, is_unsafe: i8) -> *mut u8 {
         unsafe {
             let layout = Layout::from_size_align_unchecked(size, align);
-            System.alloc_zeroed(layout)
+            MM.alloc(layout)
+            /*
+            if is_unsafe == 1 {
+                mi_malloc_unsafe(layout.size()) as *mut u8
+            } else {
+            }
+            */
         }
     }
     #[rustc_std_internal_symbol]
-    pub unsafe extern "C" fn __mimalloc_dealloc(ptr: *mut u8, size: usize, align: usize) {
+    pub unsafe extern "C" fn __rdl_dealloc(ptr: *mut u8, size: usize, align: usize) {
         // SAFETY: see the guarantees expected by `Layout::from_size_align` and
         // `GlobalAlloc::dealloc`.
-        unsafe { System.dealloc(ptr, Layout::from_size_align_unchecked(size, align)) }
+        unsafe { mi_free(ptr as *mut c_void) }
     }
     #[rustc_std_internal_symbol]
-    pub unsafe extern "C" fn __mimalloc_realloc(
+    pub unsafe extern "C" fn __rdl_realloc(
         ptr: *mut u8,
         old_size: usize,
         align: usize,
@@ -485,12 +546,12 @@ pub mod __default_lib_allocator {
         // `GlobalAlloc::realloc`.
         unsafe {
             let old_layout = Layout::from_size_align_unchecked(old_size, align);
-            System.realloc(ptr, old_layout, new_size)
+            MM.realloc(ptr, old_size, old_layout, new_size)
         }
     }
 
     #[rustc_std_internal_symbol]
-    pub unsafe extern "C" fn __mimalloc_alloc_zeroed(
+    pub unsafe extern "C" fn __rdl_alloc_zeroed(
         size: usize,
         align: usize,
         is_unsafe: i8,
@@ -499,7 +560,8 @@ pub mod __default_lib_allocator {
         // `GlobalAlloc::alloc_zeroed`.
         unsafe {
             let layout = Layout::from_size_align_unchecked(size, align);
-            System.alloc_zeroed(layout)
+            MM.alloc_zeroed(layout)
         }
     }
+    */
 }
