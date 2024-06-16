@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
 #![feature(unix_sigpipe)]
 
 // A note about jemalloc: rustc uses jemalloc when built for CI and
@@ -34,13 +36,15 @@
 // https://github.com/rust-lang/rust/commit/b90cfc887c31c3e7a9e6d462e2464db1fe506175#diff-43914724af6e464c1da2171e4a9b6c7e607d5bc1203fa95c0ab85be4122605ef
 // for an example of how to do so.
 
+use mimalloc_rs;
+
 #[unix_sigpipe = "sig_dfl"]
 fn main() {
     // See the comment at the top of this file for an explanation of this.
-    #[cfg(feature = "jemalloc-sys")]
+    //#[cfg(feature = "jemalloc-sys")]
     {
         use std::os::raw::{c_int, c_void};
-
+        /*
         #[used]
         static _F1: unsafe extern "C" fn(usize, usize) -> *mut c_void = jemalloc_sys::calloc;
         #[used]
@@ -68,6 +72,20 @@ fn main() {
             #[used]
             static _F7: unsafe extern "C" fn() = _rjem_je_zone_register;
         }
+        */
+        #[used]
+        static _F1: unsafe extern "C" fn(usize, usize) -> *mut c_void = mimalloc_rs::calloc;
+        #[used]
+        static _F2: unsafe extern "C" fn(*mut *mut c_void, usize, usize) -> c_int =
+            mimalloc_rs::posix_memalign;
+        #[used]
+        static _F3: unsafe extern "C" fn(usize, usize) -> *mut c_void = mimalloc_rs::aligned_alloc;
+        #[used]
+        static F4: unsafe extern "C" fn(usize) -> *mut c_void = mimalloc_rs::malloc;
+        #[used]
+        static _F5: unsafe extern "C" fn(*mut c_void, usize) -> *mut c_void = mimalloc_rs::realloc;
+        #[used]
+        static _F6: unsafe extern "C" fn(*mut c_void) = mimalloc_rs::free;
     }
 
     rustc_driver::main()

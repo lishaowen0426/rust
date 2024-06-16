@@ -2384,12 +2384,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "mimalloc"
-version = "0.0.0"
+name = "mimalloc-rs"
+version = "0.1.0"
 dependencies = [
- "cc",
- "compiler_builtins",
- "core",
  "libc",
 ]
 
@@ -3338,6 +3335,7 @@ name = "rustc-main"
 version = "0.0.0"
 dependencies = [
  "jemalloc-sys",
+ "mimalloc-rs",
  "rustc_codegen_ssa",
  "rustc_driver",
  "rustc_driver_impl",
@@ -5144,7 +5142,6 @@ dependencies = [
  "hashbrown",
  "hermit-abi",
  "libc",
- "mimalloc",
  "miniz_oxide",
  "object",
  "panic_abort",
