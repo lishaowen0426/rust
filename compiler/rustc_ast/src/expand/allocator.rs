@@ -14,6 +14,10 @@ pub fn default_fn_name(base: Symbol) -> String {
     format!("__rdl_{base}")
 }
 
+pub fn default_unsafe_fn_name(base: Symbol) -> String {
+    format!("__rdl_{base}_unsafe")
+}
+
 pub fn mimalloc_fn_name(base: Symbol) -> String {
     format!("__mimalloc_{base}")
 }

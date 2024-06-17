@@ -1512,6 +1512,11 @@ extern "C" LLVMValueRef LLVMRustBuildCall(LLVMBuilderRef B, LLVMTypeRef Ty,
   return wrap(inst);
 }
 
+extern "C" LLVMValueRef LLVMRustBuildICmpEQ(LLVMBuilderRef B, LLVMValueRef LHS,
+                                            LLVMValueRef RHS) {
+  return wrap(unwrap(B)->CreateICmpEQ(unwrap(LHS), unwrap(RHS)));
+}
+
 extern "C" LLVMValueRef
 LLVMRustGetInstrProfIncrementIntrinsic(LLVMModuleRef M) {
   return wrap(llvm::Intrinsic::getDeclaration(

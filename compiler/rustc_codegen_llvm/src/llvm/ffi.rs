@@ -1638,6 +1638,8 @@ extern "C" {
         NumOpBundles: c_uint,
         IsUnsafe: Bool,
     ) -> &'a Value;
+
+    pub fn LLVMRustBuildICmpEQ<'a>(B: &Builder<'a>, LHS: &'a Value, RHS: &'a Value) -> &'a Value;
     pub fn LLVMRustBuildMemCpy<'a>(
         B: &Builder<'a>,
         Dst: &'a Value,

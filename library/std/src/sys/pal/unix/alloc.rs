@@ -1,10 +1,17 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
+
 use crate::alloc::{GlobalAlloc, Layout, System};
 use crate::cmp;
 use crate::ptr;
 use crate::sys::common::alloc::{realloc_fallback, MIN_ALIGN};
-use libc::c_void;
+use libc::{c_void, size_t};
+
+#[linkage = "weak"]
+#[no_mangle]
+pub fn malloc_unsafe(_size: size_t) -> *mut c_void {
+    return ptr::null_mut();
+}
 
 #[stable(feature = "alloc_system_type", since = "1.28.0")]
 unsafe impl GlobalAlloc for System {
@@ -25,6 +32,11 @@ unsafe impl GlobalAlloc for System {
             }
             aligned_malloc(&layout)
         }
+    }
+
+    #[inline]
+    unsafe fn alloc_unsafe(&self, layout: Layout) -> *mut u8 {
+        return malloc_unsafe(layout.size()) as *mut u8;
     }
 
     #[inline]

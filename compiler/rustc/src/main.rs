@@ -82,11 +82,13 @@ fn main() {
         #[used]
         static _F3: unsafe extern "C" fn(usize, usize) -> *mut c_void = mimalloc_rs::aligned_alloc;
         #[used]
-        static F4: unsafe extern "C" fn(usize) -> *mut c_void = mimalloc_rs::malloc;
+        static _F4: unsafe extern "C" fn(usize) -> *mut c_void = mimalloc_rs::malloc;
         #[used]
         static _F5: unsafe extern "C" fn(*mut c_void, usize) -> *mut c_void = mimalloc_rs::realloc;
         #[used]
         static _F6: unsafe extern "C" fn(*mut c_void) = mimalloc_rs::free;
+        #[used]
+        static _F7: unsafe extern "C" fn(usize) -> *mut c_void = mimalloc_rs::malloc_unsafe;
     }
 
     rustc_driver::main()
