@@ -65,6 +65,7 @@ use core::hint;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicPtr, Ordering};
 use core::{mem, ptr};
+use libc::{c_int, c_void};
 
 #[stable(feature = "alloc_module", since = "1.28.0")]
 #[doc(inline)]

@@ -73,6 +73,7 @@ fn main() {
             static _F7: unsafe extern "C" fn() = _rjem_je_zone_register;
         }
         */
+
         #[used]
         static _F1: unsafe extern "C" fn(usize, usize) -> *mut c_void = mimalloc_rs::calloc;
         #[used]

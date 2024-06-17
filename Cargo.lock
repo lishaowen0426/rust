@@ -2387,7 +2387,9 @@ dependencies = [
 name = "mimalloc-rs"
 version = "0.1.0"
 dependencies = [
+ "compiler_builtins",
  "libc",
+ "rustc-std-workspace-core",
 ]
 
 [[package]]
@@ -5142,6 +5144,7 @@ dependencies = [
  "hashbrown",
  "hermit-abi",
  "libc",
+ "mimalloc-rs",
  "miniz_oxide",
  "object",
  "panic_abort",
