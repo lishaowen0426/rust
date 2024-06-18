@@ -222,31 +222,36 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
     fx.per_local_var_debug_info = fx.compute_per_local_var_debug_info(&mut start_bx);
 
     let memory_locals = analyze::non_ssa_locals(&fx);
+    debug!("non_ssa(memory locals):");
+    for l in memory_locals.iter() {
+        debug!("{:?}", l);
+    }
 
     // Allocate variable and temp allocas
     let local_values = {
         let args = arg_local_refs(&mut start_bx, &mut fx, &memory_locals);
 
         let mut allocate_local = |local| {
+            debug!("alloca local: {:?}", local);
             let decl = &mir.local_decls[local];
             let layout = start_bx.layout_of(fx.monomorphize(decl.ty));
             assert!(!layout.ty.has_erasable_regions());
 
             if local == mir::RETURN_PLACE && fx.fn_abi.ret.is_indirect() {
-                //debug!("alloc: {:?} (return place) -> place", local);
+                debug!("alloc: {:?} (return place) -> place", local);
                 let llretptr = start_bx.get_param(0);
                 return LocalRef::Place(PlaceRef::new_sized(llretptr, layout));
             }
 
             if memory_locals.contains(local) {
-                //debug!("alloc: {:?} -> place", local);
+                debug!("alloc: {:?} -> place", local);
                 if layout.is_unsized() {
                     LocalRef::UnsizedPlace(PlaceRef::alloca_unsized_indirect(&mut start_bx, layout))
                 } else {
                     LocalRef::Place(PlaceRef::alloca(&mut start_bx, layout))
                 }
             } else {
-                //debug!("alloc: {:?} -> operand", local);
+                debug!("alloc: {:?} -> operand", local);
                 LocalRef::new_operand(layout)
             }
         };

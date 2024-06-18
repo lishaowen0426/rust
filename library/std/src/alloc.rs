@@ -377,35 +377,6 @@ pub fn rust_oom(layout: Layout) -> ! {
     hook(layout);
     crate::process::abort()
 }
-/*
-#[stable(feature = "alloc_system_type", since = "1.28.0")]
-#[derive(Debug)]
-#[allow(missing_docs)]
-#[allow(dead_code)]
-pub struct MiHeapRef {
-    heap: *mut MiHeap,
-}
-
-#[stable(feature = "alloc_system_type", since = "1.28.0")]
-unsafe impl Sync for MiHeapRef {}
-#[stable(feature = "alloc_system_type", since = "1.28.0")]
-unsafe impl Send for MiHeapRef {}
-
-
-#[rustc_const_stable(feature = "alloc_system_type", since = "1.28.0")]
-#[stable(feature = "alloc_system_type", since = "1.28.0")]
-#[allow(missing_docs)]
-pub const fn new_mi_heap() -> MiHeapRef {
-    MiHeapRef { heap: ptr::null_mut() }
-}
-
-#[stable(feature = "alloc_system_type", since = "1.28.0")]
-#[allow(missing_docs)]
-pub static SAFE_HEAP: Mutex<MiHeapRef> = Mutex::new(new_mi_heap());
-#[unstable(feature = "unsafe_alloc", issue = "none")]
-#[allow(missing_docs)]
-pub static UNSAFE_HEAP: Mutex<MiHeapRef> = Mutex::new(new_mi_heap());
-*/
 
 #[cfg(not(test))]
 #[doc(hidden)]
