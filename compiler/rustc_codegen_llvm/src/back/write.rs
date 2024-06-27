@@ -52,6 +52,10 @@ pub fn llvm_err<'a>(dcx: &rustc_errors::DiagCtxt, err: LlvmError<'a>) -> FatalEr
     }
 }
 
+#[instrument(
+    level = "debug",
+    skip(dcx, target, pm, m, output, dwo_output, file_type, self_profiler_ref)
+)]
 pub fn write_output_file<'ll>(
     dcx: &rustc_errors::DiagCtxt,
     target: &'ll llvm::TargetMachine,
@@ -665,6 +669,10 @@ pub(crate) unsafe fn codegen(
     module: ModuleCodegen<ModuleLlvm>,
     config: &ModuleConfig,
 ) -> Result<CompiledModule, FatalError> {
+    debug!(
+        "codegen config: emit_ir = {}, emit_asm = {}, emit_obj = {:?}",
+        config.emit_ir, config.emit_asm, config.emit_obj
+    );
     let _timer = cgcx.prof.generic_activity_with_arg("LLVM_module_codegen", &*module.name);
     {
         let llmod = module.module_llvm.llmod();

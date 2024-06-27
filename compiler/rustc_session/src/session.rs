@@ -602,7 +602,7 @@ impl Session {
 
     /// Checks if LLVM lifetime markers should be emitted.
     pub fn emit_lifetime_markers(&self) -> bool {
-        self.opts.optimize != config::OptLevel::No
+        self.opts.optimize != config::OptLevel::No || self.opts.unstable_opts.emit_llvm_lifetime
         // AddressSanitizer and KernelAddressSanitizer uses lifetimes to detect use after scope bugs.
         // MemorySanitizer uses lifetimes to detect use of uninitialized stack variables.
         // HWAddressSanitizer will use lifetimes to detect use after scope bugs in the future.

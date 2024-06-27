@@ -52,7 +52,7 @@ use std::thread;
 const PRE_LTO_BC_EXT: &str = "pre-lto.bc";
 
 /// What kind of object file to emit.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EmitObj {
     // No object file.
     None,
@@ -66,7 +66,7 @@ pub enum EmitObj {
 }
 
 /// What kind of llvm bitcode section to embed in an object file.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BitcodeSection {
     // No bitcode section.
     None,
