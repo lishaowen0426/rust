@@ -10,7 +10,6 @@ impl<'tcx> MirPass<'tcx> for SafetyProp {
         true
     }
 
-    #[instrument(level = "debug", skip_all)]
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
         let mut unsafe_locals = SafetyLocals { local_decls: body.local_decls.clone() }
             .into_engine(tcx, body)
