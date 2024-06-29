@@ -11,6 +11,10 @@ impl<'tcx> MirPass<'tcx> for SafetyProp {
     }
 
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
+        body.initialize_unsafe_locals(body.local_decls.len());
+        if !tcx.features().unsafe_alloc {
+            return;
+        }
         let mut unsafe_locals = SafetyLocals { local_decls: body.local_decls.clone() }
             .into_engine(tcx, body)
             .iterate_to_fixpoint()
@@ -30,7 +34,6 @@ impl<'tcx> MirPass<'tcx> for SafetyProp {
                 "unsafe locals that will be propagated to the predecessors of {bb:?}: {results:?}"
             );
         }
-        body.initialize_unsafe_locals(body.local_decls.len());
         collected_unsafe_locals.iter().for_each(|loc| {
             debug!("unsafe: {loc:?}");
             body.set_unsafe_local(loc);

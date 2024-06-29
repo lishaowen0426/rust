@@ -2,11 +2,13 @@ use crate::{Analysis, AnalysisDomain, Backward, GenKill};
 use rustc_index::bit_set::BitSet;
 use rustc_index::{IndexSlice, IndexVec};
 use rustc_middle::mir::visit::{PlaceContext, Visitor};
+use rustc_middle::mir::CastKind;
 use rustc_middle::mir::{
     BorrowKind, Local, LocalDecl, Location, Operand, Place, Rvalue, Statement, StatementSafety,
     Terminator, TerminatorEdges, TerminatorKind,
 };
 use rustc_middle::ty;
+use rustc_middle::ty::adjustment::PointerCoercion;
 
 pub struct SafetyLocals<'tcx> {
     pub local_decls: IndexVec<Local, LocalDecl<'tcx>>,
@@ -146,33 +148,35 @@ struct LTRRvaluePlaceVisitor<'a, 'tcx> {
 impl<'tcx> Visitor<'tcx> for LTRRvaluePlaceVisitor<'_, '_> {
     fn visit_rvalue(&mut self, rvalue: &Rvalue<'tcx>, location: Location) {
         match rvalue {
-            Rvalue::Repeat(..)
-            | Rvalue::Len(_)
+            Rvalue::Len(_)
             | Rvalue::NullaryOp(..)
             | Rvalue::Discriminant(_)
-            | Rvalue::Aggregate(..)
-            | Rvalue::Cast(..)
             | Rvalue::BinaryOp(..)
             | Rvalue::CheckedBinaryOp(..)
             | Rvalue::UnaryOp(..) => {
                 //safe case, we return without further descending to the place
                 return;
             }
-            Rvalue::Use(op) => {
-                //we check if op is pointer or reference,
-                if let Operand::Copy(p) | Operand::Move(p) = op {
-                    match self.local_decls[p.local].ty.kind() {
-                        ty::Ref(..) | ty::RawPtr(..) => {
-                            self.super_rvalue(rvalue, location);
-                        }
-                        _ => {
-                            return;
-                        }
-                    }
-                } else {
-                    return;
+            Rvalue::Aggregate(_, fields) => {
+                for f in fields {
+                    self.visit_operand(f, location)
                 }
             }
+            Rvalue::Cast(cast_kind, operand, _) => match cast_kind {
+                CastKind::PointerExposeAddress | CastKind::PointerFromExposedAddress => {
+                    self.visit_operand(operand, location)
+                }
+                CastKind::PointerCoercion(PointerCoercion::ArrayToPointer)
+                | CastKind::PointerCoercion(PointerCoercion::MutToConstPointer) => {
+                    self.visit_operand(operand, location)
+                }
+                CastKind::PtrToPtr => self.visit_operand(operand, location),
+                _ => {
+                    return;
+                }
+            },
+            Rvalue::Repeat(operand, _) => self.visit_operand(operand, location),
+            Rvalue::Use(operand) => self.visit_operand(operand, location),
             Rvalue::Ref(_, kind, place) => match kind {
                 BorrowKind::Mut { .. } => {
                     self.super_rvalue(rvalue, location);
@@ -185,16 +189,30 @@ impl<'tcx> Visitor<'tcx> for LTRRvaluePlaceVisitor<'_, '_> {
                 }
             },
             Rvalue::ThreadLocalRef(def_id) => self.super_rvalue(rvalue, location),
-            Rvalue::AddressOf(mutability, place) => self.super_rvalue(rvalue, location),
+            Rvalue::AddressOf(mutability, place) => {
+                // this specifically ref to ptr cast
+                self.super_rvalue(rvalue, location);
+            }
             Rvalue::ShallowInitBox(op, _) => self.super_rvalue(rvalue, location),
             Rvalue::CopyForDeref(place) => self.super_rvalue(rvalue, location),
         }
         return;
     }
 
+    fn visit_operand(&mut self, operand: &Operand<'tcx>, location: Location) {
+        if let Operand::Copy(p) | Operand::Move(p) = operand {
+            match self.local_decls[p.local].ty.kind() {
+                ty::Ref(..) | ty::RawPtr(..) => self.super_operand(operand, location),
+                _ => {
+                    return;
+                }
+            }
+        }
+    }
+
     fn visit_place(&mut self, place: &Place<'tcx>, context: PlaceContext, location: Location) {
         self.gen_kill.gen(place.local);
-        self.super_place(place, context, location);
+        return;
     }
 }
 #[allow(dead_code)]
