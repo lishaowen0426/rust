@@ -57,10 +57,10 @@ impl<'a, 'tcx, V: CodegenObject> PlaceRef<'tcx, V> {
         bx: &mut Bx,
         layout: TyAndLayout<'tcx>,
         align: Align,
-        _is_unsafe: bool,
+        is_unsafe: bool,
     ) -> Self {
         assert!(layout.is_sized(), "tried to statically allocate unsized place");
-        let tmp = bx.alloca(bx.cx().backend_type(layout), align);
+        let tmp = bx.alloca(bx.cx().backend_type(layout), align, is_unsafe);
         Self::new_sized_aligned(tmp, layout, align)
     }
 

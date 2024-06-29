@@ -1495,7 +1495,15 @@ extern "C" void LLVMRustFreeOperandBundleDef(OperandBundleDef *Bundle) {
 }
 
 extern "C" LLVMValueRef LLVMRustBuildAlloca(LLVMBuilderRef B, LLVMTypeRef Ty, const char *Name,bool IsUnsafe ){
-  return LLVMBuildAlloca(B, Ty, Name);
+  Value *inst =  unwrap(LLVMBuildAlloca(B, Ty, Name));
+  AllocaInst *alloca_inst = cast<AllocaInst>(inst);
+  if(IsUnsafe){
+    llvm::MDBuilder MDHelper(unwrap(B)->getContext());
+    llvm::MDString *mstr = MDHelper.createString("unsafe_call");
+    llvm::MDNode *mnode = llvm::MDTuple::get(unwrap(B)->getContext(), mstr);
+    alloca_inst->setMetadata("unsafe_rust", mnode);
+  }
+  return wrap(alloca_inst);
 }
 
 extern "C" LLVMValueRef LLVMRustBuildCall(LLVMBuilderRef B, LLVMTypeRef Ty,

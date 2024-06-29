@@ -468,11 +468,11 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         val
     }
 
-    fn alloca(&mut self, ty: &'ll Type, align: Align) -> &'ll Value {
+    fn alloca(&mut self, ty: &'ll Type, align: Align, is_unsafe: bool) -> &'ll Value {
         let mut bx = Builder::with_cx(self.cx);
         bx.position_at_start(unsafe { llvm::LLVMGetFirstBasicBlock(self.llfn()) });
         unsafe {
-            let alloca = llvm::LLVMRustBuildAlloca(bx.llbuilder, ty, UNNAMED, false);
+            let alloca = llvm::LLVMRustBuildAlloca(bx.llbuilder, ty, UNNAMED, is_unsafe);
             llvm::LLVMSetAlignment(alloca, align.bytes() as c_uint);
             alloca
         }

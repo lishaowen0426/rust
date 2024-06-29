@@ -323,7 +323,7 @@ impl<'a, 'tcx, V: CodegenObject> OperandRef<'tcx, V> {
                 let llfield_ty = bx.cx().backend_type(field);
 
                 // Can't bitcast an aggregate, so round trip through memory.
-                let llptr = bx.alloca(llfield_ty, field.align.abi);
+                let llptr = bx.alloca(llfield_ty, field.align.abi, false);
                 bx.store(*llval, llptr, field.align.abi);
                 *llval = bx.load(llfield_ty, llptr, field.align.abi);
             }
