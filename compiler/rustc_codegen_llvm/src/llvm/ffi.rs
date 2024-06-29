@@ -1524,6 +1524,12 @@ extern "C" {
 
 #[link(name = "llvm-wrapper", kind = "static")]
 extern "C" {
+    pub fn LLVMRustBuildAlloca<'a>(
+        B: &Builder<'a>,
+        Ty: &'a Type,
+        Name: *const c_char,
+        IsUnsafe: bool,
+    ) -> &'a Value;
     pub fn LLVMRustInstallFatalErrorHandler();
     pub fn LLVMRustDisableSystemDialogsOnCrash();
 

@@ -472,7 +472,7 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         let mut bx = Builder::with_cx(self.cx);
         bx.position_at_start(unsafe { llvm::LLVMGetFirstBasicBlock(self.llfn()) });
         unsafe {
-            let alloca = llvm::LLVMBuildAlloca(bx.llbuilder, ty, UNNAMED);
+            let alloca = llvm::LLVMRustBuildAlloca(bx.llbuilder, ty, UNNAMED, false);
             llvm::LLVMSetAlignment(alloca, align.bytes() as c_uint);
             alloca
         }

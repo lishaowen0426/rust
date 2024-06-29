@@ -37,6 +37,8 @@ using namespace llvm;
 using namespace llvm::sys;
 using namespace llvm::object;
 
+extern"C" LLVMValueRef 	LLVMBuildAlloca(LLVMBuilderRef, LLVMTypeRef Ty, const char *Name);
+
 // LLVMAtomicOrdering is already an enum - don't create another
 // one.
 static AtomicOrdering fromRust(LLVMAtomicOrdering Ordering) {
@@ -1490,6 +1492,10 @@ extern "C" OperandBundleDef *LLVMRustBuildOperandBundleDef(const char *Name,
 
 extern "C" void LLVMRustFreeOperandBundleDef(OperandBundleDef *Bundle) {
   delete Bundle;
+}
+
+extern "C" LLVMValueRef LLVMRustBuildAlloca(LLVMBuilderRef B, LLVMTypeRef Ty, const char *Name,bool IsUnsafe ){
+  return LLVMBuildAlloca(B, Ty, Name);
 }
 
 extern "C" LLVMValueRef LLVMRustBuildCall(LLVMBuilderRef B, LLVMTypeRef Ty,
