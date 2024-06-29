@@ -1,3 +1,4 @@
+#[allow(unused)]
 use super::operand::OperandValue;
 use super::{FunctionCx, LocalRef};
 
@@ -47,14 +48,16 @@ impl<'a, 'tcx, V: CodegenObject> PlaceRef<'tcx, V> {
     pub fn alloca<Bx: BuilderMethods<'a, 'tcx, Value = V>>(
         bx: &mut Bx,
         layout: TyAndLayout<'tcx>,
+        is_unsafe: bool,
     ) -> Self {
-        Self::alloca_aligned(bx, layout, layout.align.abi)
+        Self::alloca_aligned(bx, layout, layout.align.abi, is_unsafe)
     }
 
     pub fn alloca_aligned<Bx: BuilderMethods<'a, 'tcx, Value = V>>(
         bx: &mut Bx,
         layout: TyAndLayout<'tcx>,
         align: Align,
+        _is_unsafe: bool,
     ) -> Self {
         assert!(layout.is_sized(), "tried to statically allocate unsized place");
         let tmp = bx.alloca(bx.cx().backend_type(layout), align);
@@ -71,7 +74,7 @@ impl<'a, 'tcx, V: CodegenObject> PlaceRef<'tcx, V> {
         assert!(layout.is_unsized(), "tried to allocate indirect place for sized values");
         let ptr_ty = Ty::new_mut_ptr(bx.cx().tcx(), layout.ty);
         let ptr_layout = bx.cx().layout_of(ptr_ty);
-        Self::alloca(bx, ptr_layout)
+        Self::alloca(bx, ptr_layout, false)
     }
 
     pub fn len<Cx: ConstMethods<'tcx, Value = V>>(&self, cx: &Cx) -> V {

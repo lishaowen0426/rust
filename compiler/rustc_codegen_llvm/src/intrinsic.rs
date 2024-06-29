@@ -993,7 +993,7 @@ fn generic_simd_intrinsic<'ll, 'tcx>(
                     && len.try_eval_target_usize(bx.tcx, ty::ParamEnv::reveal_all())
                         == Some(expected_bytes) =>
             {
-                let place = PlaceRef::alloca(bx, args[0].layout);
+                let place = PlaceRef::alloca(bx, args[0].layout, false);
                 args[0].val.store(bx, place);
                 let int_ty = bx.type_ix(expected_bytes * 8);
                 bx.load(int_ty, place.llval, Align::ONE)

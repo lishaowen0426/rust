@@ -459,7 +459,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 };
                 let llslot = match op.val {
                     Immediate(_) | Pair(..) => {
-                        let scratch = PlaceRef::alloca(bx, self.fn_abi.ret.layout);
+                        let scratch = PlaceRef::alloca(bx, self.fn_abi.ret.layout, false);
                         op.val.store(bx, scratch);
                         scratch.llval
                     }
@@ -1055,9 +1055,20 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             // The callee needs to own the argument memory if we pass it
             // by-ref, so make a local copy of non-immediate constants.
             match (&arg.node, op.val) {
-                (&mir::Operand::Copy(_), Ref(_, None, _))
-                | (&mir::Operand::Constant(_), Ref(_, None, _)) => {
-                    let tmp = PlaceRef::alloca(bx, op.layout);
+                (&mir::Operand::Copy(p), Ref(_, None, _)) => {
+                    let arg_is_unsafe = if self.mir.unsafe_locals.len() > 0 {
+                        self.mir.unsafe_locals[p.local]
+                    } else {
+                        false
+                    };
+                    let tmp = PlaceRef::alloca(bx, op.layout, arg_is_unsafe);
+                    bx.lifetime_start(tmp.llval, tmp.layout.size);
+                    op.val.store(bx, tmp);
+                    op.val = Ref(tmp.llval, None, tmp.align);
+                    copied_constant_arguments.push(tmp);
+                }
+                (&mir::Operand::Constant(_), Ref(_, None, _)) => {
+                    let tmp = PlaceRef::alloca(bx, op.layout, false);
                     bx.lifetime_start(tmp.llval, tmp.layout.size);
                     op.val.store(bx, tmp);
                     op.val = Ref(tmp.llval, None, tmp.align);
@@ -1408,12 +1419,12 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         Some(pointee_align) => cmp::max(pointee_align, arg.layout.align.abi),
                         None => arg.layout.align.abi,
                     };
-                    let scratch = PlaceRef::alloca_aligned(bx, arg.layout, required_align);
+                    let scratch = PlaceRef::alloca_aligned(bx, arg.layout, required_align, false);
                     op.val.store(bx, scratch);
                     (scratch.llval, scratch.align, true)
                 }
                 PassMode::Cast { .. } => {
-                    let scratch = PlaceRef::alloca(bx, arg.layout);
+                    let scratch = PlaceRef::alloca(bx, arg.layout, false);
                     op.val.store(bx, scratch);
                     (scratch.llval, scratch.align, true)
                 }
@@ -1429,7 +1440,8 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         // For `foo(packed.large_field)`, and types with <4 byte alignment on x86,
                         // alignment requirements may be higher than the type's alignment, so copy
                         // to a higher-aligned alloca.
-                        let scratch = PlaceRef::alloca_aligned(bx, arg.layout, required_align);
+                        let scratch =
+                            PlaceRef::alloca_aligned(bx, arg.layout, required_align, false);
                         base::memcpy_ty(
                             bx,
                             scratch.llval,
@@ -1456,7 +1468,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     // Though `extern "Rust"` doesn't pass ZSTs, some ABIs pass
                     // a pointer for `repr(C)` structs even when empty, so get
                     // one from an `alloca` (which can be left uninitialized).
-                    let scratch = PlaceRef::alloca(bx, arg.layout);
+                    let scratch = PlaceRef::alloca(bx, arg.layout, false);
                     (scratch.llval, scratch.align, true)
                 }
                 _ => bug!("ZST {op:?} wasn't ignored, but was passed with abi {arg:?}"),
@@ -1537,7 +1549,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 cx.tcx(),
                 &[Ty::new_mut_ptr(cx.tcx(), cx.tcx().types.u8), cx.tcx().types.i32],
             ));
-            let slot = PlaceRef::alloca(bx, layout);
+            let slot = PlaceRef::alloca(bx, layout, false);
             self.personality_slot = Some(slot);
             slot
         }
@@ -1718,7 +1730,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     return if fn_ret.is_indirect() {
                         // Odd, but possible, case, we have an operand temporary,
                         // but the calling convention has an indirect return.
-                        let tmp = PlaceRef::alloca(bx, fn_ret.layout);
+                        let tmp = PlaceRef::alloca(bx, fn_ret.layout, false);
                         tmp.storage_live(bx);
                         llargs.push(tmp.llval);
                         ReturnDest::IndirectOperand(tmp, index)
@@ -1726,7 +1738,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         // Currently, intrinsics always need a location to store
                         // the result, so we create a temporary `alloca` for the
                         // result.
-                        let tmp = PlaceRef::alloca(bx, fn_ret.layout);
+                        let tmp = PlaceRef::alloca(bx, fn_ret.layout, false);
                         tmp.storage_live(bx);
                         ReturnDest::IndirectOperand(tmp, index)
                     } else {
@@ -1779,7 +1791,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             DirectOperand(index) => {
                 // If there is a cast, we have to store and reload.
                 let op = if let PassMode::Cast { .. } = ret_abi.mode {
-                    let tmp = PlaceRef::alloca(bx, ret_abi.layout);
+                    let tmp = PlaceRef::alloca(bx, ret_abi.layout, false);
                     tmp.storage_live(bx);
                     bx.store_arg(ret_abi, llval, tmp);
                     let op = bx.load_operand(tmp);

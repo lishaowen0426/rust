@@ -250,7 +250,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         // to also load from the stack every single time.
         // FIXME(#68817) use `llvm.dbg.value` instead,
         // at least for the cases which LLVM handles correctly.
-        let spill_slot = PlaceRef::alloca(bx, operand.layout);
+        let spill_slot = PlaceRef::alloca(bx, operand.layout, false);
         if let Some(name) = name {
             bx.set_var_name(spill_slot.llval, &(name + ".dbg.spill"));
         }
@@ -419,7 +419,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 ty::TypeAndMut { mutbl: mir::Mutability::Mut, ty: place.layout.ty },
             );
             let ptr_layout = bx.layout_of(ptr_ty);
-            let alloca = PlaceRef::alloca(bx, ptr_layout);
+            let alloca = PlaceRef::alloca(bx, ptr_layout, false);
             bx.set_var_name(alloca.llval, &(var.name.to_string() + ".dbg.spill"));
 
             // Write the pointer to the variable

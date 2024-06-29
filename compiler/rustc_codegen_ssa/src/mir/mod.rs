@@ -235,6 +235,8 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             debug!("alloca local: {:?}", local);
             let decl = &mir.local_decls[local];
             let layout = start_bx.layout_of(fx.monomorphize(decl.ty));
+            let arg_is_unsafe =
+                if mir.unsafe_locals.len() > 0 { mir.unsafe_locals[local] } else { false };
             assert!(!layout.ty.has_erasable_regions());
 
             if local == mir::RETURN_PLACE && fx.fn_abi.ret.is_indirect() {
@@ -248,7 +250,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                 if layout.is_unsized() {
                     LocalRef::UnsizedPlace(PlaceRef::alloca_unsized_indirect(&mut start_bx, layout))
                 } else {
-                    LocalRef::Place(PlaceRef::alloca(&mut start_bx, layout))
+                    LocalRef::Place(PlaceRef::alloca(&mut start_bx, layout, arg_is_unsafe))
                 }
             } else {
                 debug!("alloc: {:?} -> operand", local);
@@ -297,6 +299,8 @@ fn arg_local_refs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         .map(|(arg_index, local)| {
             let arg_decl = &mir.local_decls[local];
             let arg_ty = fx.monomorphize(arg_decl.ty);
+            let arg_is_unsafe =
+                if mir.unsafe_locals.len() > 0 { mir.unsafe_locals[local] } else { false };
 
             if Some(local) == mir.spread_arg {
                 // This argument (e.g., the last argument in the "rust-call" ABI)
@@ -317,7 +321,7 @@ fn arg_local_refs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                     );
                 }
 
-                let place = PlaceRef::alloca(bx, layout);
+                let place = PlaceRef::alloca(bx, layout, arg_is_unsafe);
                 for i in 0..tupled_arg_tys.len() {
                     let arg = &fx.fn_abi.args[idx];
                     idx += 1;
@@ -337,7 +341,7 @@ fn arg_local_refs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             }
 
             if fx.fn_abi.c_variadic && arg_index == fx.fn_abi.args.len() {
-                let va_list = PlaceRef::alloca(bx, bx.layout_of(arg_ty));
+                let va_list = PlaceRef::alloca(bx, bx.layout_of(arg_ty), arg_is_unsafe);
                 bx.va_start(va_list.llval);
 
                 return LocalRef::Place(va_list);
@@ -398,7 +402,7 @@ fn arg_local_refs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                 indirect_operand.store(bx, tmp);
                 LocalRef::UnsizedPlace(tmp)
             } else {
-                let tmp = PlaceRef::alloca(bx, arg.layout);
+                let tmp = PlaceRef::alloca(bx, arg.layout, arg_is_unsafe);
                 bx.store_fn_arg(arg, &mut llarg_idx, tmp);
                 LocalRef::Place(tmp)
             }
