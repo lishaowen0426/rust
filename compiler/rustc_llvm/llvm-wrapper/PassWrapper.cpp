@@ -786,6 +786,11 @@ extern "C" LLVMRustResult LLVMRustOptimize(
   CGSCCAnalysisManager CGAM;
   ModuleAnalysisManager MAM;
 
+  if (IsUnsafeAllocMode) {
+    FAM.registerPass([&]() { return CollectAllocaAnalysis(); });
+    FAM.registerPass([&]() { return CollectLifetimeEndAnalysis(); });
+  }
+
   if (LLVMPluginsLen) {
     auto PluginsStr = StringRef(LLVMPlugins, LLVMPluginsLen);
     SmallVector<StringRef> Plugins;
@@ -823,13 +828,6 @@ extern "C" LLVMRustResult LLVMRustOptimize(
       PipelineStartEPCallbacks;
   std::vector<std::function<void(ModulePassManager &, OptimizationLevel)>>
       OptimizerLastEPCallbacks;
-
-  if (IsUnsafeAllocMode) {
-    PipelineStartEPCallbacks.push_back(
-        [](ModulePassManager &MPM, OptimizationLevel Level) {
-          MPM.addPass(createModuleToFunctionPassAdaptor(UnsafeAllocPass()));
-        });
-  }
 
   if (!IsLinkerPluginLTO && SanitizerOptions && SanitizerOptions->SanitizeCFI &&
       !NoPrepopulatePasses) {
@@ -986,6 +984,11 @@ extern "C" LLVMRustResult LLVMRustOptimize(
   if (NeedThinLTOBufferPasses) {
     MPM.addPass(CanonicalizeAliasesPass());
     MPM.addPass(NameAnonGlobalPass());
+  }
+
+  if (IsUnsafeAllocMode) {
+    MPM.addPass(createModuleToFunctionPassAdaptor(ReplaceAllocaPass()));
+    MPM.addPass(createModuleToFunctionPassAdaptor(ReplaceLifetimeEndPass()));
   }
 
   // Upgrade all calls to old intrinsics first.
