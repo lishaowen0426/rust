@@ -317,7 +317,7 @@ pub trait BuilderMethods<'a, 'tcx>:
     fn lifetime_start(&mut self, ptr: Self::Value, size: Size);
 
     /// Called for `StorageDead`
-    fn lifetime_end(&mut self, ptr: Self::Value, size: Size);
+    fn lifetime_end(&mut self, ptr: Self::Value, size: Size, is_unsafe: bool);
 
     fn instrprof_increment(
         &mut self,

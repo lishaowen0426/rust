@@ -238,7 +238,7 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
                 bx.switch_to_block(fx.llbb(target));
                 fx.set_debug_loc(bx, self.terminator.source_info);
                 for tmp in copied_constant_arguments {
-                    bx.lifetime_end(tmp.llval, tmp.layout.size);
+                    bx.lifetime_end(tmp.llval, tmp.layout.size, false);
                 }
                 fx.store_return(bx, ret_dest, &fn_abi.ret, invokeret);
             }
@@ -260,7 +260,7 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
 
             if let Some((ret_dest, target)) = destination {
                 for tmp in copied_constant_arguments {
-                    bx.lifetime_end(tmp.llval, tmp.layout.size);
+                    bx.lifetime_end(tmp.llval, tmp.layout.size, false);
                 }
                 fx.store_return(bx, ret_dest, &fn_abi.ret, llret);
                 self.funclet_br(fx, bx, target, mergeable_succ)
@@ -333,7 +333,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             let exn0 = bx.load_operand(exn0).immediate();
             let exn1 = slot.project_field(bx, 1);
             let exn1 = bx.load_operand(exn1).immediate();
-            slot.storage_dead(bx);
+            slot.storage_dead(bx, false);
 
             bx.resume(exn0, exn1);
         }
@@ -1784,7 +1784,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             Store(dst) => bx.store_arg(ret_abi, llval, dst),
             IndirectOperand(tmp, index) => {
                 let op = bx.load_operand(tmp);
-                tmp.storage_dead(bx);
+                tmp.storage_dead(bx, false);
                 self.overwrite_local(index, LocalRef::Operand(op));
                 self.debug_introduce_local(bx, index);
             }
@@ -1795,7 +1795,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     tmp.storage_live(bx);
                     bx.store_arg(ret_abi, llval, tmp);
                     let op = bx.load_operand(tmp);
-                    tmp.storage_dead(bx);
+                    tmp.storage_dead(bx, false);
                     op
                 } else {
                     OperandRef::from_immediate_or_packed_pair(bx, llval, ret_abi.layout)

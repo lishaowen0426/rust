@@ -1188,11 +1188,11 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     }
 
     fn lifetime_start(&mut self, ptr: &'ll Value, size: Size) {
-        self.call_lifetime_intrinsic("llvm.lifetime.start.p0i8", ptr, size);
+        self.call_lifetime_intrinsic("llvm.lifetime.start.p0i8", ptr, size, false);
     }
 
-    fn lifetime_end(&mut self, ptr: &'ll Value, size: Size) {
-        self.call_lifetime_intrinsic("llvm.lifetime.end.p0i8", ptr, size);
+    fn lifetime_end(&mut self, ptr: &'ll Value, size: Size, is_unsafe: bool) {
+        self.call_lifetime_intrinsic("llvm.lifetime.end.p0i8", ptr, size, is_unsafe);
     }
 
     fn instrprof_increment(
@@ -1478,8 +1478,23 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
         let (ty, f) = self.cx.get_intrinsic(intrinsic);
         self.call(ty, None, None, f, args, None, false)
     }
+    pub(crate) fn call_intrinsic_with_unsafety(
+        &mut self,
+        intrinsic: &str,
+        args: &[&'ll Value],
+        is_unsafe: bool,
+    ) -> &'ll Value {
+        let (ty, f) = self.cx.get_intrinsic(intrinsic);
+        self.call(ty, None, None, f, args, None, is_unsafe)
+    }
 
-    fn call_lifetime_intrinsic(&mut self, intrinsic: &str, ptr: &'ll Value, size: Size) {
+    fn call_lifetime_intrinsic(
+        &mut self,
+        intrinsic: &str,
+        ptr: &'ll Value,
+        size: Size,
+        is_unsafe: bool,
+    ) {
         let size = size.bytes();
         if size == 0 {
             return;
@@ -1489,7 +1504,7 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
             return;
         }
 
-        self.call_intrinsic(intrinsic, &[self.cx.const_u64(size), ptr]);
+        self.call_intrinsic_with_unsafety(intrinsic, &[self.cx.const_u64(size), ptr], is_unsafe);
     }
 
     pub(crate) fn phi(

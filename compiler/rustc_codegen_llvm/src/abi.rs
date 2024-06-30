@@ -250,7 +250,7 @@ impl<'ll, 'tcx> ArgAbiExt<'ll, 'tcx> for ArgAbi<'tcx, Ty<'tcx>> {
                     MemFlags::empty(),
                 );
 
-                bx.lifetime_end(llscratch, scratch_size);
+                bx.lifetime_end(llscratch, scratch_size, false);
             }
         } else {
             OperandRef::from_immediate_or_packed_pair(bx, val, self.layout).val.store(bx, dst);

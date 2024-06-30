@@ -419,8 +419,12 @@ impl<'a, 'tcx, V: CodegenObject> PlaceRef<'tcx, V> {
         bx.lifetime_start(self.llval, self.layout.size);
     }
 
-    pub fn storage_dead<Bx: BuilderMethods<'a, 'tcx, Value = V>>(&self, bx: &mut Bx) {
-        bx.lifetime_end(self.llval, self.layout.size);
+    pub fn storage_dead<Bx: BuilderMethods<'a, 'tcx, Value = V>>(
+        &self,
+        bx: &mut Bx,
+        is_unsafe: bool,
+    ) {
+        bx.lifetime_end(self.llval, self.layout.size, is_unsafe);
     }
 }
 

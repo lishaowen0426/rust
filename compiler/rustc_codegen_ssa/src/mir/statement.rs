@@ -57,10 +57,15 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 }
             }
             mir::StatementKind::StorageDead(local) => {
+                let is_unsafe = if self.mir.unsafe_locals.len() > 0 {
+                    self.mir.unsafe_locals[local]
+                } else {
+                    false
+                };
                 if let LocalRef::Place(cg_place) = self.locals[local] {
-                    cg_place.storage_dead(bx);
+                    cg_place.storage_dead(bx, is_unsafe);
                 } else if let LocalRef::UnsizedPlace(cg_indirect_place) = self.locals[local] {
-                    cg_indirect_place.storage_dead(bx);
+                    cg_indirect_place.storage_dead(bx, is_unsafe);
                 }
             }
             mir::StatementKind::Coverage(box ref coverage) => {

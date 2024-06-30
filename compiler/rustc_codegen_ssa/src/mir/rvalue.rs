@@ -65,7 +65,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         scratch.storage_live(bx);
                         operand.val.store(bx, scratch);
                         base::coerce_unsized_into(bx, scratch, dest);
-                        scratch.storage_dead(bx);
+                        scratch.storage_dead(bx, false);
                     }
                     OperandValue::Ref(llref, None, align) => {
                         let source = PlaceRef::new_sized_aligned(llref, operand.layout, align);
