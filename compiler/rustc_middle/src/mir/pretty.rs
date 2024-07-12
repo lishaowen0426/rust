@@ -275,6 +275,21 @@ pub fn write_mir_pretty<'tcx>(
     Ok(())
 }
 
+pub fn write_mir_local_unsafety_and_type<'tcx>(
+    _tcx: TyCtxt<'tcx>,
+    body: &Body<'tcx>,
+    w: &mut dyn io::Write,
+) -> io::Result<()> {
+    for (l, ld) in body.local_decls.iter().enumerate() {
+        writeln!(w, "Local {:?}:{:?}", l, ld.ty)?;
+    }
+
+    for (i, s) in body.unsafe_locals.iter().enumerate() {
+        writeln!(w, "Local {:?}: {}", i, if *s { "unsafe" } else { "safe" })?;
+    }
+
+    Ok(())
+}
 /// Write out a human-readable textual representation for the given function.
 pub fn write_mir_fn<'tcx, F>(
     tcx: TyCtxt<'tcx>,
@@ -297,6 +312,7 @@ where
     writeln!(w, "}}")?;
 
     write_allocations(tcx, body, w)?;
+    write_mir_local_unsafety_and_type(tcx, body, w)?;
 
     Ok(())
 }

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_data_structures::sync::Lock;
 use rustc_span::def_id::DefId;
@@ -86,12 +87,37 @@ pub struct VTableSizeInfo {
 }
 
 #[derive(Default)]
+pub struct UnsafeLocal {
+    safe_local: usize,
+    unsafe_local: usize,
+}
+
+#[derive(Default)]
 pub struct CodeStats {
     type_sizes: Lock<FxHashSet<TypeSizeInfo>>,
     vtable_sizes: Lock<FxHashMap<DefId, VTableSizeInfo>>,
+    unsafe_locals: Lock<Vec<UnsafeLocal>>,
 }
 
 impl CodeStats {
+    #[instrument(level = "debug", skip(self))]
+    pub fn record_unsafe_locals(&self, safe_local: usize, unsafe_local: usize) {
+        let s = UnsafeLocal { safe_local, unsafe_local };
+        self.unsafe_locals.borrow_mut().push(s);
+    }
+
+    #[instrument(level = "debug", skip(self))]
+    pub fn summarize_unsafe_locals(&self) -> (usize, usize) {
+        debug!("unsafe_locals len: {}", self.unsafe_locals.borrow().len());
+        let mut total_safe_local = 0usize;
+        let mut total_unsafe_local = 0usize;
+        self.unsafe_locals.borrow().iter().for_each(|s| {
+            total_safe_local += s.safe_local;
+            total_unsafe_local += s.unsafe_local;
+        });
+        return (total_safe_local, total_unsafe_local);
+    }
+
     pub fn record_type_size<S: ToString>(
         &self,
         kind: DataTypeKind,

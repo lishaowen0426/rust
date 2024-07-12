@@ -986,10 +986,12 @@ extern "C" LLVMRustResult LLVMRustOptimize(
     MPM.addPass(NameAnonGlobalPass());
   }
 
-  if (IsUnsafeAllocMode) {
-    MPM.addPass(createModuleToFunctionPassAdaptor(ReplaceAllocaPass()));
-    MPM.addPass(createModuleToFunctionPassAdaptor(ReplaceLifetimeEndPass()));
-  }
+  /*
+    if (IsUnsafeAllocMode) {
+      MPM.addPass(createModuleToFunctionPassAdaptor(ReplaceAllocaPass()));
+      MPM.addPass(createModuleToFunctionPassAdaptor(ReplaceLifetimeEndPass()));
+    }
+    */
 
   // Upgrade all calls to old intrinsics first.
   for (Module::iterator I = TheModule->begin(), E = TheModule->end(); I != E;)

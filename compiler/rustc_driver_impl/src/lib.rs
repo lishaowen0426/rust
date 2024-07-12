@@ -454,6 +454,8 @@ fn run_compiler(
 
                 sess.code_stats.print_vtable_sizes(crate_name);
             }
+            let (safe_local, unsafe_local) = sess.code_stats.summarize_unsafe_locals();
+            debug!("safe_local: {safe_local}, unsafe_local: {unsafe_local}");
 
             Ok(Some(linker))
         })?;

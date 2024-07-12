@@ -37,6 +37,17 @@ impl<'tcx> MirPass<'tcx> for SafetyProp {
         collected_unsafe_locals.iter().for_each(|loc| {
             debug!("unsafe: {loc:?}");
             body.set_unsafe_local(loc);
-        })
+        });
+
+        let total_local = body.local_decls.len();
+        let total_unsafe_local = collected_unsafe_locals.count();
+        debug!(
+            "safe local {}, unsafe_local {}",
+            total_local - total_unsafe_local,
+            total_unsafe_local
+        );
+        tcx.sess
+            .code_stats
+            .record_unsafe_locals(total_local - total_unsafe_local, total_unsafe_local);
     }
 }
