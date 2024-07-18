@@ -1,4 +1,5 @@
-#![feature(diagnostic_namespace)]
+#![cfg_attr(bootstrap, feature(diagnostic_namespace))]
+
 //@ check-pass
 #[diagnostic::non_existing_attribute]
 //~^WARN unknown diagnostic attribute

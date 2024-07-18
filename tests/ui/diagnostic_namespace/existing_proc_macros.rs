@@ -1,4 +1,6 @@
-#![feature(diagnostic_namespace)]
+
+
+#![cfg_attr(bootstrap, feature(diagnostic_namespace))]
 //@ check-pass
 //@ aux-build:proc-macro-helper.rs
 

@@ -1,4 +1,5 @@
-#![feature(diagnostic_namespace)]
+#![cfg_attr(bootstrap, feature(diagnostic_namespace))]
+
 
 #[diagnostic::on_unimplemented(unsupported = "foo")]
 //~^WARN malformed `on_unimplemented` attribute

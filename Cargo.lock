@@ -5405,6 +5405,7 @@ dependencies = [
  "core",
  "getopts",
  "libc",
+ "mimalloc-rs",
  "panic_abort",
  "panic_unwind",
  "std",

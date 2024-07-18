@@ -136,6 +136,8 @@ declare_features! (
     (accepted, crate_in_paths, "1.30.0", Some(45477)),
     /// Allows using `#[debugger_visualizer]` attribute.
     (accepted, debugger_visualizer, "1.71.0", Some(95939)),
+    /// Allows using the `#[diagnostic]` attribute tool namespace
+    (accepted, diagnostic_namespace, "1.73.0", Some(111996)),
     /// Allows rustc to inject a default alloc_error_handler
     (accepted, default_alloc_error_handler, "1.68.0", Some(66741)),
     /// Allows using assigning a default type to type parameters in algebraic data type definitions.

@@ -1,4 +1,5 @@
-#![feature(diagnostic_namespace)]
+#![cfg_attr(bootstrap, feature(diagnostic_namespace))]
+
 
 #[diagnostic]
 //~^ERROR cannot find attribute `diagnostic` in this scope
