@@ -17,7 +17,7 @@ Session.vim
 .cproject
 .idea
 *.iml
-.vscode
+#.vscode
 .project
 .favorites.json
 .settings/
@@ -30,7 +30,7 @@ Session.vim
 !/tests/run-make/thumb-none-qemu/example/.cargo
 
 ## Configuration
-/config.toml
+#/config.toml
 /Makefile
 config.mk
 config.stamp

@@ -1,0 +1,23 @@
+change-id = 118724
+[build]
+build-stage = 1
+
+extended = true
+
+tools = [
+    "rustfmt",
+    "rust-analyzer",
+    "rust-analyzer-proc-macro-srv",
+]
+
+verbose = 1
+
+#cargo = "/Users/ziyuanliu/.cargo/bin/cargo"
+#rustc = "/Users/ziyuanliu/.cargo/bin/rustc"
+#rustfmt = "/Users/ziyuanliu/.cargo/bin/rustfmt"
+
+[rust]
+optimize = true
+debug = true
+codegen-units = 0
+
