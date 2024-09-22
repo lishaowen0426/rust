@@ -1683,6 +1683,8 @@ options! {
          `=skip-entry`
          `=skip-exit`
          Multiple options can be combined with commas."),
+    isolate: Option<bool> = (None, parse_opt_bool, [TRACKED],
+        "isolate the compiled crate (default: no)"),
     layout_seed: Option<u64> = (None, parse_opt_number, [TRACKED],
         "seed layout randomization"),
     link_directives: bool = (true, parse_bool, [TRACKED],
