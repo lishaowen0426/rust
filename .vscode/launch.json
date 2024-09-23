@@ -8,15 +8,14 @@
             "type": "lldb",
             "request": "launch",
             "name": "Debug",
-            "program": "/Users/ziyuanliu/Code/rust-isolation/rust/build/host/stage1/bin/rustc",
+            "program": "/home/swli/rust-isolation/rust/build/host/stage1/bin/rustc",
             "args": [
-                "--explain",
                 "--crate-type",
                 "lib",
                 "--out-dir",
-                "/Users/ziyuanliu/Code/rust-isolation/rust-dep2/output",
+                "/home/swli/rust-isolation/lib_demo/output",
                 "-Zisolate",
-                "/Users/ziyuanliu/Code/rust-isolation/rust-dep2/src/lib.rs"
+                "/home/swli/rust-isolation/lib_demo/src/lib.rs"
             ],
             "cwd": "${workspaceFolder}"
         }

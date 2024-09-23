@@ -19,3 +19,6 @@ optimize = true
 debug = true
 codegen-units = 0
 
+[llvm]
+download-ci-llvm = false
+
