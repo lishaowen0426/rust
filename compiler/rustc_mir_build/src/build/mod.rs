@@ -450,6 +450,7 @@ macro_rules! unpack {
 ///////////////////////////////////////////////////////////////////////////
 /// the main entry point for building MIR for a function
 
+#[instrument(level = "debug", skip_all)]
 fn construct_fn<'tcx>(
     tcx: TyCtxt<'tcx>,
     fn_def: LocalDefId,

@@ -17,7 +17,13 @@
                 "-Zisolate",
                 "/home/swli/rust-isolation/lib_demo/src/lib.rs"
             ],
-            "cwd": "${workspaceFolder}"
+            "environment": [
+                {
+                    "name": "RUSTC_LOG",
+                    "value": "rustc_mir_build=debug"
+                }
+            ],
+            "cwd": "/home/swli/rust-isolation/lib_demo"
         }
     ]
 }

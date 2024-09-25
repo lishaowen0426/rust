@@ -127,3 +127,11 @@ pub fn log_wrapper<F: Fn(f64) -> f64>(n: f64, log_fn: F) -> f64 {
 
 #[cfg(not(target_os = "uefi"))]
 pub type RawOsError = i32;
+
+#[cfg(not(unix))]
+pub mod isolate {
+    #[inline]
+    pub fn enter_domain() -> () {}
+    #[inline]
+    pub fn exit_domain() -> () {}
+}

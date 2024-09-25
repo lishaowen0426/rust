@@ -34,6 +34,10 @@ pub use crate::option::Option::{self, None, Some};
 #[doc(no_inline)]
 pub use crate::result::Result::{self, Err, Ok};
 
+#[stable(feature = "rust1", since = "1.0.0")]
+#[doc(no_inline)]
+pub use crate::isolate::{enter_domain, exit_domain};
+
 // Re-exported built-in macros
 #[stable(feature = "builtin_macro_prelude", since = "1.38.0")]
 #[allow(deprecated)]

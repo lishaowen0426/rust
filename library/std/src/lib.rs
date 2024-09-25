@@ -576,6 +576,7 @@ pub mod ffi;
 pub mod fs;
 pub mod hash;
 pub mod io;
+pub mod isolate;
 pub mod net;
 pub mod num;
 pub mod os;

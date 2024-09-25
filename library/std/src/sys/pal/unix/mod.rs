@@ -36,6 +36,8 @@ pub mod thread_local_key;
 pub mod thread_parking;
 pub mod time;
 
+pub mod isolate;
+
 #[cfg(target_os = "espidf")]
 pub fn init(_argc: isize, _argv: *const *const u8, _sigpipe: u8) {}
 
