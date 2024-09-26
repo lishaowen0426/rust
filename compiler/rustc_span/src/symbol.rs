@@ -694,6 +694,8 @@ symbols! {
         doc_spotlight,
         doctest,
         document_private_items,
+        domain_enter,
+        domain_exit,
         dotdot: "..",
         dotdot_in_tuple_patterns,
         dotdoteq_in_patterns,

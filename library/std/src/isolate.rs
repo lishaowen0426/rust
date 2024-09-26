@@ -4,14 +4,32 @@
 
 use crate::sys::isolate;
 
-#[stable(feature = "isolate_domain", since = "1.0.0")]
-#[allow(missing_docs)]
-pub fn enter_domain() -> () {
-    isolate::enter_domain()
-}
+cfg_if::cfg_if! {
+    if #[cfg(bootstrap)]{
+        #[stable(feature = "isolate_domain", since = "1.0.0")]
+        #[allow(missing_docs)]
+        pub fn enter_domain() -> () {
+            isolate::enter_domain()
+        }
 
-#[stable(feature = "isolate_domain", since = "1.0.0")]
-#[allow(missing_docs)]
-pub fn exit_domain() -> () {
-    isolate::exit_domain()
+        #[stable(feature = "isolate_domain", since = "1.0.0")]
+        #[allow(missing_docs)]
+        pub fn exit_domain() -> () {
+            isolate::exit_domain()
+        }
+    }else{
+        #[stable(feature = "isolate_domain", since = "1.0.0")]
+        #[allow(missing_docs)]
+        #[lang="domain_enter"]
+        pub fn enter_domain() -> () {
+            isolate::enter_domain()
+        }
+
+        #[stable(feature = "isolate_domain", since = "1.0.0")]
+        #[allow(missing_docs)]
+        #[lang="domain_exit"]
+        pub fn exit_domain() -> () {
+            isolate::exit_domain()
+        }
+    }
 }
