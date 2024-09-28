@@ -8,7 +8,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "Debug",
-            "program": "/home/swli/rust-isolation/rust/build/host/stage1/bin/rustc",
+            "program": "/home/swli/rust-isolation/rust/build/host/stage2/bin/rustc",
             "args": [
                 "--crate-type",
                 "lib",
