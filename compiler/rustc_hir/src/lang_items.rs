@@ -139,6 +139,8 @@ pub fn extract(attrs: &[ast::Attribute]) -> Option<(Symbol, Span)> {
 
 language_item_table! {
 //  Variant name,            Name,                     Getter method name,         Target                  Generic requirements;
+    ContextEnter,            sym::context_enter,       context_enter,              Target::Fn,             GenericRequirement::None;
+    ContextExit,             sym::context_exit,        context_exit,               Target::Fn,             GenericRequirement::None;
     DomainEnter,             sym::domain_enter,        domain_enter,               Target::Fn,             GenericRequirement::None;
     DomainExit,              sym::domain_exit,         domain_exit,                Target::Fn,             GenericRequirement::None;
     Sized,                   sym::sized,               sized_trait,                Target::Trait,          GenericRequirement::Exact(0);

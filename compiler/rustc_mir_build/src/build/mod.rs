@@ -550,7 +550,7 @@ fn construct_fn<'tcx>(
             }));
 
         #[cfg(not(bootstrap))]
-        let return_block = if tcx.sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate) {
+        let return_block = if false {
             let exit_domain_def_id = tcx.lang_items().domain_exit().unwrap();
             debug!("insert domain_exit(def_id = {:?})", exit_domain_def_id);
             let exit_domain_fn_sig = tcx.fn_sig(exit_domain_def_id).instantiate_identity();
@@ -1057,7 +1057,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         }
 
         #[cfg(not(bootstrap))]
-        let block = if self.tcx.sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate) {
+        let block = if false {
             let enter_domain_def_id = self.tcx.lang_items().domain_enter().unwrap();
             debug!("insert domain_enter(def_id = {:?})", enter_domain_def_id);
             let enter_domain_fn_sig = self.tcx.fn_sig(enter_domain_def_id).instantiate_identity();

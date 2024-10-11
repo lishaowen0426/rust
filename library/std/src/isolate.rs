@@ -17,6 +17,15 @@ cfg_if::cfg_if! {
         pub fn exit_domain() -> () {
             isolate::exit_domain()
         }
+
+        #[stable(feature = "isolate_domain", since = "1.0.0")]
+        #[allow(missing_docs)]
+        pub fn context_enter<F,R, T>(mut f: F, t: T) -> R
+        where F: FnMut(T) -> R
+         {
+            f(t)
+
+        }
     }else{
         #[stable(feature = "isolate_domain", since = "1.0.0")]
         #[allow(missing_docs)]
@@ -30,6 +39,16 @@ cfg_if::cfg_if! {
         #[lang="domain_exit"]
         pub fn exit_domain() -> () {
             isolate::exit_domain()
+        }
+
+        #[stable(feature = "isolate_domain", since = "1.0.0")]
+        #[allow(missing_docs)]
+        #[lang="context_enter"]
+        pub fn context_enter<F,R, T>(mut f: F, t: T) -> R
+        where F: FnMut(T) -> R
+         {
+            f(t)
+
         }
     }
 }

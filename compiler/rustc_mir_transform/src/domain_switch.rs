@@ -5,13 +5,15 @@
 use crate::MirPass;
 use rustc_ast::Mutability;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
+use rustc_hir::def_id::DefId;
 use rustc_index::IndexVec;
 use rustc_middle::mir::visit::{MutVisitor, PlaceContext};
 use rustc_middle::mir::{
-    BasicBlock, BasicBlockData, Body, HasLocalDecls, Local, LocalDecl, Location, Operand, Place,
-    ProjectionElem, Rvalue, SourceInfo, Statement, StatementKind, Terminator, TerminatorKind,
+    BasicBlock, BasicBlockData, Body, CallSource, Const, ConstOperand, HasLocalDecls, Local,
+    LocalDecl, Location, Operand, Place, ProjectionElem, Rvalue, SourceInfo, Statement,
+    StatementKind, Terminator, TerminatorKind, UnwindAction,
 };
-use rustc_middle::ty::{Ty, TyCtxt};
+use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_target::abi::FieldIdx;
 
 struct RenameLocalVisitor<'tcx> {
@@ -38,6 +40,63 @@ impl<'tcx> MutVisitor<'tcx> for RenameLocalVisitor<'tcx> {
                 // transform already handles `return` correctly.
             }
             _ => self.super_terminator(terminator, location),
+        }
+    }
+}
+#[derive(Debug, Clone, Copy)]
+enum LocalRemap<'tcx> {
+    Arg((Ty<'tcx>, FieldIdx)),
+    Local(Local),
+}
+struct TransformLocalsVisitor<'tcx, 'a> {
+    remap: &'a FxHashMap<Local, LocalRemap<'tcx>>,
+    tcx: TyCtxt<'tcx>,
+}
+
+impl<'tcx, 'a> MutVisitor<'tcx> for TransformLocalsVisitor<'tcx, 'a> {
+    fn tcx(&self) -> TyCtxt<'tcx> {
+        self.tcx
+    }
+
+    fn visit_local(&mut self, local: &mut Local, _: PlaceContext, _: Location) {}
+
+    fn visit_place(&mut self, place: &mut Place<'tcx>, _: PlaceContext, _: Location) {
+        if let Some(map) = self.remap.get(&place.local) {
+            match map {
+                LocalRemap::Arg((ty, idx)) => {
+                    replace_base_local(
+                        place,
+                        make_tuple_field_place(self.tcx, TUPLE_ARG, *idx, *ty),
+                        self.tcx,
+                    );
+                }
+                LocalRemap::Local(loc) => {
+                    place.local = *loc;
+                }
+            }
+        }
+    }
+}
+
+struct DerefTupleArgVisitor<'tcx> {
+    tcx: TyCtxt<'tcx>,
+}
+
+impl<'tcx> MutVisitor<'tcx> for DerefTupleArgVisitor<'tcx> {
+    fn tcx(&self) -> TyCtxt<'tcx> {
+        self.tcx
+    }
+
+    fn visit_place(&mut self, place: &mut Place<'tcx>, _: PlaceContext, _: Location) {
+        if place.local == TUPLE_ARG {
+            replace_base_local(
+                place,
+                Place {
+                    local: TUPLE_ARG,
+                    projection: self.tcx().mk_place_elems(&[ProjectionElem::Deref]),
+                },
+                self.tcx,
+            );
         }
     }
 }
@@ -81,7 +140,21 @@ fn make_tuple_field_place<'tcx>(
     tcx.mk_place_elem(tuple_place, ProjectionElem::Field(idx, ty))
 }
 
+fn make_tuple_argument_indirect<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
+    let tuple_type = body.local_decls[TUPLE_ARG].ty;
+    let ref_tuple_type = Ty::new_ref(
+        tcx,
+        tcx.lifetimes.re_erased,
+        ty::TypeAndMut { ty: tuple_type, mutbl: Mutability::Mut },
+    );
+    body.local_decls[TUPLE_ARG].ty = ref_tuple_type;
+    let mut vis = DerefTupleArgVisitor { tcx };
+    vis.visit_body(body);
+}
+
 const TUPLE_ARG: Local = Local::from_u32(1);
+const RETURN_LOCAL: Local = Local::from_u32(0);
+
 pub struct DomainSwitch;
 
 impl<'tcx> MirPass<'tcx> for DomainSwitch {
@@ -96,20 +169,83 @@ impl<'tcx> MirPass<'tcx> for DomainSwitch {
             return;
         }
 
+        if tcx.lang_items().domain_enter().is_none() || tcx.lang_items().domain_exit().is_none() {
+            debug!("domain_enter/exit lang items do not exit");
+            return;
+        }
+
+        let body_span = body.span;
+        //prepare enter_domain and exit_domain call
+        let domain_enter_def_id = tcx.lang_items().domain_enter().unwrap();
+        let domain_exit_def_id = tcx.lang_items().domain_exit().unwrap();
+        let prepare_call_terminator =
+            |def_id: DefId, target: usize, local_decls: &mut IndexVec<Local, LocalDecl<'tcx>>| {
+                //let def_id = tcx.lang_items().domain_enter().unwrap();
+                let fn_sig = tcx.fn_sig(def_id).instantiate_identity();
+                let args = fn_sig
+                    .inputs()
+                    .no_bound_vars()
+                    .unwrap()
+                    .iter()
+                    .map(|a| a.clone())
+                    .collect::<Vec<_>>();
+                let return_ty = fn_sig.output().no_bound_vars().unwrap();
+                let return_local = local_decls.push(LocalDecl::new(return_ty, body_span));
+                let func_ty = Ty::new_fn_def(tcx, def_id, args);
+                let func = Operand::Constant(Box::new(ConstOperand {
+                    span: body_span,
+                    user_ty: None,
+                    const_: Const::zero_sized(func_ty),
+                }));
+                let terminator = Terminator {
+                    source_info: SourceInfo::outermost(body_span),
+                    kind: TerminatorKind::Call {
+                        func,
+                        args: vec![],
+                        destination: Place::from(return_local),
+                        target: Some(BasicBlock::from_usize(target)),
+                        unwind: UnwindAction::Continue,
+                        call_source: CallSource::Normal,
+                        fn_span: body_span,
+                    },
+                };
+                terminator
+            };
+
         // create a new local for the new tuple parameter
         let new_tuple_type = create_tuple_paramter_ty(tcx, body);
         let mut new_tuple_decl = LocalDecl::new(new_tuple_type, body.span);
         //tuple needs to be mutable so we can assign to it
         new_tuple_decl.mutability = Mutability::Mut;
-        let new_tuple_local = body.local_decls.push(new_tuple_decl);
 
-        //map parameter local to tuple field
-        let mut remap: FxHashMap<Local, (Ty<'tcx>, FieldIdx)> = FxHashMap::default();
-        body.args_iter().enumerate().for_each(|(i, l)| {
-            remap.insert(l, (body.local_decls[l].ty, FieldIdx::from_usize(i)));
+        let mut new_local_decls: IndexVec<Local, LocalDecl<'tcx>> = IndexVec::new();
+        new_local_decls.push(body.local_decls[RETURN_LOCAL].clone()); // push the return local to 0
+        new_local_decls.push(new_tuple_decl); //push the tuple arg to 1
+        //push the rest except the return and original args
+        let mut local_remap: FxHashMap<Local, LocalRemap<'_>> = FxHashMap::default();
+        body.local_decls.iter().enumerate().skip(1).for_each(|(idx, decl)| {
+            let old_local = Local::from(idx);
+            if idx <= body.arg_count {
+                //argument
+                local_remap.insert(
+                    old_local,
+                    LocalRemap::Arg((
+                        body.local_decls[old_local].ty,
+                        FieldIdx::from_usize(idx - 1),
+                    )),
+                );
+            } else {
+                //function local
+                let new_local = new_local_decls.push(body.local_decls[old_local].clone());
+                local_remap.insert(old_local, LocalRemap::Local(new_local));
+            }
         });
 
+        let mut local_transform = TransformLocalsVisitor { remap: &local_remap, tcx };
+        local_transform.visit_body(body);
+
         // create the tuple
+        /*
         let mut assign_tuple_stats = vec![];
         body.args_iter().for_each(|loc| {
             let &(ty, idx) = remap.get(&loc).unwrap();
@@ -122,25 +258,20 @@ impl<'tcx> MirPass<'tcx> for DomainSwitch {
                 ))),
             });
         });
-        let body_span = body.span;
+        let terminator =
+            prepare_call_terminator(domain_enter_def_id, 1usize, &mut body.local_decls);
         body.basic_blocks_mut().raw.insert(
             0,
             BasicBlockData {
                 statements: assign_tuple_stats,
-                terminator: Some(Terminator {
-                    source_info: SourceInfo::outermost(body_span),
-                    kind: TerminatorKind::Goto { target: BasicBlock::from_u32(1u32) },
-                }),
+                terminator: Some(terminator),
                 is_cleanup: false,
             },
         );
-
-        //change arg ref to tuple ref
-        let mut arg_transform =
-            TransformArgsVisitor { tcx, tuple_local: new_tuple_local, remap: &remap };
-        arg_transform.visit_body(body);
+        */
 
         // assign tuple back to arg if it is a mutable reference
+        /*
         let mut assign_arg_stats: Vec<Statement<'tcx>> = vec![];
         body.args_iter().for_each(|loc| {
             let &(ty, idx) = remap.get(&loc).unwrap();
@@ -155,8 +286,32 @@ impl<'tcx> MirPass<'tcx> for DomainSwitch {
                 })
             }
         });
-        let mut assign_back = AssignBackVisitor { tcx, stats: assign_arg_stats };
+
+        //create a new empty return block
+        let return_block = body.basic_blocks_mut().push(BasicBlockData {
+            statements: vec![],
+            terminator: Some(Terminator {
+                source_info: SourceInfo::outermost(body_span),
+                kind: TerminatorKind::Return,
+            }),
+            is_cleanup: false,
+        });
+        debug!("exit_domain return block: {:?}", return_block);
+        let terminator =
+            prepare_call_terminator(domain_exit_def_id, return_block.into(), &mut body.local_decls);
+
+        let mut assign_back = AssignBackVisitor {
+            tcx,
+            stats: assign_arg_stats,
+            exit_terminator: terminator,
+            skip_block: return_block,
+        };
         assign_back.visit_body(body);
+        */
+        body.arg_count = 1;
+        body.local_decls = new_local_decls;
+        make_tuple_argument_indirect(tcx, body); // this needs to be after we have set the new local_decls
+        debug!("transformed body: {:?}", body);
     }
 }
 
@@ -166,36 +321,11 @@ fn create_tuple_paramter_ty<'tcx>(tcx: TyCtxt<'tcx>, body: &Body<'tcx>) -> Ty<'t
     new_tuple_ty
 }
 
-struct TransformArgsVisitor<'tcx, 'a> {
-    tcx: TyCtxt<'tcx>,
-    tuple_local: Local,
-    remap: &'a FxHashMap<Local, (Ty<'tcx>, FieldIdx)>,
-}
-
-impl<'tcx, 'a> MutVisitor<'tcx> for TransformArgsVisitor<'tcx, 'a> {
-    fn tcx(&self) -> TyCtxt<'tcx> {
-        self.tcx
-    }
-
-    fn visit_place(
-        &mut self,
-        place: &mut Place<'tcx>,
-        _context: PlaceContext,
-        _location: Location,
-    ) {
-        if let Some(&(ty, idx)) = self.remap.get(&place.local) {
-            replace_base_local(
-                place,
-                make_tuple_field_place(self.tcx, self.tuple_local, idx, ty),
-                self.tcx,
-            );
-        }
-    }
-}
-
 struct AssignBackVisitor<'tcx> {
     tcx: TyCtxt<'tcx>,
     stats: Vec<Statement<'tcx>>,
+    exit_terminator: Terminator<'tcx>,
+    skip_block: BasicBlock,
 }
 
 impl<'tcx> MutVisitor<'tcx> for AssignBackVisitor<'tcx> {
@@ -204,9 +334,13 @@ impl<'tcx> MutVisitor<'tcx> for AssignBackVisitor<'tcx> {
     }
 
     fn visit_basic_block_data(&mut self, block: BasicBlock, data: &mut BasicBlockData<'tcx>) {
+        if block == self.skip_block {
+            return;
+        }
         match data.terminator().kind {
             TerminatorKind::Return => {
                 data.statements.extend(self.stats.iter().cloned());
+                data.terminator_mut().kind = self.exit_terminator.kind.clone();
             }
             _ => {}
         }

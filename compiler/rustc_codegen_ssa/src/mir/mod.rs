@@ -164,6 +164,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
     let llfn = cx.get_fn(instance);
 
     let mir = cx.tcx().instance_mir(instance.def);
+    debug!("body: {:?}", mir);
 
     let fn_abi = cx.fn_abi_of_instance(instance, ty::List::empty());
     debug!("fn_abi: {:?}", fn_abi);

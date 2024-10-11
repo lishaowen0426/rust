@@ -591,6 +591,8 @@ symbols! {
         const_try,
         constant,
         constructor,
+        context_enter,
+        context_exit,
         convert_identity,
         copy,
         copy_closures,

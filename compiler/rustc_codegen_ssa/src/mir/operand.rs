@@ -491,12 +491,17 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         bx: &mut Bx,
         place_ref: mir::PlaceRef<'tcx>,
     ) -> Option<OperandRef<'tcx, Bx::Value>> {
-        debug!("maybe_codegen_consume_direct(place_ref={:?})", place_ref);
+        debug!(
+            "maybe_codegen_consume_direct(place_ref={:?}, place_local={:?})",
+            place_ref, place_ref.local
+        );
 
         match self.locals[place_ref.local] {
             LocalRef::Operand(mut o) => {
+                debug!("local ref to operand");
                 // Moves out of scalar and scalar pair fields are trivial.
                 for elem in place_ref.projection.iter() {
+                    debug!("elem={:?}", elem);
                     match elem {
                         mir::ProjectionElem::Field(ref f, _) => {
                             o = o.extract_field(bx, f.index());
@@ -525,6 +530,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             LocalRef::Place(..) | LocalRef::UnsizedPlace(..) => {
                 // watch out for locals that do not have an
                 // alloca; they are handled somewhat differently
+                debug!("local ref to Place | UnsizedPlace");
                 None
             }
         }
@@ -535,10 +541,14 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         bx: &mut Bx,
         place_ref: mir::PlaceRef<'tcx>,
     ) -> OperandRef<'tcx, Bx::Value> {
-        debug!("codegen_consume(place_ref={:?})", place_ref);
+        debug!(
+            "codegen_consume(place_ref={:?}, place_projections={:?})",
+            place_ref, place_ref.projection
+        );
 
         let ty = self.monomorphized_place_ty(place_ref);
         let layout = bx.cx().layout_of(ty);
+        debug!("layout: {:?}", layout);
 
         // ZSTs don't require any actual memory access.
         if layout.is_zst() {

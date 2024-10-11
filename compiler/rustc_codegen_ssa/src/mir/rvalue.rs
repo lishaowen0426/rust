@@ -388,6 +388,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         }
     }
 
+    #[instrument(level = "debug", skip(self, bx))]
     pub fn codegen_rvalue_operand(
         &mut self,
         bx: &mut Bx,

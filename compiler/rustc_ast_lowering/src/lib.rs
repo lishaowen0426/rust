@@ -420,6 +420,7 @@ fn compute_hir_hash(
     })
 }
 
+#[instrument(level = "debug", skip_all)]
 pub fn lower_to_hir(tcx: TyCtxt<'_>, (): ()) -> hir::Crate<'_> {
     let sess = tcx.sess;
     // Queries that borrow `resolver_for_lowering`.
