@@ -1059,6 +1059,7 @@ impl<'tcx> TyCtxtAt<'tcx> {
 
 impl<'tcx> TyCtxt<'tcx> {
     /// `tcx`-dependent operations performed for every created definition.
+
     pub fn create_def(
         self,
         parent: LocalDefId,

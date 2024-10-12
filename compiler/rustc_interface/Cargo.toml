@@ -47,6 +47,7 @@ rustc_target = { path = "../rustc_target" }
 rustc_trait_selection = { path = "../rustc_trait_selection" }
 rustc_traits = { path = "../rustc_traits" }
 rustc_ty_utils = { path = "../rustc_ty_utils" }
+thin-vec = "0.2.12"
 tracing = "0.1"
 # tidy-alphabetical-end
 

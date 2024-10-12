@@ -2,7 +2,7 @@ use crate::errors::{FailedWritingFile, RustcErrorFatal, RustcErrorUnexpectedAnno
 use crate::interface::{Compiler, Result};
 use crate::{errors, passes, util};
 
-use rustc_ast as ast;
+use rustc_ast::{self as ast, Crate};
 use rustc_codegen_ssa::traits::CodegenBackend;
 use rustc_codegen_ssa::CodegenResults;
 use rustc_data_structures::steal::Steal;
@@ -25,6 +25,7 @@ use rustc_span::symbol::sym;
 use std::any::Any;
 use std::cell::{RefCell, RefMut};
 use std::sync::Arc;
+use thin_vec::ThinVec;
 
 /// Represent the result of a query.
 ///
@@ -112,11 +113,26 @@ impl<'tcx> Queries<'tcx> {
         })
     }
 
+    fn inject_duplicated_fn(&self, krate: &mut Crate) {
+        let mut duplicated_fns = ThinVec::new();
+        for item in krate.items.iter() {
+            if let Some(dup) = item.duplicate_fn() {
+                debug!("duplicated item:{:?}", dup);
+                duplicated_fns.push(dup);
+            }
+        }
+        krate.items.append(&mut duplicated_fns);
+    }
+
     pub fn global_ctxt(&'tcx self) -> Result<QueryResult<'_, &'tcx GlobalCtxt<'tcx>>> {
         self.gcx.compute(|| {
             let sess = &self.compiler.sess;
 
             let mut krate = self.parse()?.steal();
+
+            if sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate) {
+                self.inject_duplicated_fn(&mut krate);
+            }
 
             rustc_builtin_macros::cmdline_attrs::inject(
                 &mut krate,

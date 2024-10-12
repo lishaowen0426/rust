@@ -59,6 +59,8 @@ impl<'a> Parser<'a> {
         let post_attr_lo = self.token.span;
         let mut items = ThinVec::new();
         while let Some(item) = self.parse_item(ForceCollect::No)? {
+            debug!("parsed item:{:?}", item);
+
             items.push(item);
             self.maybe_consume_incorrect_semicolon(&items);
         }

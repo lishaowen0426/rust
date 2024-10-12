@@ -273,7 +273,7 @@ fn configure_and_expand(
 
     // Done with macro expansion!
 
-    resolver.resolve_crate(&krate);
+    resolver.resolve_crate(&krate); //name resolution
 
     krate
 }
@@ -540,6 +540,7 @@ fn resolver_for_lowering<'tcx>(
     let (krate, pre_configured_attrs) = tcx.crate_for_resolver(()).steal();
     let mut resolver = Resolver::new(tcx, &pre_configured_attrs, krate.spans.inner_span, &arenas);
     let krate = configure_and_expand(krate, &pre_configured_attrs, &mut resolver);
+    //debug!("resolver nodeid to def id:{:?}", resolver.node_id_to_def_id)'
 
     // Make sure we don't mutate the cstore from here on.
     tcx.untracked().cstore.freeze();

@@ -17,6 +17,7 @@
 //! - [`MacroDef`], [`MacStmtStyle`], [`MacCall`]: Macro definition and invocation.
 //! - [`Attribute`]: Metadata associated with item.
 //! - [`UnOp`], [`BinOp`], and [`BinOpKind`]: Unary and binary operators.
+#![allow(unused_mut)]
 
 pub use crate::format::*;
 pub use crate::util::parser::ExprPrecedence;
@@ -2888,6 +2889,20 @@ impl Item {
     /// Return the span that encompasses the attributes.
     pub fn span_with_attributes(&self) -> Span {
         self.attrs.iter().fold(self.span, |acc, attr| acc.to(attr.span))
+    }
+
+    pub fn duplicate_fn(&self) -> Option<P<Self>> {
+        match &self.kind {
+            ItemKind::Fn(_) => {
+                let mut copied = self.clone();
+                let mut original_name = copied.ident.to_string();
+                original_name.push_str("_duplicated_by_sbd");
+                copied.ident = Ident::from_str(original_name.as_str());
+
+                Some(P(copied))
+            }
+            _ => None,
+        }
     }
 
     pub fn opt_generics(&self) -> Option<&Generics> {

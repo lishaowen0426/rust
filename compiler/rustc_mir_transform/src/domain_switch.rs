@@ -159,7 +159,8 @@ pub struct DomainSwitch;
 
 impl<'tcx> MirPass<'tcx> for DomainSwitch {
     fn is_enabled(&self, sess: &rustc_session::Session) -> bool {
-        sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate)
+        //sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate)
+        false
     }
 
     #[instrument(level = "debug", skip_all)]

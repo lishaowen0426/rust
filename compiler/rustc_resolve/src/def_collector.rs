@@ -8,12 +8,18 @@ use rustc_span::hygiene::LocalExpnId;
 use rustc_span::symbol::{kw, sym, Symbol};
 use rustc_span::Span;
 
+#[instrument(level = "debug", skip(resolver, fragment))]
 pub(crate) fn collect_definitions(
     resolver: &mut Resolver<'_, '_>,
     fragment: &AstFragment,
     expansion: LocalExpnId,
 ) {
     let (parent_def, impl_trait_context) = resolver.invocation_parents[&expansion];
+    debug!(
+        "parent defid:{:?}, is_top_level:{:?}",
+        parent_def,
+        parent_def.clone().is_top_level_module()
+    );
     fragment.visit_with(&mut DefCollector { resolver, parent_def, expansion, impl_trait_context });
 }
 
@@ -109,7 +115,7 @@ impl<'a, 'b, 'tcx> DefCollector<'a, 'b, 'tcx> {
 
 impl<'a, 'b, 'tcx> visit::Visitor<'a> for DefCollector<'a, 'b, 'tcx> {
     fn visit_item(&mut self, i: &'a Item) {
-        debug!("visit_item: {:?}", i);
+        debug!("visit_item: {:?}", i.ident);
 
         // Pick the def data. This need not be unique, but the more
         // information we encapsulate into, the better

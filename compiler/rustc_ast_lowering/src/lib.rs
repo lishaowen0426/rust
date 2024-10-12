@@ -429,6 +429,7 @@ pub fn lower_to_hir(tcx: TyCtxt<'_>, (): ()) -> hir::Crate<'_> {
     tcx.ensure_with_value().debugger_visualizers(LOCAL_CRATE);
     tcx.ensure_with_value().get_lang_items(());
     let (mut resolver, krate) = tcx.resolver_for_lowering(()).steal();
+    //debug!("resolver.node_id_to_def_id:{:?}", resolver.node_id_to_def_id);
 
     let ast_index = index_crate(&resolver.node_id_to_def_id, &krate);
     let mut owners = IndexVec::from_fn_n(
@@ -472,6 +473,7 @@ enum ParenthesizedGenericArgs {
 }
 
 impl<'a, 'hir> LoweringContext<'a, 'hir> {
+    #[instrument(level = "debug", skip(self, span))]
     fn create_def(
         &mut self,
         parent: LocalDefId,
