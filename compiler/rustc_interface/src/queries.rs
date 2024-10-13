@@ -2,7 +2,7 @@ use crate::errors::{FailedWritingFile, RustcErrorFatal, RustcErrorUnexpectedAnno
 use crate::interface::{Compiler, Result};
 use crate::{errors, passes, util};
 
-use rustc_ast::{self as ast, Crate};
+use rustc_ast::{self as ast, ast::DuplicateDest, Crate};
 use rustc_codegen_ssa::traits::CodegenBackend;
 use rustc_codegen_ssa::CodegenResults;
 use rustc_data_structures::steal::Steal;
@@ -115,9 +115,11 @@ impl<'tcx> Queries<'tcx> {
 
     fn inject_duplicated_fn(&self, krate: &mut Crate) {
         let mut duplicated_fns = ThinVec::new();
-        for item in krate.items.iter() {
+        for item in krate.items.iter_mut() {
             if let Some(dup) = item.duplicate_fn() {
-                debug!("duplicated item:{:?}", dup);
+                item.duplicated_to = Some(DuplicateDest::new(&dup));
+                //debug!("duplicated item:{:?}", dup);
+
                 duplicated_fns.push(dup);
             }
         }
@@ -131,6 +133,7 @@ impl<'tcx> Queries<'tcx> {
             let mut krate = self.parse()?.steal();
 
             if sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate) {
+                debug!("isolate is enable, duplicate items...");
                 self.inject_duplicated_fn(&mut krate);
             }
 

@@ -777,6 +777,7 @@ pub(super) fn expand_global_asm<'cx>(
                 },
                 span: sp,
                 tokens: None,
+                duplicated_to: None,
             })]),
             Err(guar) => DummyResult::any(sp, guar),
         },

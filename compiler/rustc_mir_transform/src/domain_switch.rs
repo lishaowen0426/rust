@@ -5,15 +5,16 @@
 use crate::MirPass;
 use rustc_ast::Mutability;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
-use rustc_hir::def_id::DefId;
+use rustc_hir::def_id::{DefId, LocalDefId};
 use rustc_index::IndexVec;
 use rustc_middle::mir::visit::{MutVisitor, PlaceContext};
 use rustc_middle::mir::{
-    BasicBlock, BasicBlockData, Body, CallSource, Const, ConstOperand, HasLocalDecls, Local,
-    LocalDecl, Location, Operand, Place, ProjectionElem, Rvalue, SourceInfo, Statement,
+    BasicBlock, BasicBlockData, BasicBlocks, Body, CallSource, Const, ConstOperand, HasLocalDecls,
+    Local, LocalDecl, Location, Operand, Place, ProjectionElem, Rvalue, SourceInfo, Statement,
     StatementKind, Terminator, TerminatorKind, UnwindAction,
 };
-use rustc_middle::ty::{self, Ty, TyCtxt};
+use rustc_middle::ty::{self, Ty, TyCtxt, TypeVisitableExt};
+use rustc_span::source_map::dummy_spanned;
 use rustc_target::abi::FieldIdx;
 
 struct RenameLocalVisitor<'tcx> {
@@ -159,10 +160,19 @@ pub struct DomainSwitch;
 
 impl<'tcx> MirPass<'tcx> for DomainSwitch {
     fn is_enabled(&self, sess: &rustc_session::Session) -> bool {
-        //sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate)
-        false
+        sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate)
+    }
+    #[instrument(level = "debug", skip_all)]
+    fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
+        let def_id = body.source.def_id().expect_local();
+        let duplicate_map = tcx.duplicate_map(());
+        if let Some(duplicate_to_def_id) = duplicate_map.get(&def_id) {
+            debug!("{:?} was duplicated to {:?}", def_id, duplicate_to_def_id);
+            self.replace_body(tcx, body, *duplicate_to_def_id);
+        }
     }
 
+    /*
     #[instrument(level = "debug", skip_all)]
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
         if body.coroutine.is_some() {
@@ -313,6 +323,68 @@ impl<'tcx> MirPass<'tcx> for DomainSwitch {
         body.local_decls = new_local_decls;
         make_tuple_argument_indirect(tcx, body); // this needs to be after we have set the new local_decls
         debug!("transformed body: {:?}", body);
+    }
+    */
+}
+
+impl DomainSwitch {
+    fn replace_body<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        body: &mut Body<'tcx>,
+        duplicate_id: LocalDefId,
+    ) {
+        let body_span = body.span;
+        let mut new_bb: IndexVec<BasicBlock, BasicBlockData<'tcx>> = IndexVec::new();
+
+        let return_block = BasicBlockData {
+            statements: vec![],
+            terminator: Some(Terminator {
+                source_info: SourceInfo::outermost(body_span),
+                kind: TerminatorKind::Return,
+            }),
+            is_cleanup: false,
+        };
+
+        let fn_sig = tcx.fn_sig(duplicate_id.to_def_id()).instantiate_identity();
+        debug!("number of args:{:?}", fn_sig.inputs().skip_binder().len());
+        debug!("original generics:{:?}", tcx.generics_of(body.source.def_id()));
+        let args = body.args_iter().map(|a| body.local_decls[a].ty);
+        //let fn_def = Ty::new_fn_def(tcx, duplicate_id.to_def_id(), args);
+        let func = Operand::function_handle(
+            tcx,
+            duplicate_id.to_def_id(),
+            ty::GenericArgs::for_item(tcx, duplicate_id.to_def_id(), |param, _| {
+                if let ty::GenericParamDefKind::Lifetime = param.kind {
+                    tcx.lifetimes.re_erased.into()
+                } else {
+                    tcx.mk_param_from_def(param)
+                }
+            }),
+            body_span,
+        );
+        let args = body.args_iter().map(|a| dummy_spanned(Operand::Copy(Place::from(a)))).collect();
+
+        let call_block = BasicBlockData {
+            statements: vec![],
+            terminator: Some(Terminator {
+                source_info: SourceInfo::outermost(body_span),
+                kind: TerminatorKind::Call {
+                    func,
+                    args,
+                    destination: Place::from(RETURN_LOCAL),
+                    target: Some(BasicBlock::from_usize(1usize)),
+                    unwind: UnwindAction::Continue,
+                    call_source: CallSource::Normal,
+                    fn_span: body_span,
+                },
+            }),
+            is_cleanup: false,
+        };
+        new_bb.push(call_block);
+        new_bb.push(return_block);
+
+        body.basic_blocks = BasicBlocks::new(new_bb);
     }
 }
 

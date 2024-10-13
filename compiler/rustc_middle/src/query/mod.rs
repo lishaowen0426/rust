@@ -2247,6 +2247,11 @@ rustc_queries! {
     query find_field((def_id, ident): (DefId, rustc_span::symbol::Ident)) -> Option<rustc_target::abi::FieldIdx> {
         desc { |tcx| "find the index of maybe nested field `{ident}` in `{}`", tcx.def_path_str(def_id) }
     }
+
+    query duplicate_map(_:()) -> &'tcx LocalDefIdMap<LocalDefId>{
+        desc {"get the duplication map"}
+         eval_always
+    }
 }
 
 rustc_query_append! { define_callbacks! }

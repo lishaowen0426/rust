@@ -31,6 +31,8 @@
 //! in the HIR, especially for multiple identifiers.
 
 #![allow(internal_features)]
+#![allow(unused_mut)]
+#![allow(unused_variables)]
 #![feature(rustdoc_internals)]
 #![doc(rust_logo)]
 #![feature(assert_matches)]
@@ -58,6 +60,7 @@ use rustc_hir::def_id::{LocalDefId, LocalDefIdMap, CRATE_DEF_ID, LOCAL_CRATE};
 use rustc_hir::{ConstArg, GenericArg, ItemLocalMap, ParamName, TraitCandidate};
 use rustc_index::{Idx, IndexSlice, IndexVec};
 use rustc_macros::extension;
+use rustc_middle::query::Providers;
 use rustc_middle::span_bug;
 use rustc_middle::ty::{ResolverAstLowering, TyCtxt};
 use rustc_session::parse::{add_feature_diagnostics, feature_err};
@@ -86,6 +89,10 @@ mod pat;
 mod path;
 
 rustc_fluent_macro::fluent_messages! { "../messages.ftl" }
+
+pub fn provide(providers: &mut Providers) {
+    *providers = Providers { duplicate_map, ..*providers };
+}
 
 struct LoweringContext<'a, 'hir> {
     tcx: TyCtxt<'hir>,
@@ -420,6 +427,31 @@ fn compute_hir_hash(
     })
 }
 
+/// key: duplicate src
+/// value: duplicate to
+fn duplicate_map<'tcx>(tcx: TyCtxt<'tcx>, (): ()) -> &'tcx LocalDefIdMap<LocalDefId> {
+    let mut duplicate_map = LocalDefIdMap::default();
+    let (resolver, krate) = &*tcx.resolver_for_lowering(()).borrow();
+    for item in krate.items.iter() {
+        if let Some(duplicate_to) = item.duplicated_to() {
+            debug!(
+                "duplicate from {:?}/{:?} to {:?}/{:?}",
+                item.id,
+                resolver.node_id_to_def_id[&item.id],
+                duplicate_to.id,
+                resolver.node_id_to_def_id[&duplicate_to.id]
+            );
+            if duplicate_map.insert(
+                resolver.node_id_to_def_id[&item.id],
+                resolver.node_id_to_def_id[&duplicate_to.id],
+            ).is_some(){
+                panic!("an item has been duplicated more than once");
+            }
+        }
+    }
+    &*tcx.arena.alloc(duplicate_map)
+}
+
 #[instrument(level = "debug", skip_all)]
 pub fn lower_to_hir(tcx: TyCtxt<'_>, (): ()) -> hir::Crate<'_> {
     let sess = tcx.sess;
@@ -428,6 +460,7 @@ pub fn lower_to_hir(tcx: TyCtxt<'_>, (): ()) -> hir::Crate<'_> {
     tcx.ensure_with_value().early_lint_checks(());
     tcx.ensure_with_value().debugger_visualizers(LOCAL_CRATE);
     tcx.ensure_with_value().get_lang_items(());
+    tcx.ensure_with_value().duplicate_map(());
     let (mut resolver, krate) = tcx.resolver_for_lowering(()).steal();
     //debug!("resolver.node_id_to_def_id:{:?}", resolver.node_id_to_def_id);
 

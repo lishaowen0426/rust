@@ -107,6 +107,10 @@ macro_rules! arena_types {
                     rustc_hir::def_id::DefId,
                     rustc_middle::ty::EarlyBinder<rustc_middle::ty::Ty<'tcx>>
                 >,
+            [] duplicate_map: rustc_data_structures::unord::UnordMap<
+                    rustc_hir::def_id::LocalDefId,
+                    rustc_hir::def_id::LocalDefId,
+                >,
             [] external_constraints: rustc_middle::traits::solve::ExternalConstraintsData<'tcx>,
             [] predefined_opaques_in_body: rustc_middle::traits::solve::PredefinedOpaquesData<'tcx>,
             [decode] doc_link_resolutions: rustc_hir::def::DocLinkResMap,

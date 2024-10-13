@@ -540,7 +540,6 @@ fn resolver_for_lowering<'tcx>(
     let (krate, pre_configured_attrs) = tcx.crate_for_resolver(()).steal();
     let mut resolver = Resolver::new(tcx, &pre_configured_attrs, krate.spans.inner_span, &arenas);
     let krate = configure_and_expand(krate, &pre_configured_attrs, &mut resolver);
-    //debug!("resolver nodeid to def id:{:?}", resolver.node_id_to_def_id)'
 
     // Make sure we don't mutate the cstore from here on.
     tcx.untracked().cstore.freeze();
@@ -610,6 +609,7 @@ pub static DEFAULT_QUERY_PROVIDERS: LazyLock<Providers> = LazyLock::new(|| {
     providers.hir_crate = rustc_ast_lowering::lower_to_hir;
     providers.resolver_for_lowering = resolver_for_lowering;
     providers.early_lint_checks = early_lint_checks;
+    rustc_ast_lowering::provide(providers);
     proc_macro_decls::provide(providers);
     rustc_const_eval::provide(providers);
     rustc_middle::hir::provide(providers);

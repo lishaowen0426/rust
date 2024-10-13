@@ -606,6 +606,7 @@ impl<'a> TraitDef<'a> {
                     ty: Some(type_def.to_ty(cx, self.span, type_ident, generics)),
                 })),
                 tokens: None,
+                duplicated_to: None,
             })
         });
 
@@ -1037,6 +1038,7 @@ impl<'a> MethodDef<'a> {
                 body: Some(body_block),
             })),
             tokens: None,
+            duplicated_to: None,
         })
     }
 

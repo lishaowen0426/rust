@@ -616,6 +616,7 @@ impl<'a> ExtCtxt<'a> {
             },
             span,
             tokens: None,
+            duplicated_to: None,
         })
     }
 

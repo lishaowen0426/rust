@@ -198,7 +198,7 @@ impl<'a> MutVisitor for EntryPointCleaner<'a> {
         // #[allow(dead_code)] to avoid printing warnings.
         let item = match entry_point_type(&item, self.depth == 0) {
             EntryPointType::MainNamed | EntryPointType::RustcMainAttr | EntryPointType::Start => {
-                item.map(|ast::Item { id, ident, attrs, kind, vis, span, tokens }| {
+                item.map(|ast::Item { id, ident, attrs, kind, vis, span, tokens, .. }| {
                     let allow_dead_code = attr::mk_attr_nested_word(
                         &self.sess.parse_sess.attr_id_generator,
                         ast::AttrStyle::Outer,
@@ -214,7 +214,7 @@ impl<'a> MutVisitor for EntryPointCleaner<'a> {
                         .chain(iter::once(allow_dead_code))
                         .collect();
 
-                    ast::Item { id, ident, attrs, kind, vis, span, tokens }
+                    ast::Item { id, ident, attrs, kind, vis, span, tokens, duplicated_to: None }
                 })
             }
             EntryPointType::None | EntryPointType::OtherMain => item,
@@ -358,6 +358,7 @@ fn mk_main(cx: &mut TestCtxt<'_>) -> P<ast::Item> {
         vis: ast::Visibility { span: sp, kind: ast::VisibilityKind::Public, tokens: None },
         span: sp,
         tokens: None,
+        duplicated_to: None,
     });
 
     // Integrate the new item into existing module structures.

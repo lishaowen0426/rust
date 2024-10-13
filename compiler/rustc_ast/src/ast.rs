@@ -18,10 +18,10 @@
 //! - [`Attribute`]: Metadata associated with item.
 //! - [`UnOp`], [`BinOp`], and [`BinOpKind`]: Unary and binary operators.
 #![allow(unused_mut)]
-
 pub use crate::format::*;
 pub use crate::util::parser::ExprPrecedence;
 pub use rustc_span::AttrId;
+use std::fmt::{Error, Formatter};
 pub use GenericArgs::*;
 pub use UnsafeSource::*;
 
@@ -2862,6 +2862,34 @@ impl VariantData {
     }
 }
 
+#[derive(Clone, Encodable, Decodable)]
+pub struct DuplicateDest {
+    pub src: usize, //pointer to Item
+}
+
+impl Drop for DuplicateDest {
+    fn drop(&mut self) {}
+}
+
+impl DuplicateDest {
+    pub fn new(p: &P<Item>) -> Self {
+        Self { src: &(**p) as *const Item as usize }
+    }
+
+    pub fn to_item(&self) -> &Item {
+        unsafe { (self.src as *const Item).as_ref().unwrap() }
+    }
+}
+
+unsafe impl rustc_data_structures::marker::DynSend for DuplicateDest {}
+unsafe impl rustc_data_structures::marker::DynSync for DuplicateDest {}
+
+impl std::fmt::Debug for DuplicateDest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "DuplicateDest[{:p}]", self.src as *const Item)
+    }
+}
+
 /// An item definition.
 #[derive(Clone, Encodable, Decodable, Debug)]
 pub struct Item<K = ItemKind> {
@@ -2883,6 +2911,12 @@ pub struct Item<K = ItemKind> {
     /// Note that the tokens here do not include the outer attributes, but will
     /// include inner attributes.
     pub tokens: Option<LazyAttrTokenStream>,
+
+    pub duplicated_to: Option<DuplicateDest>, // this item is compiler-generated from another Item
+}
+#[inline(always)]
+pub fn duplicate_suffix() -> &'static str {
+    "_duplicated_by_sbd"
 }
 
 impl Item {
@@ -2896,12 +2930,19 @@ impl Item {
             ItemKind::Fn(_) => {
                 let mut copied = self.clone();
                 let mut original_name = copied.ident.to_string();
-                original_name.push_str("_duplicated_by_sbd");
+                original_name.push_str(&duplicate_suffix());
                 copied.ident = Ident::from_str(original_name.as_str());
 
                 Some(P(copied))
             }
             _ => None,
+        }
+    }
+
+    pub fn duplicated_to(&self) -> Option<&Item> {
+        match self.duplicated_to.as_ref() {
+            None => None,
+            Some(src) => Some(src.to_item()),
         }
     }
 
@@ -3336,20 +3377,20 @@ mod size_asserts {
     use super::*;
     use rustc_data_structures::static_assert_size;
     // tidy-alphabetical-start
-    static_assert_size!(AssocItem, 88);
+    static_assert_size!(AssocItem, 104);
     static_assert_size!(AssocItemKind, 16);
     static_assert_size!(Attribute, 32);
     static_assert_size!(Block, 32);
     static_assert_size!(Expr, 72);
     static_assert_size!(ExprKind, 40);
     static_assert_size!(Fn, 160);
-    static_assert_size!(ForeignItem, 96);
+    static_assert_size!(ForeignItem, 112);
     static_assert_size!(ForeignItemKind, 24);
     static_assert_size!(GenericArg, 24);
     static_assert_size!(GenericBound, 88);
     static_assert_size!(Generics, 40);
     static_assert_size!(Impl, 136);
-    static_assert_size!(Item, 136);
+    static_assert_size!(Item, 152);
     static_assert_size!(ItemKind, 64);
     static_assert_size!(LitKind, 24);
     static_assert_size!(Local, 72);

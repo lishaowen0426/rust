@@ -563,6 +563,7 @@ impl CStore {
                     tokens: None,
                 },
                 tokens: None,
+                duplicated_to: None,
             },
             data.root.edition,
         )

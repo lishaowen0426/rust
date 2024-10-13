@@ -1138,7 +1138,7 @@ pub fn noop_flat_map_assoc_item<T: MutVisitor>(
     mut item: P<AssocItem>,
     visitor: &mut T,
 ) -> SmallVec<[P<AssocItem>; 1]> {
-    let Item { id, ident, vis, attrs, kind, span, tokens } = item.deref_mut();
+    let Item { id, ident, vis, attrs, kind, span, tokens, .. } = item.deref_mut();
     visitor.visit_id(id);
     visitor.visit_ident(ident);
     visitor.visit_vis(vis);
@@ -1215,7 +1215,7 @@ pub fn noop_flat_map_item<T: MutVisitor>(
     mut item: P<Item>,
     visitor: &mut T,
 ) -> SmallVec<[P<Item>; 1]> {
-    let Item { ident, attrs, id, kind, vis, span, tokens } = item.deref_mut();
+    let Item { ident, attrs, id, kind, vis, span, tokens, .. } = item.deref_mut();
     visitor.visit_ident(ident);
     visit_attrs(attrs, visitor);
     visitor.visit_id(id);
@@ -1231,7 +1231,7 @@ pub fn noop_flat_map_foreign_item<T: MutVisitor>(
     mut item: P<ForeignItem>,
     visitor: &mut T,
 ) -> SmallVec<[P<ForeignItem>; 1]> {
-    let Item { ident, attrs, id, kind, vis, span, tokens } = item.deref_mut();
+    let Item { ident, attrs, id, kind, vis, span, tokens, .. } = item.deref_mut();
     visitor.visit_id(id);
     visitor.visit_ident(ident);
     visitor.visit_vis(vis);
@@ -1634,6 +1634,7 @@ impl DummyAstNode for Item {
             ident: Ident::empty(),
             kind: ItemKind::ExternCrate(None),
             tokens: Default::default(),
+            duplicated_to: None,
         }
     }
 }

@@ -660,7 +660,7 @@ pub fn walk_pat<'a, V: Visitor<'a>>(visitor: &mut V, pattern: &'a Pat) -> V::Res
 }
 
 pub fn walk_foreign_item<'a, V: Visitor<'a>>(visitor: &mut V, item: &'a ForeignItem) -> V::Result {
-    let &Item { id, span, ident, ref vis, ref attrs, ref kind, tokens: _ } = item;
+    let &Item { id, span, ident, ref vis, ref attrs, ref kind, tokens: _, .. } = item;
     try_visit!(visitor.visit_vis(vis));
     try_visit!(visitor.visit_ident(ident));
     walk_list!(visitor, visit_attribute, attrs);
@@ -793,7 +793,7 @@ pub fn walk_assoc_item<'a, V: Visitor<'a>>(
     item: &'a AssocItem,
     ctxt: AssocCtxt,
 ) -> V::Result {
-    let &Item { id, span, ident, ref vis, ref attrs, ref kind, tokens: _ } = item;
+    let &Item { id, span, ident, ref vis, ref attrs, ref kind, tokens: _, .. } = item;
     try_visit!(visitor.visit_vis(vis));
     try_visit!(visitor.visit_ident(ident));
     walk_list!(visitor, visit_attribute, attrs);

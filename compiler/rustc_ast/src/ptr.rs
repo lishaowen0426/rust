@@ -20,9 +20,10 @@
 //!   `and_then` and `map` - which can remain fully functional even if the
 //!   implementation changes (using a special thread-local heap, for example).
 //!   Moreover, a switch to, e.g., `P<'a, T>` would be easy and mostly automated.
-
+#![allow(unused_imports)]
 use std::fmt::{self, Debug, Display};
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 use std::{slice, vec};
 
 use rustc_serialize::{Decodable, Decoder, Encodable, Encoder};
