@@ -80,6 +80,8 @@ fn verify(tcx: TyCtxt<'_>, items: &lang_items::LanguageItems) {
                 tcx.dcx().emit_err(MissingPanicHandler);
             } else if item == LangItem::EhPersonality {
                 tcx.dcx().emit_err(PanicUnwindWithoutStd);
+            } else if item == LangItem::ContextSwitch {
+                continue;
             } else {
                 tcx.dcx().emit_err(MissingLangItem { name: item.name() });
             }

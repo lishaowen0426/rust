@@ -1227,7 +1227,7 @@ impl<'a> Parser<'a> {
             )
     }
 
-    fn is_static_global(&mut self) -> bool {
+    pub fn is_static_global(&mut self) -> bool {
         if self.check_keyword(kw::Static) {
             // Check if this could be a closure.
             !self.look_ahead(1, |token| {
@@ -1298,7 +1298,10 @@ impl<'a> Parser<'a> {
     /// ```ebnf
     /// Static = "static" "mut"? $ident ":" $ty (= $expr)? ";" ;
     /// ```
-    fn parse_static_item(&mut self, mutability: Mutability) -> PResult<'a, (Ident, StaticItem)> {
+    pub fn parse_static_item(
+        &mut self,
+        mutability: Mutability,
+    ) -> PResult<'a, (Ident, StaticItem)> {
         let ident = self.parse_ident()?;
 
         if self.token.kind == TokenKind::Lt && self.may_recover() {

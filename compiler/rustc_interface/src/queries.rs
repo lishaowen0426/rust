@@ -1,3 +1,6 @@
+#![allow(unused_variables)]
+#![allow(unused_mut)]
+#![allow(dead_code)]
 use crate::errors::{FailedWritingFile, RustcErrorFatal, RustcErrorUnexpectedAnnotation};
 use crate::interface::{Compiler, Result};
 use crate::{errors, passes, util};
@@ -22,6 +25,7 @@ use rustc_session::cstore::Untracked;
 use rustc_session::output::find_crate_name;
 use rustc_session::Session;
 use rustc_span::symbol::sym;
+
 use std::any::Any;
 use std::cell::{RefCell, RefMut};
 use std::sync::Arc;

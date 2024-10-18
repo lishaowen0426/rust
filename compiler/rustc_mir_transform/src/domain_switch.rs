@@ -349,8 +349,6 @@ impl DomainSwitch {
         let fn_sig = tcx.fn_sig(duplicate_id.to_def_id()).instantiate_identity();
         debug!("number of args:{:?}", fn_sig.inputs().skip_binder().len());
         debug!("original generics:{:?}", tcx.generics_of(body.source.def_id()));
-        let args = body.args_iter().map(|a| body.local_decls[a].ty);
-        //let fn_def = Ty::new_fn_def(tcx, duplicate_id.to_def_id(), args);
         let func = Operand::function_handle(
             tcx,
             duplicate_id.to_def_id(),

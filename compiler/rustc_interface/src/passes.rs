@@ -1,9 +1,12 @@
+#![allow(unused_variables)]
+#![allow(dead_code)]
 use crate::errors;
 use crate::interface::{Compiler, Result};
 use crate::proc_macro_decls;
 use crate::util;
 
-use rustc_ast::{self as ast, visit};
+use rustc_ast::ptr::P;
+use rustc_ast::{self as ast, visit, Item};
 use rustc_borrowck as mir_borrowck;
 use rustc_codegen_ssa::traits::CodegenBackend;
 use rustc_data_structures::parallel;
@@ -35,6 +38,12 @@ use rustc_span::FileName;
 use rustc_target::spec::PanicStrategy;
 use rustc_trait_selection::traits;
 
+use rustc_ast::Crate;
+use rustc_ast::ItemKind;
+use rustc_ast::DUMMY_NODE_ID;
+use rustc_parse::parser::FollowedByType;
+use rustc_session::output::find_crate_name;
+use rustc_span::DUMMY_SP;
 use std::any::Any;
 use std::ffi::OsString;
 use std::io::{self, BufWriter, Write};
@@ -42,13 +51,67 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use std::{env, fs, iter};
 
+use thin_vec::thin_vec;
+fn inject_crate_key(sess: &Session, krate: &mut Crate) {
+    let pre_configured_attrs = rustc_expand::config::pre_configure_attrs(sess, &krate.attrs);
+
+    let crate_name = find_crate_name(sess, &pre_configured_attrs);
+    let crate_types = util::collect_crate_types(sess, &pre_configured_attrs);
+    let stable_crate_id = StableCrateId::new(
+        crate_name,
+        crate_types.contains(&CrateType::Executable),
+        sess.opts.cg.metadata.clone(),
+        sess.cfg_version,
+    );
+    debug!("crate key is : {:?}", stable_crate_id);
+    let code = format!("pub static __ISOLATE_CRATE_KEY: u64 = {};", stable_crate_id.as_u64());
+    let mut parser = rustc_parse::new_parser_from_source_str(
+        &sess.parse_sess,
+        FileName::anon_source_code("inject_crate_key"),
+        code,
+    );
+
+    /*
+    let span = lo.to(self.prev_token.span);
+        let id = DUMMY_NODE_ID;
+        let item =
+            Item { ident, attrs, id, kind, vis, span, tokens: None, duplicated_to: None };
+     */
+    let vis = parser.parse_visibility(FollowedByType::No).unwrap();
+    if parser.is_static_global() {
+        parser.bump(); // `static`
+        let mutability = parser.parse_mutability();
+        assert!(mutability.is_not(), "crate key should be an immutable static");
+        let (ident, item) = parser.parse_static_item(mutability).unwrap();
+        let span = DUMMY_SP;
+        let id = DUMMY_NODE_ID;
+        let item = Item {
+            ident,
+            attrs: thin_vec![],
+            id,
+            span,
+            kind: ItemKind::Static(Box::new(item)),
+            vis,
+            tokens: None,
+            duplicated_to: None,
+        };
+        krate.items.push(P(item));
+    } else {
+        panic!("expect a static");
+    }
+}
+
 pub fn parse<'a>(sess: &'a Session) -> PResult<'a, ast::Crate> {
-    let krate = sess.time("parse_crate", || match &sess.io.input {
+    let mut krate = sess.time("parse_crate", || match &sess.io.input {
         Input::File(file) => parse_crate_from_file(file, &sess.parse_sess),
         Input::Str { input, name } => {
             parse_crate_from_source_str(name.clone(), input.clone(), &sess.parse_sess)
         }
     })?;
+
+    if sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate) {
+        inject_crate_key(sess, &mut krate);
+    }
 
     if sess.opts.unstable_opts.input_stats {
         eprintln!("Lines of code:             {}", sess.source_map().count_lines());

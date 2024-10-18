@@ -593,6 +593,7 @@ symbols! {
         constructor,
         context_enter,
         context_exit,
+        context_switch,
         convert_identity,
         copy,
         copy_closures,
