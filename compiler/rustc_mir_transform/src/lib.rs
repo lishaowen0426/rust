@@ -106,6 +106,7 @@ mod ssa;
 // This pass is public to allow external drivers to perform MIR cleanup
 mod check_alignment;
 mod domain_switch;
+mod duplication_rewrite;
 pub mod simplify;
 mod simplify_branches;
 mod simplify_comparison_integral;
@@ -617,6 +618,7 @@ fn run_optimization_passes<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
             &large_enums::EnumSizeOpt { discrepancy: 128 },
             // Some cleanup necessary at least for LLVM and potentially other codegen backends.
             &add_call_guards::CriticalCallEdges,
+            &duplication_rewrite::DuplicationRewrite,
             &domain_switch::DomainSwitch,
             // Cleanup for human readability, off by default.
             &prettify::ReorderBasicBlocks,

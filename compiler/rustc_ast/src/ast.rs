@@ -2933,6 +2933,17 @@ impl Item {
                 original_name.push_str(&duplicate_suffix());
                 copied.ident = Ident::from_str(original_name.as_str());
 
+                match &mut copied.kind {
+                    ItemKind::Fn(fn_info) => {
+                        if fn_info.sig.decl.has_self() {
+                            panic!("currently we cannot duplicate method");
+                        }
+                    }
+                    _ => {
+                        panic!("duplicated item should be a function");
+                    }
+                }
+
                 Some(P(copied))
             }
             _ => None,

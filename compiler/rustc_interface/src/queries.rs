@@ -5,7 +5,8 @@ use crate::errors::{FailedWritingFile, RustcErrorFatal, RustcErrorUnexpectedAnno
 use crate::interface::{Compiler, Result};
 use crate::{errors, passes, util};
 
-use rustc_ast::{self as ast, ast::DuplicateDest, Crate};
+use rustc_ast::ptr::P;
+use rustc_ast::{self as ast, ast::DuplicateDest, Crate, Item, ItemKind, Param};
 use rustc_codegen_ssa::traits::CodegenBackend;
 use rustc_codegen_ssa::CodegenResults;
 use rustc_data_structures::steal::Steal;
@@ -25,6 +26,7 @@ use rustc_session::cstore::Untracked;
 use rustc_session::output::find_crate_name;
 use rustc_session::Session;
 use rustc_span::symbol::sym;
+use rustc_span::FileName;
 
 use std::any::Any;
 use std::cell::{RefCell, RefMut};
@@ -117,10 +119,38 @@ impl<'tcx> Queries<'tcx> {
         })
     }
 
+    #[inline(always)]
+    pub fn duplicate_param() -> &'static str {
+        "duplicated_by_sbd_param"
+    }
+    fn mk_param_for_duplication(&self) -> Param {
+        let code = format!("{}:*mut u8", Self::duplicate_param());
+        let mut parser = rustc_parse::new_parser_from_source_str(
+            &self.compiler.sess.parse_sess,
+            FileName::anon_source_code("adjust_dup_func_param"),
+            code,
+        );
+        let param = parser.parse_param_general(|_| true, true).unwrap();
+        debug!("dup param: {:?}", param);
+        param
+    }
+
+    fn adjust_duplicated_fn_param(&self, item: &mut P<Item>, param: Param) {
+        match &mut item.kind {
+            ItemKind::Fn(fn_ptr) => {
+                assert!(!fn_ptr.sig.decl.has_self(), "cannot duplicate method(with self)");
+                fn_ptr.sig.decl.inputs.insert(0usize, param);
+            }
+            _ => {}
+        }
+    }
+
     fn inject_duplicated_fn(&self, krate: &mut Crate) {
         let mut duplicated_fns = ThinVec::new();
+        let param = self.mk_param_for_duplication();
         for item in krate.items.iter_mut() {
-            if let Some(dup) = item.duplicate_fn() {
+            if let Some(mut dup) = item.duplicate_fn() {
+                self.adjust_duplicated_fn_param(&mut dup, param.clone());
                 item.duplicated_to = Some(DuplicateDest::new(&dup));
                 //debug!("duplicated item:{:?}", dup);
 

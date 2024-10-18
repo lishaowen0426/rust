@@ -2248,8 +2248,8 @@ rustc_queries! {
         desc { |tcx| "find the index of maybe nested field `{ident}` in `{}`", tcx.def_path_str(def_id) }
     }
 
-    query duplicate_map(_:()) -> &'tcx LocalDefIdMap<LocalDefId>{
-        desc {"get the duplication map"}
+    query duplicate_map(_:()) -> (&'tcx LocalDefIdMap<LocalDefId>, &'tcx LocalDefIdSet){
+        desc {"get the duplication map(src->to) and set(all items that are compiler-duplicated)"}
          eval_always
     }
 }

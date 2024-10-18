@@ -56,7 +56,7 @@ use rustc_data_structures::sync::Lrc;
 use rustc_errors::{DiagArgFromDisplay, DiagCtxt, StashKey};
 use rustc_hir as hir;
 use rustc_hir::def::{DefKind, LifetimeRes, Namespace, PartialRes, PerNS, Res};
-use rustc_hir::def_id::{LocalDefId, LocalDefIdMap, CRATE_DEF_ID, LOCAL_CRATE};
+use rustc_hir::def_id::{LocalDefId, LocalDefIdMap, LocalDefIdSet, CRATE_DEF_ID, LOCAL_CRATE};
 use rustc_hir::{ConstArg, GenericArg, ItemLocalMap, ParamName, TraitCandidate};
 use rustc_index::{Idx, IndexSlice, IndexVec};
 use rustc_macros::extension;
@@ -429,8 +429,12 @@ fn compute_hir_hash(
 
 /// key: duplicate src
 /// value: duplicate to
-fn duplicate_map<'tcx>(tcx: TyCtxt<'tcx>, (): ()) -> &'tcx LocalDefIdMap<LocalDefId> {
+fn duplicate_map<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    (): (),
+) -> (&'tcx LocalDefIdMap<LocalDefId>, &'tcx LocalDefIdSet) {
     let mut duplicate_map = LocalDefIdMap::default();
+    let mut duplicate_set = LocalDefIdSet::default();
     let (resolver, krate) = &*tcx.resolver_for_lowering(()).borrow();
     for item in krate.items.iter() {
         if let Some(duplicate_to) = item.duplicated_to() {
@@ -441,15 +445,22 @@ fn duplicate_map<'tcx>(tcx: TyCtxt<'tcx>, (): ()) -> &'tcx LocalDefIdMap<LocalDe
                 duplicate_to.id,
                 resolver.node_id_to_def_id[&duplicate_to.id]
             );
-            if duplicate_map.insert(
-                resolver.node_id_to_def_id[&item.id],
-                resolver.node_id_to_def_id[&duplicate_to.id],
-            ).is_some(){
+            if duplicate_map
+                .insert(
+                    resolver.node_id_to_def_id[&item.id],
+                    resolver.node_id_to_def_id[&duplicate_to.id],
+                )
+                .is_some()
+            {
                 panic!("an item has been duplicated more than once");
+            }
+
+            if !duplicate_set.insert(resolver.node_id_to_def_id[&duplicate_to.id]) {
+                panic!("an item has been duplicated more than once(already in the set)");
             }
         }
     }
-    &*tcx.arena.alloc(duplicate_map)
+    (&*tcx.arena.alloc(duplicate_map), &*tcx.arena.alloc(duplicate_set))
 }
 
 #[instrument(level = "debug", skip_all)]

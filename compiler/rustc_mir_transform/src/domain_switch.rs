@@ -160,12 +160,16 @@ pub struct DomainSwitch;
 
 impl<'tcx> MirPass<'tcx> for DomainSwitch {
     fn is_enabled(&self, sess: &rustc_session::Session) -> bool {
-        sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate)
+        sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate) && false
     }
     #[instrument(level = "debug", skip_all)]
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
+        if body.coroutine.is_some() {
+            //disable this pass for coroutine
+            return;
+        }
         let def_id = body.source.def_id().expect_local();
-        let duplicate_map = tcx.duplicate_map(());
+        let (duplicate_map, _) = tcx.duplicate_map(());
         if let Some(duplicate_to_def_id) = duplicate_map.get(&def_id) {
             debug!("{:?} was duplicated to {:?}", def_id, duplicate_to_def_id);
             self.replace_body(tcx, body, *duplicate_to_def_id);

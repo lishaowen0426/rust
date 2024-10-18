@@ -1600,6 +1600,10 @@ impl<'tcx> MirPass<'tcx> for StateTransform {
             // This only applies to coroutines
             return;
         };
+
+        {
+            debug!("original body locals:{:?}", body.local_decls);
+        }
         let old_ret_ty = body.return_ty();
 
         assert!(body.coroutine_drop().is_none());
@@ -1767,6 +1771,10 @@ impl<'tcx> MirPass<'tcx> for StateTransform {
 
         // Run derefer to fix Derefs that are not in the first place
         deref_finder(tcx, body);
+
+        {
+            debug!("post body locals:{:?}", body.local_decls);
+        }
     }
 }
 

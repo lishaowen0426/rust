@@ -2679,7 +2679,11 @@ impl<'a> Parser<'a> {
     /// Parses a single function parameter.
     ///
     /// - `self` is syntactically allowed when `first_param` holds.
-    fn parse_param_general(&mut self, req_name: ReqName, first_param: bool) -> PResult<'a, Param> {
+    pub fn parse_param_general(
+        &mut self,
+        req_name: ReqName,
+        first_param: bool,
+    ) -> PResult<'a, Param> {
         let lo = self.token.span;
         let attrs = self.parse_outer_attributes()?;
         self.collect_tokens_trailing_token(attrs, ForceCollect::No, |this, attrs| {

@@ -18,6 +18,7 @@ verbose = 1
 optimize = true
 debug = true
 codegen-units = 0
+channel ="nightly"
 
 [llvm]
 download-ci-llvm = false
