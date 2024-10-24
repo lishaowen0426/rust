@@ -15,14 +15,13 @@
                 "--out-dir",
                 "/home/swli/rust-isolation/lib_demo/output",
                 "-Zisolate",
+                "-Zunpretty=mir",
+                "-Zisolate_crate=lib1,lib2",
                 "/home/swli/rust-isolation/lib_demo/src/lib.rs"
             ],
-            "environment": [
-                {
-                    "name": "RUSTC_LOG",
-                    "value": "rustc_mir_build=debug"
-                }
-            ],
+            "env": {
+                "RUSTC_LOG": "rustc_mir_transform=debug"
+            },
             "cwd": "/home/swli/rust-isolation/lib_demo"
         }
     ]

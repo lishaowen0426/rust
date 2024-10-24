@@ -35,5 +35,6 @@
     "rust-analyzer.rustc.source": "./Cargo.toml",
     "rust-analyzer.cargo.extraEnv": {
         "RUSTC_BOOTSTRAP": "1"
-    }
+    },
+    "cmake.sourceDirectory": "/home/swli/rust-isolation/rust/src/llvm-project/libcxxabi"
 }

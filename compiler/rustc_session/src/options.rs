@@ -436,6 +436,7 @@ mod desc {
         "either a boolean (`yes`, `no`, `on`, `off`, etc), or a non-negative number";
     pub const parse_llvm_module_flag: &str = "<key>:<type>:<value>:<behavior>. Type must currently be `u32`. Behavior should be one of (`error`, `warning`, `require`, `override`, `append`, `appendunique`, `max`, `min`)";
     pub const parse_function_return: &str = "`keep` or `thunk-extern`";
+    pub const parse_isolate_crate: &str = "<crate-name>,<crate-name>,<crate-name>";
 }
 
 mod parse {
@@ -1353,6 +1354,14 @@ mod parse {
         true
     }
 
+    #[instrument(level = "debug", name = "parse_isolate_crate")]
+    pub(crate) fn parse_isolate_crate(slot: &mut Vec<String>, v: Option<&str>) -> bool {
+        let mut libs = v.unwrap_or_default().split(",").map(|s| s.to_string()).collect::<Vec<_>>();
+        slot.append(&mut libs);
+
+        true
+    }
+
     pub(crate) fn parse_llvm_module_flag(
         slot: &mut Vec<(String, u32, String)>,
         v: Option<&str>,
@@ -1685,6 +1694,7 @@ options! {
          Multiple options can be combined with commas."),
     isolate: Option<bool> = (None, parse_opt_bool, [TRACKED],
         "isolate the compiled crate (default: no)"),
+    isolate_crate: Vec<String> = (Vec::new(), parse_isolate_crate , [TRACKED], "a comma separated list of crate name to be isolated"),
     layout_seed: Option<u64> = (None, parse_opt_number, [TRACKED],
         "seed layout randomization"),
     link_directives: bool = (true, parse_bool, [TRACKED],

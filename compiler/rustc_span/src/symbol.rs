@@ -1745,6 +1745,8 @@ symbols! {
         transmute,
         transmute_generic_consts,
         transmute_opts,
+        transmute_to_pointer,
+        transmute_to_ref,
         transmute_trait,
         transmute_unchecked,
         transparent,
@@ -1934,6 +1936,10 @@ impl Ident {
         Ident { name, span }
     }
 
+    pub fn is_injected_crate_key(&self) -> bool {
+        self.name.is_crate_key()
+    }
+
     /// Constructs a new identifier with a dummy span.
     #[inline]
     pub const fn with_dummy_span(name: Symbol) -> Ident {
@@ -2120,6 +2126,14 @@ rustc_index::newtype_index! {
 impl Symbol {
     const fn new(n: u32) -> Self {
         Symbol(SymbolIndex::from_u32(n))
+    }
+
+    pub const fn crate_key_name() -> &'static str {
+        "__ISOLATE_CRATE_KEY"
+    }
+
+    pub fn is_crate_key(&self) -> bool {
+        self.to_string() == Self::crate_key_name()
     }
 
     /// for use in Decoder only

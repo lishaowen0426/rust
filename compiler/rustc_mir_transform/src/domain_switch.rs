@@ -2,6 +2,7 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 #![allow(unused_mut)]
+use crate::duplication_rewrite::create_tuple_parameter_ty;
 use crate::MirPass;
 use rustc_ast::Mutability;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
@@ -9,149 +10,15 @@ use rustc_hir::def_id::{DefId, LocalDefId};
 use rustc_index::IndexVec;
 use rustc_middle::mir::visit::{MutVisitor, PlaceContext};
 use rustc_middle::mir::{
-    BasicBlock, BasicBlockData, BasicBlocks, Body, CallSource, Const, ConstOperand, HasLocalDecls,
-    Local, LocalDecl, Location, Operand, Place, ProjectionElem, Rvalue, SourceInfo, Statement,
-    StatementKind, Terminator, TerminatorKind, UnwindAction,
+    AggregateKind, BasicBlock, BasicBlockData, BasicBlocks, Body, BorrowKind, CallSource, Const,
+    ConstOperand, HasLocalDecls, Local, LocalDecl, Location, MutBorrowKind, Operand, Place,
+    ProjectionElem, Rvalue, SourceInfo, Statement, StatementKind, Terminator, TerminatorKind,
+    UnwindAction,
 };
-use rustc_middle::ty::{self, Ty, TyCtxt, TypeVisitableExt};
+use rustc_middle::ty::GenericArgs;
+use rustc_middle::ty::{self, GenericParamDefKind, Ty, TyCtxt, TypeVisitableExt, UintTy};
 use rustc_span::source_map::dummy_spanned;
 use rustc_target::abi::FieldIdx;
-
-struct RenameLocalVisitor<'tcx> {
-    from: Local,
-    to: Local,
-    tcx: TyCtxt<'tcx>,
-}
-
-impl<'tcx> MutVisitor<'tcx> for RenameLocalVisitor<'tcx> {
-    fn tcx(&self) -> TyCtxt<'tcx> {
-        self.tcx
-    }
-
-    fn visit_local(&mut self, local: &mut Local, _: PlaceContext, _: Location) {
-        if *local == self.from {
-            *local = self.to;
-        }
-    }
-
-    fn visit_terminator(&mut self, terminator: &mut Terminator<'tcx>, location: Location) {
-        match terminator.kind {
-            TerminatorKind::Return => {
-                // Do not replace the implicit `_0` access here, as that's not possible. The
-                // transform already handles `return` correctly.
-            }
-            _ => self.super_terminator(terminator, location),
-        }
-    }
-}
-#[derive(Debug, Clone, Copy)]
-enum LocalRemap<'tcx> {
-    Arg((Ty<'tcx>, FieldIdx)),
-    Local(Local),
-}
-struct TransformLocalsVisitor<'tcx, 'a> {
-    remap: &'a FxHashMap<Local, LocalRemap<'tcx>>,
-    tcx: TyCtxt<'tcx>,
-}
-
-impl<'tcx, 'a> MutVisitor<'tcx> for TransformLocalsVisitor<'tcx, 'a> {
-    fn tcx(&self) -> TyCtxt<'tcx> {
-        self.tcx
-    }
-
-    fn visit_local(&mut self, local: &mut Local, _: PlaceContext, _: Location) {}
-
-    fn visit_place(&mut self, place: &mut Place<'tcx>, _: PlaceContext, _: Location) {
-        if let Some(map) = self.remap.get(&place.local) {
-            match map {
-                LocalRemap::Arg((ty, idx)) => {
-                    replace_base_local(
-                        place,
-                        make_tuple_field_place(self.tcx, TUPLE_ARG, *idx, *ty),
-                        self.tcx,
-                    );
-                }
-                LocalRemap::Local(loc) => {
-                    place.local = *loc;
-                }
-            }
-        }
-    }
-}
-
-struct DerefTupleArgVisitor<'tcx> {
-    tcx: TyCtxt<'tcx>,
-}
-
-impl<'tcx> MutVisitor<'tcx> for DerefTupleArgVisitor<'tcx> {
-    fn tcx(&self) -> TyCtxt<'tcx> {
-        self.tcx
-    }
-
-    fn visit_place(&mut self, place: &mut Place<'tcx>, _: PlaceContext, _: Location) {
-        if place.local == TUPLE_ARG {
-            replace_base_local(
-                place,
-                Place {
-                    local: TUPLE_ARG,
-                    projection: self.tcx().mk_place_elems(&[ProjectionElem::Deref]),
-                },
-                self.tcx,
-            );
-        }
-    }
-}
-
-/// Allocates a new local and replaces all references of `local` with it. Returns the new local.
-///
-/// `local` will be changed to a new local decl with type `ty`.
-///
-/// Note that the new local will be uninitialized. It is the caller's responsibility to assign some
-/// valid value to it before its first use.
-fn replace_local<'tcx>(
-    local: Local,
-    ty: Ty<'tcx>,
-    body: &mut Body<'tcx>,
-    tcx: TyCtxt<'tcx>,
-) -> Local {
-    let new_decl = LocalDecl::new(ty, body.span);
-    let new_local = body.local_decls.push(new_decl);
-    body.local_decls.swap(local, new_local);
-
-    RenameLocalVisitor { from: local, to: new_local, tcx }.visit_body(body);
-
-    new_local
-}
-
-fn replace_base_local<'tcx>(place: &mut Place<'tcx>, new_base: Place<'tcx>, tcx: TyCtxt<'tcx>) {
-    place.local = new_base.local;
-    let mut new_projection = new_base.projection.to_vec();
-    new_projection.append(&mut place.projection.to_vec());
-
-    place.projection = tcx.mk_place_elems(&new_projection);
-}
-
-fn make_tuple_field_place<'tcx>(
-    tcx: TyCtxt<'tcx>,
-    tuple_local: Local,
-    idx: FieldIdx,
-    ty: Ty<'tcx>,
-) -> Place<'tcx> {
-    let tuple_place = Place::from(tuple_local);
-    tcx.mk_place_elem(tuple_place, ProjectionElem::Field(idx, ty))
-}
-
-fn make_tuple_argument_indirect<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
-    let tuple_type = body.local_decls[TUPLE_ARG].ty;
-    let ref_tuple_type = Ty::new_ref(
-        tcx,
-        tcx.lifetimes.re_erased,
-        ty::TypeAndMut { ty: tuple_type, mutbl: Mutability::Mut },
-    );
-    body.local_decls[TUPLE_ARG].ty = ref_tuple_type;
-    let mut vis = DerefTupleArgVisitor { tcx };
-    vis.visit_body(body);
-}
 
 const TUPLE_ARG: Local = Local::from_u32(1);
 const RETURN_LOCAL: Local = Local::from_u32(0);
@@ -160,7 +27,7 @@ pub struct DomainSwitch;
 
 impl<'tcx> MirPass<'tcx> for DomainSwitch {
     fn is_enabled(&self, sess: &rustc_session::Session) -> bool {
-        sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate) && false
+        sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate)
     }
     #[instrument(level = "debug", skip_all)]
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
@@ -169,10 +36,16 @@ impl<'tcx> MirPass<'tcx> for DomainSwitch {
             return;
         }
         let def_id = body.source.def_id().expect_local();
+
+        if !tcx.reachable_set(()).contains(&def_id) {
+            //skip items inaccessible to other crates
+            return;
+        }
+
         let (duplicate_map, _) = tcx.duplicate_map(());
         if let Some(duplicate_to_def_id) = duplicate_map.get(&def_id) {
             debug!("{:?} was duplicated to {:?}", def_id, duplicate_to_def_id);
-            self.replace_body(tcx, body, *duplicate_to_def_id);
+            self.replace_body(tcx, body, def_id, *duplicate_to_def_id);
         }
     }
 
@@ -331,40 +204,146 @@ impl<'tcx> MirPass<'tcx> for DomainSwitch {
     */
 }
 
+fn create_cast_to_ptr<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    tuple: Local,
+    trans_to_ptr: DefId,
+    body: &mut Body<'tcx>,
+    target: usize,
+) -> (Local, BasicBlockData<'tcx>) {
+    let body_span = body.span;
+    let tuple_ty = body.local_decls[tuple].ty;
+    let tuple_fields = body.args_iter().map(|loc| Operand::Copy(Place::from(loc))).collect();
+
+    let tuple_init_stmt = Statement {
+        source_info: SourceInfo::outermost(body_span),
+        kind: StatementKind::Assign(Box::new((
+            Place::from(tuple),
+            Rvalue::Aggregate(Box::new(AggregateKind::Tuple), tuple_fields),
+        ))),
+    };
+
+    let tuple_ref = body.local_decls.push(LocalDecl::new(
+        Ty::new_mut_ref(tcx, tcx.lifetimes.re_erased, body.local_decls[tuple].ty),
+        body_span,
+    ));
+
+    let tuple_ptr = body
+        .local_decls
+        .push(LocalDecl::new(Ty::new_mut_ptr(tcx, Ty::new_uint(tcx, UintTy::U8)), body_span));
+
+    let tuple_cast_stmt = Statement {
+        source_info: SourceInfo::outermost(body_span),
+        kind: StatementKind::Assign(Box::new((
+            Place::from(tuple_ref),
+            Rvalue::Ref(
+                tcx.lifetimes.re_erased,
+                BorrowKind::Mut { kind: MutBorrowKind::Default },
+                Place::from(tuple),
+            ),
+        ))),
+    };
+
+    let inst_args = GenericArgs::for_item(tcx, trans_to_ptr, |param, _| match param.kind {
+        GenericParamDefKind::Lifetime => tcx.lifetimes.re_erased.into(),
+        GenericParamDefKind::Type { .. } => tuple_ty.into(),
+        _ => panic!("transmute_to_ptr has wrong generics"),
+    });
+
+    let func = Operand::function_handle(tcx, trans_to_ptr, inst_args, body_span);
+
+    let cast_block = BasicBlockData {
+        statements: vec![tuple_init_stmt, tuple_cast_stmt],
+        terminator: Some(Terminator {
+            source_info: SourceInfo::outermost(body_span),
+            kind: TerminatorKind::Call {
+                func,
+                args: vec![dummy_spanned(Operand::Copy(Place::from(tuple_ref)))],
+                destination: Place::from(tuple_ptr),
+                target: Some(BasicBlock::from_usize(target)),
+                unwind: UnwindAction::Continue,
+                call_source: CallSource::Normal,
+                fn_span: body_span,
+            },
+        }),
+        is_cleanup: false,
+    };
+    (tuple_ptr, cast_block)
+}
+
+fn create_dup_call_blk<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    duplicate_from: LocalDefId,
+    duplicate_to: LocalDefId,
+    tuple_ptr: Local,
+    body: &mut Body<'tcx>,
+    target: usize,
+) -> (Local, BasicBlockData<'tcx>) {
+    let body_span = body.span;
+    //since we are inside the EarlyBinder
+    let fn_sig = tcx.fn_sig(duplicate_to.to_def_id()).instantiate_identity();
+    let output_ty = tcx.instantiate_bound_regions_with_erased(fn_sig.output());
+    let output_local = body.local_decls.push(LocalDecl::new(output_ty, body_span));
+
+    let generic_args =
+        GenericArgs::for_item(tcx, duplicate_to.to_def_id(), |param, _| match param.kind {
+            GenericParamDefKind::Lifetime => tcx.lifetimes.re_erased.into(),
+            _ => tcx.mk_param_from_def(param),
+        });
+    let func = Operand::function_handle(tcx, duplicate_to.to_def_id(), generic_args, body_span);
+
+    let mut args = vec![dummy_spanned(Operand::Copy(Place::from(tuple_ptr)))];
+    args.append(
+        &mut (body.args_iter().map(|l| dummy_spanned(Operand::Copy(Place::from(l)))).collect()),
+    );
+
+    let call_block = BasicBlockData {
+        statements: vec![],
+        terminator: Some(Terminator {
+            source_info: SourceInfo::outermost(body_span),
+            kind: TerminatorKind::Call {
+                func,
+                args,
+                destination: Place::from(output_local),
+                target: Some(BasicBlock::from_usize(target)),
+                unwind: UnwindAction::Continue,
+                call_source: CallSource::Normal,
+                fn_span: body_span,
+            },
+        }),
+        is_cleanup: false,
+    };
+
+    (output_local, call_block)
+}
+
 impl DomainSwitch {
     fn replace_body<'tcx>(
         &self,
         tcx: TyCtxt<'tcx>,
         body: &mut Body<'tcx>,
-        duplicate_id: LocalDefId,
+        duplicate_from: LocalDefId,
+        duplicate_to: LocalDefId,
     ) {
         let body_span = body.span;
         let mut new_bb: IndexVec<BasicBlock, BasicBlockData<'tcx>> = IndexVec::new();
 
-        let return_block = BasicBlockData {
-            statements: vec![],
-            terminator: Some(Terminator {
-                source_info: SourceInfo::outermost(body_span),
-                kind: TerminatorKind::Return,
-            }),
-            is_cleanup: false,
-        };
+        let tuple_ty = create_tuple_parameter_ty(tcx, body, false);
+        debug!("tuple typ: {:?}", tuple_ty);
+        let tuple_loc = body.local_decls.push(LocalDecl::new(tuple_ty, body_span));
 
-        let fn_sig = tcx.fn_sig(duplicate_id.to_def_id()).instantiate_identity();
-        debug!("number of args:{:?}", fn_sig.inputs().skip_binder().len());
-        debug!("original generics:{:?}", tcx.generics_of(body.source.def_id()));
-        let func = Operand::function_handle(
-            tcx,
-            duplicate_id.to_def_id(),
-            ty::GenericArgs::for_item(tcx, duplicate_id.to_def_id(), |param, _| {
-                if let ty::GenericParamDefKind::Lifetime = param.kind {
-                    tcx.lifetimes.re_erased.into()
-                } else {
-                    tcx.mk_param_from_def(param)
-                }
-            }),
-            body_span,
-        );
+        let trans_to_ptr = tcx.lang_items().transmute_to_pointer().unwrap();
+        let (tuple_ptr, cast_block) =
+            create_cast_to_ptr(tcx, tuple_loc, trans_to_ptr, body, 1usize);
+        debug!("cast_block:{:?}", cast_block);
+        let (dup_ret, call_block) =
+            create_dup_call_blk(tcx, duplicate_from, duplicate_to, tuple_ptr, body, 2usize);
+        new_bb.push(cast_block);
+        new_bb.push(call_block);
+        /*
+         */
+        /*
+
         let args = body.args_iter().map(|a| dummy_spanned(Operand::Copy(Place::from(a)))).collect();
 
         let call_block = BasicBlockData {
@@ -384,55 +363,24 @@ impl DomainSwitch {
             is_cleanup: false,
         };
         new_bb.push(call_block);
-        new_bb.push(return_block);
 
+        */
+
+        let return_block = BasicBlockData {
+            statements: vec![Statement {
+                source_info: SourceInfo::outermost(body_span),
+                kind: StatementKind::Assign(Box::new((
+                    Place::from(RETURN_LOCAL),
+                    Rvalue::Use(Operand::Move(Place::from(dup_ret))),
+                ))),
+            }],
+            terminator: Some(Terminator {
+                source_info: SourceInfo::outermost(body_span),
+                kind: TerminatorKind::Return,
+            }),
+            is_cleanup: false,
+        };
+        new_bb.push(return_block);
         body.basic_blocks = BasicBlocks::new(new_bb);
     }
-}
-
-fn create_tuple_paramter_ty<'tcx>(tcx: TyCtxt<'tcx>, body: &Body<'tcx>) -> Ty<'tcx> {
-    let args_type = body.args_iter().map(|l| body.local_decls[l].ty);
-    let new_tuple_ty = Ty::new_tup_from_iter(tcx, args_type);
-    new_tuple_ty
-}
-
-struct AssignBackVisitor<'tcx> {
-    tcx: TyCtxt<'tcx>,
-    stats: Vec<Statement<'tcx>>,
-    exit_terminator: Terminator<'tcx>,
-    skip_block: BasicBlock,
-}
-
-impl<'tcx> MutVisitor<'tcx> for AssignBackVisitor<'tcx> {
-    fn tcx(&self) -> TyCtxt<'tcx> {
-        self.tcx
-    }
-
-    fn visit_basic_block_data(&mut self, block: BasicBlock, data: &mut BasicBlockData<'tcx>) {
-        if block == self.skip_block {
-            return;
-        }
-        match data.terminator().kind {
-            TerminatorKind::Return => {
-                data.statements.extend(self.stats.iter().cloned());
-                data.terminator_mut().kind = self.exit_terminator.kind.clone();
-            }
-            _ => {}
-        }
-    }
-}
-
-cfg_if::cfg_if! {
-    if #[cfg(bootstrap)]{
-
-        fn insert_domain_switch<'tcx>(_tcx: TyCtxt<'tcx>, _body: &mut Body<'tcx>) -> () {}
-
-    }else{
-        fn insert_domain_switch<'tcx>(tcx: TyCtxt<'tcx>, _body: &mut Body<'tcx>) -> () {
-            let _domain_enter = tcx.lang_items().domain_enter().unwrap();
-
-        }
-
-    }
-
 }

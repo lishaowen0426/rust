@@ -64,19 +64,14 @@ fn inject_crate_key(sess: &Session, krate: &mut Crate) {
         sess.cfg_version,
     );
     debug!("crate key is : {:?}", stable_crate_id);
-    let code = format!("pub static __ISOLATE_CRATE_KEY: u64 = {};", stable_crate_id.as_u64());
+    let code =
+        format!("pub static {}: u64 = {};", Symbol::crate_key_name(), stable_crate_id.as_u64());
     let mut parser = rustc_parse::new_parser_from_source_str(
         &sess.parse_sess,
         FileName::anon_source_code("inject_crate_key"),
         code,
     );
 
-    /*
-    let span = lo.to(self.prev_token.span);
-        let id = DUMMY_NODE_ID;
-        let item =
-            Item { ident, attrs, id, kind, vis, span, tokens: None, duplicated_to: None };
-     */
     let vis = parser.parse_visibility(FollowedByType::No).unwrap();
     if parser.is_static_global() {
         parser.bump(); // `static`

@@ -139,6 +139,8 @@ pub fn extract(attrs: &[ast::Attribute]) -> Option<(Symbol, Span)> {
 
 language_item_table! {
 //  Variant name,            Name,                     Getter method name,         Target                  Generic requirements;
+    TransmuteToPointer,      sym::transmute_to_pointer,transmute_to_pointer,       Target::Fn,             GenericRequirement::None;
+    TransmuteToRef,          sym::transmute_to_ref,    transmute_to_ref,           Target::Fn,             GenericRequirement::None;
     ContextSwitch,           sym::context_switch,      context_switch,             Target::Fn,             GenericRequirement::None;
     ContextEnter,            sym::context_enter,       context_enter,              Target::Fn,             GenericRequirement::None;
     ContextExit,             sym::context_exit,        context_exit,               Target::Fn,             GenericRequirement::None;

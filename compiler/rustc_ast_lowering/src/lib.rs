@@ -91,7 +91,7 @@ mod path;
 rustc_fluent_macro::fluent_messages! { "../messages.ftl" }
 
 pub fn provide(providers: &mut Providers) {
-    *providers = Providers { duplicate_map, ..*providers };
+    *providers = Providers { duplicate_map, injected_crate_key, ..*providers };
 }
 
 struct LoweringContext<'a, 'hir> {
@@ -463,6 +463,16 @@ fn duplicate_map<'tcx>(
     (&*tcx.arena.alloc(duplicate_map), &*tcx.arena.alloc(duplicate_set))
 }
 
+fn injected_crate_key<'tcx>(tcx: TyCtxt<'tcx>, (): ()) -> Option<LocalDefId> {
+    let (resolver, krate) = &*tcx.resolver_for_lowering(()).borrow();
+    for item in krate.items.iter() {
+        if item.ident.is_injected_crate_key() {
+            return Some(resolver.node_id_to_def_id[&item.id]);
+        }
+    }
+    None
+}
+
 #[instrument(level = "debug", skip_all)]
 pub fn lower_to_hir(tcx: TyCtxt<'_>, (): ()) -> hir::Crate<'_> {
     let sess = tcx.sess;
@@ -472,6 +482,7 @@ pub fn lower_to_hir(tcx: TyCtxt<'_>, (): ()) -> hir::Crate<'_> {
     tcx.ensure_with_value().debugger_visualizers(LOCAL_CRATE);
     tcx.ensure_with_value().get_lang_items(());
     tcx.ensure_with_value().duplicate_map(());
+    tcx.ensure_with_value().injected_crate_key(());
     let (mut resolver, krate) = tcx.resolver_for_lowering(()).steal();
     //debug!("resolver.node_id_to_def_id:{:?}", resolver.node_id_to_def_id);
 
@@ -526,6 +537,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
         def_kind: DefKind,
         span: Span,
     ) -> LocalDefId {
+        debug!("{:?} is crate key:{}", name, name.is_crate_key());
         debug_assert_ne!(node_id, ast::DUMMY_NODE_ID);
         assert!(
             self.opt_local_def_id(node_id).is_none(),

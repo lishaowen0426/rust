@@ -2252,6 +2252,10 @@ rustc_queries! {
         desc {"get the duplication map(src->to) and set(all items that are compiler-duplicated)"}
          eval_always
     }
+
+    query injected_crate_key(():()) -> Option<LocalDefId> {
+        desc {"get the injected crate key"}
+    }
 }
 
 rustc_query_append! { define_callbacks! }
