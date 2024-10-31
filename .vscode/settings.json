@@ -36,5 +36,12 @@
     "rust-analyzer.cargo.extraEnv": {
         "RUSTC_BOOTSTRAP": "1"
     },
-    "cmake.sourceDirectory": "/home/swli/rust-isolation/rust/src/llvm-project/libcxxabi"
+    "cmake.sourceDirectory": "/home/swli/rust-isolation/rust/src/llvm-project/libcxxabi",
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/bower_components": true,
+        "**/*.code-search": true,
+        "compiler/rustc_codegen_gcc": true,
+        "compiler/rustc_codegen_cranelift": true,
+    }
 }
