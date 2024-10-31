@@ -662,6 +662,28 @@ pub fn codegen_crate<B: ExtraBackendMethods>(
         );
     }
 
+    //codegen stack isolate module
+    if tcx.sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate) {
+        let llmod_id = cgu_name_builder
+            .build_cgu_name(LOCAL_CRATE, &["crate"], Some("isolate_stack"))
+            .to_string();
+        let module_llvm = tcx
+            .sess
+            .time("write_stack_isolate_module", || backend.codegen_stack_isolate(tcx, &llmod_id));
+
+        ongoing_codegen.wait_for_signal_to_codegen_item();
+        ongoing_codegen.check_for_errors(tcx.sess);
+
+        // These modules are generally cheap and won't throw off scheduling.
+        let cost = 0;
+        submit_codegened_module_to_llvm(
+            &backend,
+            &ongoing_codegen.coordinator.sender,
+            ModuleCodegen { name: llmod_id, module_llvm, kind: ModuleKind::Regular },
+            cost,
+        );
+    }
+
     // For better throughput during parallel processing by LLVM, we used to sort
     // CGUs largest to smallest. This would lead to better thread utilization
     // by, for example, preventing a large CGU from being processed last and

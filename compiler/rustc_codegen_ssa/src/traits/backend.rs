@@ -116,6 +116,9 @@ pub trait CodegenBackend {
 pub trait ExtraBackendMethods:
     CodegenBackend + WriteBackendMethods + Sized + Send + Sync + DynSend + DynSync
 {
+    fn codegen_stack_isolate<'tcx>(&self, _tcx: TyCtxt<'tcx>, _module_name: &str) -> Self::Module {
+        unreachable!("not implemented")
+    }
     fn codegen_allocator<'tcx>(
         &self,
         tcx: TyCtxt<'tcx>,

@@ -71,6 +71,7 @@ mod debuginfo;
 mod declare;
 mod errors;
 mod intrinsic;
+mod isolate;
 
 // The following is a workaround that replaces `pub mod llvm;` and that fixes issue 53912.
 #[path = "llvm/mod.rs"]
@@ -113,6 +114,14 @@ impl Drop for TimeTraceProfiler {
 }
 
 impl ExtraBackendMethods for LlvmCodegenBackend {
+    #[instrument(level = "debug", skip(self, tcx))]
+    fn codegen_stack_isolate<'tcx>(&self, tcx: TyCtxt<'tcx>, module_name: &str) -> Self::Module {
+        let mut module_llvm = ModuleLlvm::new_metadata(tcx, module_name);
+        unsafe {
+            isolate::codegen(tcx, &mut module_llvm, module_name);
+        }
+        module_llvm
+    }
     fn codegen_allocator<'tcx>(
         &self,
         tcx: TyCtxt<'tcx>,
