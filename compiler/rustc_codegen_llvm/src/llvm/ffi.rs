@@ -2412,4 +2412,6 @@ extern "C" {
         callback: GetSymbolsCallback,
         error_callback: GetSymbolsErrorCallback,
     ) -> *mut c_void;
+
+    pub fn LLVMAppendGlobalCtor<'a>(M: &'a Module, Function: &Value);
 }

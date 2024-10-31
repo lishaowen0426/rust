@@ -100,5 +100,7 @@ pub(crate) unsafe fn codegen(tcx: TyCtxt<'_>, module_llvm: &mut ModuleLlvm, modu
         llvm::LLVMBuildRetVoid(llbuilder);
 
         llvm::LLVMDisposeBuilder(llbuilder);
+
+        llvm::LLVMAppendGlobalCtor(llmod, init_fn);
     }
 }

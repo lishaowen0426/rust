@@ -1,0 +1,9 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": ["/home/swli/rust-isolation/rust/build/host/llvm"],
+            "cppStandard": "c++17"
+        }
+    ]
+}
