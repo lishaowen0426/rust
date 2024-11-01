@@ -2049,3 +2049,11 @@ extern "C" void LLVMAppendGlobalCtor(LLVMModuleRef M, LLVMValueRef Fn) {
   Function *F = unwrap<Function>(Fn);
   appendToGlobalCtors(*unwrap(M), F, 0);
 }
+
+extern "C" bool LLVMAppendToUsed(LLVMModuleRef M, LLVMValueRef GV) {
+  if (auto *g = dyn_cast<GlobalValue>(unwrap<Value>(GV))) {
+    appendToUsed(*unwrap(M), ArrayRef<GlobalValue *>(&g, 1));
+    return true;
+  }
+  return false;
+}

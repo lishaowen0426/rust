@@ -37,6 +37,7 @@ extern "Rust" {
     fn __rust_alloc_zeroed(size: usize, align: usize) -> *mut u8;
 
     static __rust_no_alloc_shim_is_unstable: u8;
+
 }
 
 /// The global memory allocator.

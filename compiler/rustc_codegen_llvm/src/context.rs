@@ -114,7 +114,7 @@ pub struct TypeLowering<'ll> {
     pub field_remapping: Option<SmallVec<[u32; 4]>>,
 }
 
-fn to_llvm_tls_model(tls_model: TlsModel) -> llvm::ThreadLocalMode {
+pub fn to_llvm_tls_model(tls_model: TlsModel) -> llvm::ThreadLocalMode {
     match tls_model {
         TlsModel::GeneralDynamic => llvm::ThreadLocalMode::GeneralDynamic,
         TlsModel::LocalDynamic => llvm::ThreadLocalMode::LocalDynamic,

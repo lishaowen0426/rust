@@ -25,3 +25,10 @@ pub fn transmute_to_ref<'a, T>(p: *mut u8) -> &'a mut T {
 pub fn transmute_to_pointer<'a, T>(r: &mut T) -> *mut u8 {
     (r as *mut T).cast()
 }
+
+#[stable(feature = "isolate_domain", since = "1.0.0")]
+#[allow(missing_docs)]
+#[no_mangle]
+pub fn try_to_print() {
+    println!("try_to_print");
+}

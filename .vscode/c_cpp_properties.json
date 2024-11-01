@@ -2,8 +2,15 @@
     "configurations": [
         {
             "name": "Linux",
-            "includePath": ["/home/swli/rust-isolation/rust/build/host/llvm"],
-            "cppStandard": "c++17"
+            "includePath": [
+                "/home/swli/rust-isolation/rust/build/host/llvm"
+            ],
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64",
+            "compilerPath": "/home/swli/inprocess/rust/src/llvm-project/build/bin/clang",
+            "cStandard": "c17",
+            "compileCommands": "${workspaceFolder}/build/x86_64-unknown-linux-gnu/llvm/build/compile_commands.json"
         }
-    ]
+    ],
+    "version": 4
 }

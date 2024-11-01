@@ -35,6 +35,7 @@ use rustc_codegen_ssa::ModuleCodegen;
 use rustc_codegen_ssa::{CodegenResults, CompiledModule};
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_errors::{DiagCtxt, ErrorGuaranteed, FatalError};
+use rustc_hir::def_id::LOCAL_CRATE;
 use rustc_metadata::EncodedMetadata;
 use rustc_middle::dep_graph::{WorkProduct, WorkProductId};
 use rustc_middle::ty::TyCtxt;
@@ -72,6 +73,8 @@ mod declare;
 mod errors;
 mod intrinsic;
 mod isolate;
+
+pub use context::to_llvm_tls_model;
 
 // The following is a workaround that replaces `pub mod llvm;` and that fixes issue 53912.
 #[path = "llvm/mod.rs"]
@@ -116,6 +119,7 @@ impl Drop for TimeTraceProfiler {
 impl ExtraBackendMethods for LlvmCodegenBackend {
     #[instrument(level = "debug", skip(self, tcx))]
     fn codegen_stack_isolate<'tcx>(&self, tcx: TyCtxt<'tcx>, module_name: &str) -> Self::Module {
+        debug!("crate name {}", tcx.crate_name(LOCAL_CRATE));
         let mut module_llvm = ModuleLlvm::new_metadata(tcx, module_name);
         unsafe {
             isolate::codegen(tcx, &mut module_llvm, module_name);

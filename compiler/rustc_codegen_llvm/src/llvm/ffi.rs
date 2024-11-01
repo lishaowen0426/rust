@@ -2414,4 +2414,6 @@ extern "C" {
     ) -> *mut c_void;
 
     pub fn LLVMAppendGlobalCtor<'a>(M: &'a Module, Function: &Value);
+
+    pub fn LLVMAppendToUsed<'a>(M: &'a Module, GV: &Value) -> bool;
 }
