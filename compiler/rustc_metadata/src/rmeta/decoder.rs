@@ -1773,6 +1773,7 @@ impl<'a, 'tcx> CrateMetadataRef<'a> {
 }
 
 impl CrateMetadata {
+    #[instrument(level = "debug", skip_all, name = "cratemetadata_new")]
     pub(crate) fn new(
         sess: &Session,
         cstore: &CStore,

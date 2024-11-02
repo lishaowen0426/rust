@@ -1880,6 +1880,11 @@ rustc_queries! {
         desc { "fetching `CrateNum`s for all crates loaded non-speculatively" }
     }
 
+    query isolate_crates(_: ()) -> &'tcx [CrateNum] {
+        eval_always
+        desc { "fetching `CrateNum`s for all isolated crates" }
+    }
+
     /// A list of all traits in a crate, used by rustdoc and error reporting.
     query traits(_: CrateNum) -> &'tcx [DefId] {
         desc { "fetching all traits in a crate" }

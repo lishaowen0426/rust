@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use crate::assert_module_sources::CguReuse;
 use crate::back::link::are_upstream_rust_objects_already_included;
 use crate::back::metadata::create_compressed_metadata_file;
@@ -7,6 +8,7 @@ use crate::back::write::{
 };
 use crate::common::{IntPredicate, RealPredicate, TypeKind};
 use crate::errors;
+use crate::isolate_symbols::isolate_exported_symbols;
 use crate::meth;
 use crate::mir;
 use crate::mir::operand::OperandValue;
@@ -39,6 +41,7 @@ use rustc_span::symbol::sym;
 use rustc_span::Symbol;
 use rustc_target::abi::{Align, FIRST_VARIANT};
 
+use rustc_data_structures::fx::FxIndexMap;
 use std::cmp;
 use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
@@ -833,8 +836,11 @@ impl CrateInfo {
             .iter()
             .map(|&c| (c, crate::back::linker::exported_symbols(tcx, c)))
             .collect();
-        let linked_symbols =
+        let mut linked_symbols: FxIndexMap<CrateType, Vec<(String, SymbolExportKind)>> =
             crate_types.iter().map(|&c| (c, crate::back::linker::linked_symbols(tcx, c))).collect();
+        if let Some(s) = linked_symbols.get_mut(&CrateType::Executable) {
+            s.append(&mut isolate_exported_symbols(tcx));
+        }
         let local_crate_name = tcx.crate_name(LOCAL_CRATE);
         let crate_attrs = tcx.hir().attrs(rustc_hir::CRATE_HIR_ID);
         let subsystem = attr::first_attr_value_str_by_name(crate_attrs, sym::windows_subsystem);

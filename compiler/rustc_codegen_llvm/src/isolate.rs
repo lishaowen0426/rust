@@ -8,25 +8,14 @@ use crate::to_llvm_tls_model;
 use crate::ModuleLlvm;
 use libc::{c_uint, c_ulonglong};
 use rustc_ast::expand::allocator::{global_fn_name, ALLOCATOR_METHODS};
+use rustc_codegen_ssa::isolate_symbols::{
+    isolate_stack_fn_name, isolate_stack_global_name, ISOLATE_STACK_ALIGN, ISOLATE_STACK_SIZE,
+};
 use rustc_hir::def_id::{CrateNum, LOCAL_CRATE};
 use rustc_middle::bug;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::sym;
 use std::str::from_utf8;
-
-static ISOLATE_STACK_INIT_FN: &'static str = "__rust_isolate_stack_init";
-static ISOLATE_STACK_GLOBAL_PREFIX: &'static str = "__rust_isolate_stack";
-
-static ISOLATE_STACK_SIZE: usize = 512 * 1024;
-static ISOLATE_STACK_ALIGN: usize = 16;
-
-pub fn isolate_stack_global_name(tcx: TyCtxt<'_>, crate_name: Option<CrateNum>) -> String {
-    if let Some(cn) = crate_name {
-        format!("{}_{}", ISOLATE_STACK_GLOBAL_PREFIX, tcx.crate_name(cn))
-    } else {
-        format!("{}_{}", ISOLATE_STACK_GLOBAL_PREFIX, tcx.crate_name(LOCAL_CRATE))
-    }
-}
 
 #[instrument(level = "debug", skip(tcx, module_llvm), name = "isolate_stack_codegen")]
 pub(crate) unsafe fn codegen(tcx: TyCtxt<'_>, module_llvm: &mut ModuleLlvm, module_name: &str) {
@@ -58,14 +47,11 @@ pub(crate) unsafe fn codegen(tcx: TyCtxt<'_>, module_llvm: &mut ModuleLlvm, modu
 
     {
         //create stack_init_fn
+        let fn_name = isolate_stack_fn_name(tcx, None);
         let fn_ty =
             llvm::LLVMFunctionType(llvm::LLVMVoidTypeInContext(llcx), [].as_ptr(), 0, False);
-        let init_fn = llvm::LLVMRustGetOrInsertFunction(
-            llmod,
-            ISOLATE_STACK_INIT_FN.as_ptr().cast(),
-            ISOLATE_STACK_INIT_FN.len(),
-            fn_ty,
-        );
+        let init_fn =
+            llvm::LLVMRustGetOrInsertFunction(llmod, fn_name.as_ptr().cast(), fn_name.len(), fn_ty);
         llvm::LLVMRustSetVisibility(init_fn, llvm::Visibility::Default);
 
         llvm::LLVMAppendGlobalCtor(llmod, init_fn);

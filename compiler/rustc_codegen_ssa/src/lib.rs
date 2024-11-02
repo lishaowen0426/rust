@@ -40,6 +40,7 @@ use rustc_session::config::{CrateType, OutputFilenames, OutputType, RUST_CGU_EXT
 use rustc_session::cstore::{self, CrateSource};
 use rustc_session::utils::NativeLibKind;
 use rustc_session::Session;
+
 use rustc_span::symbol::Symbol;
 use std::collections::BTreeSet;
 use std::io;
@@ -52,6 +53,7 @@ pub mod codegen_attrs;
 pub mod common;
 pub mod debuginfo;
 pub mod errors;
+pub mod isolate_symbols;
 pub mod meth;
 pub mod mir;
 pub mod mono_item;

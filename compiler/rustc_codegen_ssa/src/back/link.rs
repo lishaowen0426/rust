@@ -81,6 +81,7 @@ pub fn link_binary<'a>(
     let output_metadata = sess.opts.output_types.contains_key(&OutputType::Metadata);
     let mut tempfiles_for_stdout_output: Vec<PathBuf> = Vec::new();
     for &crate_type in &codegen_results.crate_info.crate_types {
+        debug!("crate_type:{:?}", crate_type);
         // Ignore executable crates if we have -Z no-codegen, as they will error.
         if (sess.opts.unstable_opts.no_codegen || !sess.opts.output_types.should_codegen())
             && !output_metadata
@@ -743,6 +744,7 @@ fn link_dwarf_object<'a>(
 ///
 /// This will invoke the system linker/cc to create the resulting file. This links to all upstream
 /// files as well.
+#[instrument(level = "debug", skip_all)]
 fn link_natively<'a>(
     sess: &'a Session,
     archive_builder_builder: &dyn ArchiveBuilderBuilder,
@@ -751,7 +753,7 @@ fn link_natively<'a>(
     codegen_results: &CodegenResults,
     tmpdir: &Path,
 ) -> Result<(), ErrorGuaranteed> {
-    info!("preparing {:?} to {:?}", crate_type, out_filename);
+    debug!("preparing {:?} to {:?}", crate_type, out_filename);
     let (linker_path, flavor) = linker_and_flavor(sess);
     let self_contained_components = self_contained_components(sess, crate_type);
     let mut cmd = linker_with_args(
@@ -1544,6 +1546,7 @@ fn get_object_file_path(sess: &Session, name: &str, self_contained: bool) -> Pat
     PathBuf::from(name)
 }
 
+#[instrument(level = "debug", skip(sess))]
 fn exec_linker(
     sess: &Session,
     cmd: &Command,
@@ -1929,6 +1932,7 @@ fn add_post_link_args(cmd: &mut dyn Linker, sess: &Session, flavor: LinkerFlavor
 /// like `rust_begin_unwind` but libstd ends up defining it. To get this
 /// circular dependence to work correctly we declare some of these things
 /// in this synthetic object.
+#[instrument(level = "debug", skip(cmd, sess, tmpdir))]
 fn add_linked_symbol_object(
     cmd: &mut dyn Linker,
     sess: &Session,
@@ -1988,6 +1992,12 @@ fn add_local_crate_regular_objects(cmd: &mut dyn Linker, codegen_results: &Codeg
 /// Add object files for allocator code linked once for the whole crate tree.
 fn add_local_crate_allocator_objects(cmd: &mut dyn Linker, codegen_results: &CodegenResults) {
     if let Some(obj) = codegen_results.allocator_module.as_ref().and_then(|m| m.object.as_ref()) {
+        cmd.add_object(obj);
+    }
+}
+/// Add object files for allocator code linked once for the whole crate tree.
+fn add_local_crate_isolator_objects(cmd: &mut dyn Linker, codegen_results: &CodegenResults) {
+    if let Some(obj) = codegen_results.isolator_module.as_ref().and_then(|m| m.object.as_ref()) {
         cmd.add_object(obj);
     }
 }
@@ -2126,7 +2136,6 @@ fn linker_with_args<'a>(
         tmpdir,
         &codegen_results.crate_info.linked_symbols[&crate_type],
     );
-
     // Sanitizer libraries.
     add_sanitizer_libraries(sess, flavor, crate_type, cmd);
 
@@ -2159,6 +2168,7 @@ fn linker_with_args<'a>(
     // and such dependencies are also required to be specified.
     add_local_crate_regular_objects(cmd, codegen_results);
     add_local_crate_metadata_objects(cmd, crate_type, codegen_results);
+    add_local_crate_isolator_objects(cmd, codegen_results);
     add_local_crate_allocator_objects(cmd, codegen_results);
 
     // Avoid linking to dynamic libraries unless they satisfy some undefined symbols

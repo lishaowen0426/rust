@@ -529,6 +529,20 @@ pub(in crate::rmeta) fn provide(providers: &mut Providers) {
                     .filter_map(|(cnum, data)| data.used().then_some(cnum)),
             )
         },
+        isolate_crates: |tcx, ()| {
+            tcx.untracked().cstore.freeze();
+            let isolated = &tcx.sess.opts.unstable_opts.isolate_crate;
+            tcx.arena.alloc_from_iter(CStore::from_tcx(tcx).iter_crate_data().filter_map(
+                |(cnum, _)| {
+                    let crate_name = tcx.crate_name(cnum);
+                    if isolated.iter().find(|&s| s == crate_name.as_str()).is_some() {
+                        Some(cnum)
+                    } else {
+                        None
+                    }
+                },
+            ))
+        },
         ..providers.queries
     };
     provide_extern(&mut providers.extern_queries);

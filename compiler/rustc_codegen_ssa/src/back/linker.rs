@@ -39,6 +39,7 @@ pub fn disable_localization(linker: &mut Command) {
 /// The third parameter is for env vars, used on windows to set up the
 /// path for MSVC to find its DLLs, and gcc to find its bundled
 /// toolchain
+#[instrument(level = "debug", skip(sess))]
 pub fn get_linker<'a>(
     sess: &'a Session,
     linker: &Path,
@@ -71,6 +72,8 @@ pub fn get_linker<'a>(
             _ => Command::new(linker),
         },
     };
+
+    debug!(cmd=?cmd);
 
     // UWP apps have API restrictions enforced during Store submissions.
     // To comply with the Windows App Certification Kit,
@@ -657,6 +660,7 @@ impl<'a> Linker for GccLinker<'a> {
         }
     }
 
+    #[instrument(level = "debug", skip(self))]
     fn export_symbols(&mut self, tmpdir: &Path, crate_type: CrateType, symbols: &[String]) {
         // Symbol visibility in object files typically takes care of this.
         if crate_type == CrateType::Executable {
