@@ -647,12 +647,14 @@ pub(crate) fn link(
     Ok(modules.remove(0))
 }
 
+#[instrument(level = "debug", skip_all, name = "write_codegen")]
 pub(crate) unsafe fn codegen(
     cgcx: &CodegenContext<LlvmCodegenBackend>,
     dcx: &DiagCtxt,
     module: ModuleCodegen<ModuleLlvm>,
     config: &ModuleConfig,
 ) -> Result<CompiledModule, FatalError> {
+    debug!("codegen module:{}, kind:{:?}, emit_ir:{}", module.name, module.kind, config.emit_ir);
     let _timer = cgcx.prof.generic_activity_with_arg("LLVM_module_codegen", &*module.name);
     {
         let llmod = module.module_llvm.llmod();

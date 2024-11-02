@@ -132,7 +132,11 @@ impl ModuleConfig {
         // `$regular` and `$other` are evaluated lazily.
         macro_rules! if_regular {
             ($regular: expr, $other: expr) => {
-                if let ModuleKind::Regular = kind { $regular } else { $other }
+                if let ModuleKind::Regular | ModuleKind::Isolator = kind {
+                    $regular
+                } else {
+                    $other
+                }
             };
         }
 
@@ -143,7 +147,9 @@ impl ModuleConfig {
 
         let should_emit_obj = sess.opts.output_types.contains_key(&OutputType::Exe)
             || match kind {
-                ModuleKind::Regular => sess.opts.output_types.contains_key(&OutputType::Object),
+                ModuleKind::Regular | ModuleKind::Isolator => {
+                    sess.opts.output_types.contains_key(&OutputType::Object)
+                }
                 ModuleKind::Allocator => false,
                 ModuleKind::Metadata => sess.opts.output_types.contains_key(&OutputType::Metadata),
             };
@@ -343,6 +349,7 @@ pub struct CodegenContext<B: WriteBackendMethods> {
     pub regular_module_config: Arc<ModuleConfig>,
     pub metadata_module_config: Arc<ModuleConfig>,
     pub allocator_module_config: Arc<ModuleConfig>,
+    pub isolator_module_config: Arc<ModuleConfig>,
     pub tm_factory: TargetMachineFactoryFn<B>,
     pub msvc_imps_needed: bool,
     pub is_pe_coff: bool,
@@ -381,6 +388,7 @@ impl<B: WriteBackendMethods> CodegenContext<B> {
             ModuleKind::Regular => &self.regular_module_config,
             ModuleKind::Metadata => &self.metadata_module_config,
             ModuleKind::Allocator => &self.allocator_module_config,
+            ModuleKind::Isolator => &self.isolator_module_config,
         }
     }
 }
@@ -425,6 +433,7 @@ fn generate_lto_work<B: ExtraBackendMethods>(
 pub struct CompiledModules {
     pub modules: Vec<CompiledModule>,
     pub allocator_module: Option<CompiledModule>,
+    pub isolator_module: Option<CompiledModule>,
 }
 
 fn need_bitcode_in_object(tcx: TyCtxt<'_>) -> bool {
@@ -469,6 +478,8 @@ pub fn start_async_codegen<B: ExtraBackendMethods>(
         ModuleConfig::new(ModuleKind::Metadata, tcx, no_builtins, is_compiler_builtins);
     let allocator_config =
         ModuleConfig::new(ModuleKind::Allocator, tcx, no_builtins, is_compiler_builtins);
+    let isolator_config =
+        ModuleConfig::new(ModuleKind::Isolator, tcx, no_builtins, is_compiler_builtins);
 
     let (shared_emitter, shared_emitter_main) = SharedEmitter::new();
     let (codegen_worker_send, codegen_worker_receive) = channel();
@@ -484,6 +495,7 @@ pub fn start_async_codegen<B: ExtraBackendMethods>(
         Arc::new(regular_config),
         Arc::new(metadata_config),
         Arc::new(allocator_config),
+        Arc::new(isolator_config),
         coordinator_send.clone(),
     );
 
@@ -535,6 +547,7 @@ fn copy_all_cgu_workproducts_to_incr_comp_cache_dir(
     work_products
 }
 
+#[instrument(level = "debug", skip_all)]
 fn produce_final_output_artifacts(
     sess: &Session,
     compiled_modules: &CompiledModules,
@@ -556,9 +569,10 @@ fn produce_final_output_artifacts(
             }
         }
     };
-
+    debug!("module count: {}", compiled_modules.modules.len());
     let copy_if_one_unit = |output_type: OutputType, keep_numbered: bool| {
-        if compiled_modules.modules.len() == 1 {
+        if compiled_modules.modules.len() == 1 && compiled_modules.isolator_module.is_none() {
+            debug!("only a single module");
             // 1) Only one codegen unit. In this case it's no difficulty
             //    to copy `foo.0.x` to `foo.x`.
             let module_name = Some(&compiled_modules.modules[0].name[..]);
@@ -1047,6 +1061,7 @@ fn start_executing_work<B: ExtraBackendMethods>(
     regular_config: Arc<ModuleConfig>,
     metadata_config: Arc<ModuleConfig>,
     allocator_config: Arc<ModuleConfig>,
+    isolator_config: Arc<ModuleConfig>,
     tx_to_llvm_workers: Sender<Box<dyn Any + Send>>,
 ) -> thread::JoinHandle<Result<CompiledModules, ()>> {
     let coordinator_send = tx_to_llvm_workers;
@@ -1140,6 +1155,7 @@ fn start_executing_work<B: ExtraBackendMethods>(
         regular_module_config: regular_config,
         metadata_module_config: metadata_config,
         allocator_module_config: allocator_config,
+        isolator_module_config: isolator_config,
         tm_factory: backend.target_machine_factory(tcx.sess, ol, backend_features),
         msvc_imps_needed: msvc_imps_needed(tcx),
         is_pe_coff: tcx.sess.target.is_like_windows,
@@ -1301,6 +1317,7 @@ fn start_executing_work<B: ExtraBackendMethods>(
         // through codegen and LLVM.
         let mut compiled_modules = vec![];
         let mut compiled_allocator_module = None;
+        let mut compiled_isolator_module = None;
         let mut needs_link = Vec::new();
         let mut needs_fat_lto = Vec::new();
         let mut needs_thin_lto = Vec::new();
@@ -1580,6 +1597,10 @@ fn start_executing_work<B: ExtraBackendMethods>(
                                     assert!(compiled_allocator_module.is_none());
                                     compiled_allocator_module = Some(compiled_module);
                                 }
+                                ModuleKind::Isolator => {
+                                    assert!(compiled_isolator_module.is_none());
+                                    compiled_isolator_module = Some(compiled_module);
+                                }
                                 ModuleKind::Metadata => bug!("Should be handled separately"),
                             }
                         }
@@ -1645,6 +1666,7 @@ fn start_executing_work<B: ExtraBackendMethods>(
         Ok(CompiledModules {
             modules: compiled_modules,
             allocator_module: compiled_allocator_module,
+            isolator_module: compiled_isolator_module,
         })
     })
     .expect("failed to spawn coordinator thread");
@@ -2011,6 +2033,7 @@ impl<B: ExtraBackendMethods> OngoingCodegen<B> {
 
                 modules: compiled_modules.modules,
                 allocator_module: compiled_modules.allocator_module,
+                isolator_module: compiled_modules.isolator_module,
                 metadata_module: self.metadata_module,
             },
             work_products,

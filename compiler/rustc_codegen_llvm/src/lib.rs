@@ -5,6 +5,8 @@
 //! This API is completely unstable and subject to change.
 
 #![allow(internal_features)]
+#![allow(unreachable_code)]
+#![allow(unused_variables)]
 #![feature(rustdoc_internals)]
 #![doc(rust_logo)]
 #![doc(html_root_url = "https://doc.rust-lang.org/nightly/nightly-rustc/")]

@@ -108,6 +108,7 @@ pub enum ModuleKind {
     Regular,
     Metadata,
     Allocator,
+    Isolator,
 }
 
 bitflags::bitflags! {
@@ -174,6 +175,7 @@ pub struct CrateInfo {
 pub struct CodegenResults {
     pub modules: Vec<CompiledModule>,
     pub allocator_module: Option<CompiledModule>,
+    pub isolator_module: Option<CompiledModule>,
     pub metadata_module: Option<CompiledModule>,
     pub metadata: rustc_metadata::EncodedMetadata,
     pub crate_info: CrateInfo,

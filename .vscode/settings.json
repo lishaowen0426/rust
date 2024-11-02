@@ -42,6 +42,7 @@
         "**/*.code-search": true,
         "compiler/rustc_codegen_gcc": true,
         "compiler/rustc_codegen_cranelift": true,
+        "tests/": true
     },
     "cmake.generator": "Ninja",
     "cmake.sourceDirectory": "${workspaceFolder}/src/llvm-project/llvm",

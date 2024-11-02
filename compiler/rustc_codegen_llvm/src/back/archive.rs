@@ -96,6 +96,7 @@ impl<'a> ArchiveBuilder for LlvmArchiveBuilder<'a> {
 
     /// Combine the provided files, rlibs, and native libraries into a single
     /// `Archive`.
+    #[instrument(level = "debug", name = "llvm_archive_build", skip(self))]
     fn build(mut self: Box<Self>, output: &Path) -> bool {
         match self.build_with_llvm(output) {
             Ok(any_members) => any_members,
@@ -349,6 +350,7 @@ fn get_llvm_object_symbols(
 }
 
 impl<'a> LlvmArchiveBuilder<'a> {
+    #[instrument(level = "debug", skip(self))]
     fn build_with_llvm(&mut self, output: &Path) -> io::Result<bool> {
         let kind = &*self.sess.target.archive_format;
         let kind = kind

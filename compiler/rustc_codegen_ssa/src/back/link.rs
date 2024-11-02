@@ -70,6 +70,7 @@ pub fn ensure_removed(dcx: &DiagCtxt, path: &Path) {
 
 /// Performs the linkage portion of the compilation phase. This will generate all
 /// of the requested outputs for this compilation session.
+#[instrument(level = "debug", skip_all)]
 pub fn link_binary<'a>(
     sess: &'a Session,
     archive_builder_builder: &dyn ArchiveBuilderBuilder,
@@ -302,6 +303,7 @@ pub fn each_linked_rlib(
 /// An rlib in its current incarnation is essentially a renamed .a file (with "dummy" object files).
 /// The rlib primarily contains the object file of the crate, but it also some of the object files
 /// from native libraries.
+#[instrument(level = "debug", skip_all)]
 fn link_rlib<'a>(
     sess: &'a Session,
     archive_builder_builder: &dyn ArchiveBuilderBuilder,
@@ -345,6 +347,14 @@ fn link_rlib<'a>(
 
         if let Some(dwarf_obj) = m.dwarf_object.as_ref() {
             ab.add_file(dwarf_obj);
+        }
+    }
+
+    {
+        //add isolator module to the archive
+        let obj = codegen_results.isolator_module.as_ref().and_then(|m| m.object.as_ref());
+        if let Some(obj) = obj {
+            ab.add_file(obj);
         }
     }
 
