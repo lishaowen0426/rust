@@ -23,3 +23,6 @@ channel ="nightly"
 [llvm]
 download-ci-llvm = false
 
+[target.x86_64-unknown-linux-gnu]
+llvm-libunwind = "in-tree"
+

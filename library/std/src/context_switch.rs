@@ -15,6 +15,7 @@ extern "C" {
 #[stable(feature = "isolate_domain", since = "1.0.0")]
 #[cfg_attr(all(not(bootstrap)), lang = "transmute_to_ref")]
 #[allow(missing_docs)]
+#[inline(never)]
 pub fn transmute_to_ref<'a, T>(p: *mut u8) -> &'a mut T {
     unsafe { &mut *(p as *mut T) }
 }
@@ -22,6 +23,7 @@ pub fn transmute_to_ref<'a, T>(p: *mut u8) -> &'a mut T {
 #[stable(feature = "isolate_domain", since = "1.0.0")]
 #[cfg_attr(all(not(bootstrap)), lang = "transmute_to_pointer")]
 #[allow(missing_docs)]
+#[inline(never)]
 pub fn transmute_to_pointer<'a, T>(r: &mut T) -> *mut u8 {
     (r as *mut T).cast()
 }
@@ -29,6 +31,7 @@ pub fn transmute_to_pointer<'a, T>(r: &mut T) -> *mut u8 {
 #[stable(feature = "isolate_domain", since = "1.0.0")]
 #[allow(missing_docs)]
 #[no_mangle]
+#[inline(never)]
 pub fn try_to_print() {
     println!("try_to_print");
 }

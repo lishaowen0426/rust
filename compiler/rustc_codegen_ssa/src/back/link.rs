@@ -2085,6 +2085,7 @@ fn add_rpath_args(
 /// to the linking process as a whole.
 /// Order-independent options may still override each other in order-dependent fashion,
 /// e.g `--foo=yes --foo=no` may be equivalent to `--foo=no`.
+#[instrument(level = "debug", skip_all)]
 fn linker_with_args<'a>(
     path: &Path,
     flavor: LinkerFlavor,
@@ -2096,6 +2097,10 @@ fn linker_with_args<'a>(
     codegen_results: &CodegenResults,
     self_contained_components: LinkSelfContainedComponents,
 ) -> Result<Command, ErrorGuaranteed> {
+    debug!(
+        "pre_link_args: {:?}\nlate_link_args: {:?}\nlate_link_args_dynamic:{:?}",
+        sess.target.pre_link_args, sess.target.late_link_args, sess.target.late_link_args_dynamic
+    );
     let self_contained_crt_objects = self_contained_components.is_crt_objects_enabled();
     let cmd = &mut *super::linker::get_linker(
         sess,
@@ -2105,6 +2110,10 @@ fn linker_with_args<'a>(
         &codegen_results.crate_info.target_cpu,
     );
     let link_output_kind = link_output_kind(sess, crate_type);
+
+    if sess.opts.unstable_opts.linker_verbose {
+        cmd.arg("-v");
+    }
 
     // ------------ Early order-dependent options ------------
 
