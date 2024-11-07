@@ -162,8 +162,17 @@ impl<'a> Parser<'a> {
             self.error_on_unconsumed_default(def, &kind);
             let span = lo.to(self.prev_token.span);
             let id = DUMMY_NODE_ID;
-            let item =
-                Item { ident, attrs, id, kind, vis, span, tokens: None, duplicated_to: None };
+            let item = Item {
+                ident,
+                attrs,
+                id,
+                kind,
+                vis,
+                span,
+                tokens: None,
+                duplicated_to: None,
+                is_duplicated: false,
+            };
             return Ok(Some(item));
         }
 
@@ -951,7 +960,17 @@ impl<'a> Parser<'a> {
                         _ => return self.error_bad_item_kind(span, &kind, "`trait`s or `impl`s"),
                     },
                 };
-                Some(P(Item { attrs, id, span, vis, ident, kind, tokens, duplicated_to: None }))
+                Some(P(Item {
+                    attrs,
+                    id,
+                    span,
+                    vis,
+                    ident,
+                    kind,
+                    tokens,
+                    duplicated_to: None,
+                    is_duplicated: false,
+                }))
             },
         ))
     }
@@ -1205,7 +1224,17 @@ impl<'a> Parser<'a> {
                         _ => return self.error_bad_item_kind(span, &kind, "`extern` blocks"),
                     },
                 };
-                Some(P(Item { attrs, id, span, vis, ident, kind, tokens, duplicated_to: None }))
+                Some(P(Item {
+                    attrs,
+                    id,
+                    span,
+                    vis,
+                    ident,
+                    kind,
+                    tokens,
+                    duplicated_to: None,
+                    is_duplicated: false,
+                }))
             },
         ))
     }

@@ -67,6 +67,7 @@ pub fn placeholder(
             kind: ast::ItemKind::MacCall(mac_placeholder()),
             tokens: None,
             duplicated_to: None,
+            is_duplicated: false,
         })]),
         AstFragmentKind::TraitItems => AstFragment::TraitItems(smallvec![P(ast::AssocItem {
             id,
@@ -77,6 +78,7 @@ pub fn placeholder(
             kind: ast::AssocItemKind::MacCall(mac_placeholder()),
             tokens: None,
             duplicated_to: None,
+            is_duplicated: false,
         })]),
         AstFragmentKind::ImplItems => AstFragment::ImplItems(smallvec![P(ast::AssocItem {
             id,
@@ -87,6 +89,7 @@ pub fn placeholder(
             kind: ast::AssocItemKind::MacCall(mac_placeholder()),
             tokens: None,
             duplicated_to: None,
+            is_duplicated: false,
         })]),
         AstFragmentKind::ForeignItems => {
             AstFragment::ForeignItems(smallvec![P(ast::ForeignItem {
@@ -98,6 +101,7 @@ pub fn placeholder(
                 kind: ast::ForeignItemKind::MacCall(mac_placeholder()),
                 tokens: None,
                 duplicated_to: None,
+                is_duplicated: false,
             })])
         }
         AstFragmentKind::Pat => AstFragment::Pat(P(ast::Pat {

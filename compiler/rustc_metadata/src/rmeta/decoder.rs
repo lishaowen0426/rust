@@ -448,7 +448,7 @@ impl<'a, 'tcx> SpanDecoder for DecodeContext<'a, 'tcx> {
 
         let cname = cdata.root.name();
         rustc_span::hygiene::decode_syntax_context(self, &cdata.hygiene_context, |_, id| {
-            debug!("SpecializedDecoder<SyntaxContext>: decoding {}", id);
+            //debug!("SpecializedDecoder<SyntaxContext>: decoding {}", id);
             cdata
                 .root
                 .syntax_contexts
@@ -614,10 +614,12 @@ impl<'a, 'tcx> Decodable<DecodeContext<'a, 'tcx>> for SpanData {
             }
             // tag is TAG_VALID_SPAN_FOREIGN, checked by `debug_assert` above
             let cnum = CrateNum::decode(decoder);
+            /*
             debug!(
                 "SpecializedDecoder<Span>::specialized_decode: loading source files from cnum {:?}",
                 cnum
             );
+            */
 
             let foreign_data = decoder.cdata().cstore.get_crate_data(cnum);
             foreign_data.imported_source_file(metadata_index, sess)
@@ -1479,7 +1481,7 @@ impl<'a, 'tcx> CrateMetadataRef<'a> {
 
     // Returns the path leading to the thing with this `id`.
     fn def_path(self, id: DefIndex) -> DefPath {
-        debug!("def_path(cnum={:?}, id={:?})", self.cnum, id);
+        //debug!("def_path(cnum={:?}, id={:?})", self.cnum, id);
         DefPath::make(self.cnum, id, |parent| self.def_key(parent))
     }
 
@@ -1585,11 +1587,13 @@ impl<'a, 'tcx> CrateMetadataRef<'a> {
         ];
 
         let try_to_translate_virtual_to_real = |name: &mut rustc_span::FileName| {
+            /*
             debug!(
                 "try_to_translate_virtual_to_real(name={:?}): \
                  virtual_rust_source_base_dir={:?}, real_rust_source_base_dir={:?}",
                 name, virtual_rust_source_base_dir, sess.opts.real_rust_source_base_dir,
             );
+            */
 
             for virtual_dir in virtual_rust_source_base_dir.iter().flatten() {
                 if let Some(real_dir) = &sess.opts.real_rust_source_base_dir {
@@ -1628,12 +1632,13 @@ impl<'a, 'tcx> CrateMetadataRef<'a> {
                                 } else {
                                     real_dir.join(rest)
                                 };
-
+                                /*
                                 debug!(
                                     "try_to_translate_virtual_to_real: `{}` -> `{}`",
                                     virtual_name.display(),
                                     new_path.display(),
                                 );
+                                */
                                 let new_name = rustc_span::RealFileName::Remapped {
                                     local_path: Some(new_path),
                                     virtual_name,
@@ -1695,7 +1700,7 @@ impl<'a, 'tcx> CrateMetadataRef<'a> {
                                 .and_then(|virtual_dir| virtual_name.strip_prefix(virtual_dir).ok())
                         }
                     };
-                    debug!(?relative_path, ?virtual_dir, "simulate_remapped_rust_src_base");
+                    //debug!(?relative_path, ?virtual_dir, "simulate_remapped_rust_src_base");
                     for subdir in ["library", "compiler"] {
                         if let Some(rest) = relative_path.and_then(|p| p.strip_prefix(subdir).ok())
                         {
@@ -1725,6 +1730,7 @@ impl<'a, 'tcx> CrateMetadataRef<'a> {
                     normalized_pos,
                     source_file_index,
                 );
+                /*
                 debug!(
                     "CrateMetaData::imported_source_files alloc \
                          source_file {:?} original (start_pos {:?} source_len {:?}) \
@@ -1735,6 +1741,7 @@ impl<'a, 'tcx> CrateMetadataRef<'a> {
                     local_version.start_pos,
                     local_version.source_len
                 );
+                */
 
                 ImportedSourceFile {
                     original_start_pos,
@@ -1773,7 +1780,7 @@ impl<'a, 'tcx> CrateMetadataRef<'a> {
 }
 
 impl CrateMetadata {
-    #[instrument(level = "debug", skip_all, name = "cratemetadata_new")]
+    #[instrument(level = "trace", skip_all, name = "cratemetadata_new")]
     pub(crate) fn new(
         sess: &Session,
         cstore: &CStore,

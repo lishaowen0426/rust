@@ -607,6 +607,7 @@ impl<'a> TraitDef<'a> {
                 })),
                 tokens: None,
                 duplicated_to: None,
+                is_duplicated: false,
             })
         });
 
@@ -1039,6 +1040,7 @@ impl<'a> MethodDef<'a> {
             })),
             tokens: None,
             duplicated_to: None,
+            is_duplicated: false,
         })
     }
 

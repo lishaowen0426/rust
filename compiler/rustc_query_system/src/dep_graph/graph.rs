@@ -836,7 +836,7 @@ impl<D: Deps> DepGraphData<D> {
     }
 
     /// Try to mark a dep-node which existed in the previous compilation session as green.
-    #[instrument(skip(self, qcx, prev_dep_node_index, frame), level = "debug")]
+    #[instrument(skip(self, qcx, prev_dep_node_index, frame), level = "trace")]
     fn try_mark_previous_green<Qcx: QueryContext<Deps = D>>(
         &self,
         qcx: Qcx,

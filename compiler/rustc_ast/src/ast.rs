@@ -2913,6 +2913,8 @@ pub struct Item<K = ItemKind> {
     pub tokens: Option<LazyAttrTokenStream>,
 
     pub duplicated_to: Option<DuplicateDest>, // this item is compiler-generated from another Item
+
+    pub is_duplicated: bool,
 }
 #[inline(always)]
 pub fn duplicate_suffix() -> &'static str {
@@ -2932,6 +2934,7 @@ impl Item {
                 let mut original_name = copied.ident.to_string();
                 original_name.push_str(&duplicate_suffix());
                 copied.ident = Ident::from_str(original_name.as_str());
+                copied.is_duplicated = true;
 
                 match &mut copied.kind {
                     ItemKind::Fn(fn_info) => {
@@ -3388,20 +3391,20 @@ mod size_asserts {
     use super::*;
     use rustc_data_structures::static_assert_size;
     // tidy-alphabetical-start
-    static_assert_size!(AssocItem, 104);
+    static_assert_size!(AssocItem, 112);
     static_assert_size!(AssocItemKind, 16);
     static_assert_size!(Attribute, 32);
     static_assert_size!(Block, 32);
     static_assert_size!(Expr, 72);
     static_assert_size!(ExprKind, 40);
     static_assert_size!(Fn, 160);
-    static_assert_size!(ForeignItem, 112);
+    static_assert_size!(ForeignItem, 120);
     static_assert_size!(ForeignItemKind, 24);
     static_assert_size!(GenericArg, 24);
     static_assert_size!(GenericBound, 88);
     static_assert_size!(Generics, 40);
     static_assert_size!(Impl, 136);
-    static_assert_size!(Item, 152);
+    static_assert_size!(Item, 160);
     static_assert_size!(ItemKind, 64);
     static_assert_size!(LitKind, 24);
     static_assert_size!(Local, 72);

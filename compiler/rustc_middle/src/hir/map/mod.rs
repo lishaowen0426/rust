@@ -1321,6 +1321,7 @@ impl<'hir> Visitor<'hir> for ItemCollector<'hir> {
         self.tcx.hir()
     }
 
+    #[instrument(level = "debug", skip(self), name = "item_collector_visit_item")]
     fn visit_item(&mut self, item: &'hir Item<'hir>) {
         if associated_body(Node::Item(item)).is_some() {
             self.body_owners.push(item.owner_id.def_id);

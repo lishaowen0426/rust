@@ -214,7 +214,17 @@ impl<'a> MutVisitor for EntryPointCleaner<'a> {
                         .chain(iter::once(allow_dead_code))
                         .collect();
 
-                    ast::Item { id, ident, attrs, kind, vis, span, tokens, duplicated_to: None }
+                    ast::Item {
+                        id,
+                        ident,
+                        attrs,
+                        kind,
+                        vis,
+                        span,
+                        tokens,
+                        duplicated_to: None,
+                        is_duplicated: false,
+                    }
                 })
             }
             EntryPointType::None | EntryPointType::OtherMain => item,
@@ -359,6 +369,7 @@ fn mk_main(cx: &mut TestCtxt<'_>) -> P<ast::Item> {
         span: sp,
         tokens: None,
         duplicated_to: None,
+        is_duplicated: false,
     });
 
     // Integrate the new item into existing module structures.

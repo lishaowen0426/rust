@@ -262,8 +262,7 @@ pub fn collect_crate_mono_items(
 
     let roots =
         tcx.sess.time("monomorphization_collector_root_collections", || collect_roots(tcx, mode));
-
-    debug!("building mono item graph, beginning at roots");
+    debug!("building mono item graph, beginning at roots: {:?}", roots);
 
     let mut visited = MTLock::new(FxHashSet::default());
     let mut usage_map = MTLock::new(UsageMap::new());
@@ -295,7 +294,6 @@ pub fn collect_crate_mono_items(
 // start monomorphizing from.
 #[instrument(skip(tcx, mode), level = "debug")]
 fn collect_roots(tcx: TyCtxt<'_>, mode: MonoItemCollectionMode) -> Vec<MonoItem<'_>> {
-    debug!("collecting roots");
     let mut roots = Vec::new();
 
     {
@@ -305,7 +303,8 @@ fn collect_roots(tcx: TyCtxt<'_>, mode: MonoItemCollectionMode) -> Vec<MonoItem<
 
         let mut collector = RootCollector { tcx, mode, entry_fn, output: &mut roots };
 
-        let crate_items = tcx.hir_crate_items(());
+        let crate_items = tcx.hir_crate_items(()); // ModuleItems contain generic decls
+        debug!(crate_items = ?crate_items);
 
         for id in crate_items.items() {
             collector.process_item(id);
@@ -1301,8 +1300,6 @@ impl<'v> RootCollector<'_, 'v> {
     #[instrument(skip(self), level = "debug")]
     fn push_if_root(&mut self, def_id: LocalDefId) {
         if self.is_root(def_id) {
-            debug!("found root");
-
             let instance = Instance::mono(self.tcx, def_id.to_def_id());
             self.output.push(create_fn_mono_item(self.tcx, instance, DUMMY_SP));
         }

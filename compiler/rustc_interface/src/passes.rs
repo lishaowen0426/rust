@@ -89,6 +89,7 @@ fn inject_crate_key(sess: &Session, krate: &mut Crate) {
             vis,
             tokens: None,
             duplicated_to: None,
+            is_duplicated: false,
         };
         krate.items.push(P(item));
     } else {

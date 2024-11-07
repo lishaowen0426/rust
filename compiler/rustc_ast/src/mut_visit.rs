@@ -1635,6 +1635,7 @@ impl DummyAstNode for Item {
             kind: ItemKind::ExternCrate(None),
             tokens: Default::default(),
             duplicated_to: None,
+            is_duplicated: false,
         }
     }
 }

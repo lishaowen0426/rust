@@ -49,6 +49,16 @@ pub enum MonoItem<'tcx> {
 }
 
 impl<'tcx> MonoItem<'tcx> {
+    pub fn is_duplicated_for_isolation(&self, tcx: TyCtxt<'tcx>) -> bool {
+        let (_, dset) = tcx.duplicate_map(());
+        match *self {
+            MonoItem::Fn(instance) if let InstanceDef::Item(id) = instance.def => {
+                id.is_local() && dset.contains(&(id.as_local().unwrap()))
+            }
+            _ => false,
+        }
+    }
+
     /// Returns `true` if the mono item is user-defined (i.e. not compiler-generated, like shims).
     pub fn is_user_defined(&self) -> bool {
         match *self {
