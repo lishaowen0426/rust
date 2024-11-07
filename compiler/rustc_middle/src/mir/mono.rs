@@ -258,6 +258,7 @@ pub struct CodegenUnit<'tcx> {
     /// True if this is CGU is used to hold code coverage information for dead code,
     /// false otherwise.
     is_code_coverage_dead_code_cgu: bool,
+    is_isolate_cgu: bool,
 }
 
 /// Auxiliary info about a `MonoItem`.
@@ -301,13 +302,14 @@ pub enum Visibility {
 
 impl<'tcx> CodegenUnit<'tcx> {
     #[inline]
-    pub fn new(name: Symbol) -> CodegenUnit<'tcx> {
+    pub fn new(name: Symbol, is_isolate_cgu: bool) -> CodegenUnit<'tcx> {
         CodegenUnit {
             name,
             items: Default::default(),
             size_estimate: 0,
             primary: false,
             is_code_coverage_dead_code_cgu: false,
+            is_isolate_cgu,
         }
     }
 
@@ -441,12 +443,14 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a>> for CodegenUnit<'tcx> {
         let CodegenUnit {
             ref items,
             name,
+            is_isolate_cgu,
             // The size estimate is not relevant to the hash
             size_estimate: _,
             primary: _,
             is_code_coverage_dead_code_cgu,
         } = *self;
 
+        is_isolate_cgu.hash_stable(hcx, hasher);
         name.hash_stable(hcx, hasher);
         is_code_coverage_dead_code_cgu.hash_stable(hcx, hasher);
 
