@@ -677,7 +677,6 @@ pub fn codegen_crate<B: ExtraBackendMethods>(
         ongoing_codegen.wait_for_signal_to_codegen_item();
         ongoing_codegen.check_for_errors(tcx.sess);
 
-        // These modules are generally cheap and won't throw off scheduling.
         let cost = 0;
         submit_codegened_module_to_llvm(
             &backend,
