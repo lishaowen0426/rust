@@ -111,6 +111,7 @@ pub enum ModuleKind {
     Metadata,
     Allocator,
     Isolator,
+    CompilerDuplicated,
 }
 
 bitflags::bitflags! {
@@ -176,6 +177,7 @@ pub struct CrateInfo {
 #[derive(Encodable, Decodable)]
 pub struct CodegenResults {
     pub modules: Vec<CompiledModule>,
+    pub duplicate_modules: Vec<CompiledModule>,
     pub allocator_module: Option<CompiledModule>,
     pub isolator_module: Option<CompiledModule>,
     pub metadata_module: Option<CompiledModule>,

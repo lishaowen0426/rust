@@ -313,6 +313,10 @@ impl<'tcx> CodegenUnit<'tcx> {
         }
     }
 
+    pub fn is_isolate_cgu(&self) -> bool {
+        self.is_isolate_cgu
+    }
+
     pub fn name(&self) -> Symbol {
         self.name
     }

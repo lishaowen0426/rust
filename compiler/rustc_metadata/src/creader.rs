@@ -388,6 +388,7 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
         None
     }
 
+    #[instrument(level = "info", skip(self, host_lib, root, lib, private_dep))]
     fn register_crate(
         &mut self,
         host_lib: Option<Library>,
@@ -400,7 +401,12 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
         let _prof_timer = self.sess.prof.generic_activity("metadata_register_crate");
 
         let Library { source, metadata } = lib;
+        info!(crate_source=?source);
         let crate_root = metadata.get_root();
+        info!("isolate cgu name:");
+        for sym in crate_root.decode_isolate_cgu_name(&metadata) {
+            info!(symbol=?sym)
+        }
         let host_hash = host_lib.as_ref().map(|lib| lib.metadata.get_root().hash());
 
         let private_dep = self
@@ -547,6 +553,7 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
         }
     }
 
+    #[instrument(level = "debug", skip(self, dep))]
     fn maybe_resolve_crate<'b>(
         &'b mut self,
         name: Symbol,
@@ -616,7 +623,9 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
         }
     }
 
+    #[instrument(level = "info", name = "crate_locator_load", skip_all)]
     fn load(&self, locator: &mut CrateLocator<'_>) -> Result<Option<LoadResult>, CrateError> {
+        info!(crate_name = ?locator.crate_name , exact_paths = ?locator.exact_paths);
         let Some(library) = locator.maybe_load_library_crate()? else {
             return Ok(None);
         };

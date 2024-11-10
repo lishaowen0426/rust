@@ -304,7 +304,7 @@ pub fn each_linked_rlib(
 /// An rlib in its current incarnation is essentially a renamed .a file (with "dummy" object files).
 /// The rlib primarily contains the object file of the crate, but it also some of the object files
 /// from native libraries.
-#[instrument(level = "debug", skip_all)]
+#[instrument(level = "info", skip_all)]
 fn link_rlib<'a>(
     sess: &'a Session,
     archive_builder_builder: &dyn ArchiveBuilderBuilder,
@@ -324,6 +324,7 @@ fn link_rlib<'a>(
                 codegen_results.metadata.raw_data(),
             );
             let metadata = emit_wrapper_file(sess, &metadata, tmpdir, METADATA_FILENAME);
+            debug!(metadata=?metadata);
             match metadata_position {
                 MetadataPosition::First => {
                     // Most of the time metadata in rlib files is wrapped in a "dummy" object
@@ -356,6 +357,13 @@ fn link_rlib<'a>(
         let obj = codegen_results.isolator_module.as_ref().and_then(|m| m.object.as_ref());
         if let Some(obj) = obj {
             ab.add_file(obj);
+        }
+
+        for m in &codegen_results.duplicate_modules {
+            if let Some(obj) = m.object.as_ref() {
+                info!("duplicate module:{:?}", obj);
+                ab.add_file(obj);
+            }
         }
     }
 
@@ -1546,7 +1554,7 @@ fn get_object_file_path(sess: &Session, name: &str, self_contained: bool) -> Pat
     PathBuf::from(name)
 }
 
-#[instrument(level = "debug", skip(sess))]
+#[instrument(level = "info", skip(sess))]
 fn exec_linker(
     sess: &Session,
     cmd: &Command,
@@ -1989,6 +1997,15 @@ fn add_local_crate_regular_objects(cmd: &mut dyn Linker, codegen_results: &Codeg
     }
 }
 
+/// Add compiler synthesized(e.g., duplicated)code for isolation
+#[instrument(level = "debug", skip_all)]
+fn add_local_crate_duplicated_objects(cmd: &mut dyn Linker, codegen_results: &CodegenResults) {
+    for obj in codegen_results.duplicate_modules.iter().filter_map(|m| m.object.as_ref()) {
+        debug!(obj=?obj);
+        cmd.add_object(obj);
+    }
+}
+
 /// Add object files for allocator code linked once for the whole crate tree.
 fn add_local_crate_allocator_objects(cmd: &mut dyn Linker, codegen_results: &CodegenResults) {
     if let Some(obj) = codegen_results.allocator_module.as_ref().and_then(|m| m.object.as_ref()) {
@@ -2176,6 +2193,7 @@ fn linker_with_args<'a>(
     // in this DAG so far because they can only depend on other native libraries
     // and such dependencies are also required to be specified.
     add_local_crate_regular_objects(cmd, codegen_results);
+    add_local_crate_duplicated_objects(cmd, codegen_results);
     add_local_crate_metadata_objects(cmd, crate_type, codegen_results);
     add_local_crate_isolator_objects(cmd, codegen_results);
     add_local_crate_allocator_objects(cmd, codegen_results);

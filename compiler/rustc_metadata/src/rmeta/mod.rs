@@ -259,6 +259,7 @@ pub(crate) struct CrateRoot {
     crate_deps: LazyArray<CrateDep>,
     dylib_dependency_formats: LazyArray<Option<LinkagePreference>>,
     lib_features: LazyArray<(Symbol, FeatureStability)>,
+    isolate_cgu_names: LazyArray<Symbol>,
     stability_implications: LazyArray<(Symbol, Symbol)>,
     lang_items: LazyArray<(DefIndex, LangItem)>,
     lang_items_missing: LazyArray<LangItem>,

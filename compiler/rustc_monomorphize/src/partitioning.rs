@@ -761,7 +761,7 @@ fn fallback_cgu_name(name_builder: &mut CodegenUnitNameBuilder<'_>) -> Symbol {
     name_builder.build_cgu_name(LOCAL_CRATE, &["fallback"], Some("cgu"))
 }
 
-fn isolate_cgu_name(name_builder: &mut CodegenUnitNameBuilder<'_>) -> Symbol {
+pub fn isolate_cgu_name(name_builder: &mut CodegenUnitNameBuilder<'_>) -> Symbol {
     name_builder.build_cgu_name(LOCAL_CRATE, &["isolate"], Some("isolate-cgu"))
 }
 

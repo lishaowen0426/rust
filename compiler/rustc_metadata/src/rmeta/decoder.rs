@@ -1,5 +1,5 @@
 // Decoding metadata from a single crate's metadata
-
+#![allow(dead_code)]
 use crate::creader::CStore;
 use crate::rmeta::table::IsDefault;
 use crate::rmeta::*;
@@ -108,6 +108,7 @@ pub(crate) struct CrateMetadata {
     host_hash: Option<Svh>,
     /// The crate was used non-speculatively.
     used: bool,
+    isolate_cgu_names: Vec<Symbol>,
 
     /// Additional data used for decoding `HygieneData` (e.g. `SyntaxContext`
     /// and `ExpnId`).
@@ -924,6 +925,13 @@ impl CrateRoot {
         metadata: &'a MetadataBlob,
     ) -> impl ExactSizeIterator<Item = CrateDep> + Captures<'a> {
         self.crate_deps.decode(metadata)
+    }
+
+    pub fn decode_isolate_cgu_name<'a>(
+        &self,
+        metadata: &'a MetadataBlob,
+    ) -> impl ExactSizeIterator<Item = Symbol> + Captures<'a> {
+        self.isolate_cgu_names.decode(metadata)
     }
 }
 
@@ -1806,6 +1814,7 @@ impl CrateMetadata {
         // Pre-decode the DefPathHash->DefIndex table. This is a cheap operation
         // that does not copy any data. It just does some data verification.
         let def_path_hash_map = root.def_path_hash_map.decode(&blob);
+        let isolate_cgu_names = root.decode_isolate_cgu_name(&blob).collect();
 
         let mut cdata = CrateMetadata {
             blob,
@@ -1828,6 +1837,7 @@ impl CrateMetadata {
             extern_crate: None,
             hygiene_context: Default::default(),
             def_key_cache: Default::default(),
+            isolate_cgu_names,
         };
 
         // Need `CrateMetadataRef` to decode `DefId`s in simplified types.

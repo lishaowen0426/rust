@@ -1632,6 +1632,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
     }
 
     /// Entry point to crate resolution.
+    #[instrument(level = "info", skip_all)]
     pub fn resolve_crate(&mut self, krate: &Crate) {
         self.tcx.sess.time("resolve_crate", || {
             self.tcx.sess.time("finalize_imports", || self.finalize_imports());

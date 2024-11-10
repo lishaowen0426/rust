@@ -248,8 +248,8 @@ pub(crate) struct CrateLocator<'a> {
     cfg_version: &'static str,
 
     // Immutable per-search configuration.
-    crate_name: Symbol,
-    exact_paths: Vec<CanonicalizedPath>,
+    pub crate_name: Symbol,
+    pub exact_paths: Vec<CanonicalizedPath>,
     pub hash: Option<Svh>,
     extra_filename: Option<&'a str>,
     pub target: &'a Target,
@@ -377,6 +377,7 @@ impl<'a> CrateLocator<'a> {
         self.find_library_crate("", &mut seen_paths)
     }
 
+    #[instrument(level = "info", skip(self, seen_paths))]
     fn find_library_crate(
         &mut self,
         extra_prefix: &str,
@@ -466,6 +467,7 @@ impl<'a> CrateLocator<'a> {
         let mut libraries = FxHashMap::default();
         for (_hash, (rlibs, rmetas, dylibs)) in candidates {
             if let Some((svh, lib)) = self.extract_lib(rlibs, rmetas, dylibs)? {
+                info!("library crate source: {:?}", lib.source);
                 libraries.insert(svh, lib);
             }
         }

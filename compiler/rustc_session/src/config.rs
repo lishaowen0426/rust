@@ -878,6 +878,7 @@ pub const RUST_CGU_EXT: &str = "rcgu";
 pub const DWARF_OBJECT_EXT: &str = "dwo";
 
 impl OutputFilenames {
+    #[instrument(level = "info", name = "outputfilenames_new")]
     pub fn new(
         out_directory: PathBuf,
         out_crate_name: String,

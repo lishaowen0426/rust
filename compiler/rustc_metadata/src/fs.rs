@@ -22,6 +22,7 @@ pub const METADATA_FILENAME: &str = "lib.rmeta";
 /// building an `.rlib` (stomping over one another), or writing an `.rmeta` into a
 /// directory being searched for `extern crate` (observing an incomplete file).
 /// The returned path is the temporary file containing the complete metadata.
+#[instrument(level = "debug", skip_all)]
 pub fn emit_wrapper_file(
     sess: &Session,
     data: &[u8],
@@ -29,6 +30,7 @@ pub fn emit_wrapper_file(
     name: &str,
 ) -> PathBuf {
     let out_filename = tmpdir.as_ref().join(name);
+    debug!(out_filename=?out_filename);
     let result = fs::write(&out_filename, data);
 
     if let Err(err) = result {
@@ -38,6 +40,7 @@ pub fn emit_wrapper_file(
     out_filename
 }
 
+#[instrument(level = "info", skip_all)]
 pub fn encode_and_write_metadata(tcx: TyCtxt<'_>) -> (EncodedMetadata, bool) {
     let out_filename = filename_for_metadata(tcx.sess, tcx.output_filenames(()));
     // To avoid races with another rustc process scanning the output directory,

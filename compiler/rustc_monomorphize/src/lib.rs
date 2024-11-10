@@ -20,6 +20,8 @@ mod partitioning;
 mod polymorphize;
 mod util;
 
+pub use partitioning::isolate_cgu_name;
+
 rustc_fluent_macro::fluent_messages! { "../messages.ftl" }
 
 fn custom_coerce_unsize_info<'tcx>(

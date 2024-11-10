@@ -135,7 +135,11 @@ pub fn compile_codegen_unit(tcx: TyCtxt<'_>, cgu_name: Symbol) -> (ModuleCodegen
         ModuleCodegen {
             name: cgu_name.to_string(),
             module_llvm: llvm_module,
-            kind: ModuleKind::Regular,
+            kind: if cgu.is_isolate_cgu() {
+                ModuleKind::CompilerDuplicated
+            } else {
+                ModuleKind::Regular
+            },
         }
     }
 

@@ -49,6 +49,7 @@ fn load_metadata_with(
 }
 
 impl MetadataLoader for DefaultMetadataLoader {
+    #[instrument(level = "debug", skip(self))]
     fn get_rlib_metadata(&self, target: &Target, path: &Path) -> Result<OwnedSlice, String> {
         load_metadata_with(path, |data| {
             let archive = object::read::archive::ArchiveFile::parse(&*data)

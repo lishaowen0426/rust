@@ -13,6 +13,7 @@ use rustc_hir_pretty::id_to_string;
 use rustc_middle::middle::dependency_format::Linkage;
 use rustc_middle::middle::exported_symbols::metadata_symbol_name;
 use rustc_middle::mir::interpret;
+use rustc_middle::mir::mono::CodegenUnitNameBuilder;
 use rustc_middle::query::LocalCrate;
 use rustc_middle::query::Providers;
 use rustc_middle::traits::specialization_graph;
@@ -20,6 +21,7 @@ use rustc_middle::ty::codec::TyEncoder;
 use rustc_middle::ty::fast_reject::{self, TreatParams};
 use rustc_middle::ty::{AssocItemContainer, SymbolName};
 use rustc_middle::util::common::to_readable_str;
+use rustc_monomorphize::isolate_cgu_name;
 use rustc_serialize::{opaque, Decodable, Decoder, Encodable, Encoder};
 use rustc_session::config::{CrateType, OptLevel};
 use rustc_span::hygiene::HygieneEncodeContext;
@@ -602,6 +604,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
             stat!("dep", || (self.encode_crate_deps(), self.encode_dylib_dependency_formats()));
 
         let lib_features = stat!("lib-features", || self.encode_lib_features());
+        let isolate_cgu_names = stat!("isolate-cgu-names", || self.encode_isolate_cgu_names());
 
         let stability_implications =
             stat!("stability-implications", || self.encode_stability_implications());
@@ -733,6 +736,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
                 expn_data,
                 expn_hashes,
                 def_path_hash_map,
+                isolate_cgu_names,
             })
         });
 
@@ -1917,6 +1921,12 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
         self.lazy_array(lib_features.to_sorted_vec())
     }
 
+    fn encode_isolate_cgu_names(&mut self) -> LazyArray<Symbol> {
+        empty_proc_macro!(self);
+        let cgu_name_builder = &mut CodegenUnitNameBuilder::new(self.tcx);
+        self.lazy_array(vec![isolate_cgu_name(cgu_name_builder)])
+    }
+
     fn encode_stability_implications(&mut self) -> LazyArray<(Symbol, Symbol)> {
         empty_proc_macro!(self);
         let tcx = self.tcx;
@@ -2196,6 +2206,7 @@ impl<D: Decoder> Decodable<D> for EncodedMetadata {
     }
 }
 
+#[instrument(level = "debug", skip(tcx))]
 pub fn encode_metadata(tcx: TyCtxt<'_>, path: &Path) {
     let _prof_timer = tcx.prof.verbose_generic_activity("generate_crate_metadata");
 

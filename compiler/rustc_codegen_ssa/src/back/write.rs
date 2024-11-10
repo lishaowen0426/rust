@@ -147,7 +147,7 @@ impl ModuleConfig {
 
         let should_emit_obj = sess.opts.output_types.contains_key(&OutputType::Exe)
             || match kind {
-                ModuleKind::Regular | ModuleKind::Isolator => {
+                ModuleKind::Regular | ModuleKind::Isolator | ModuleKind::CompilerDuplicated => {
                     sess.opts.output_types.contains_key(&OutputType::Object)
                 }
                 ModuleKind::Allocator => false,
@@ -385,7 +385,7 @@ impl<B: WriteBackendMethods> CodegenContext<B> {
 
     pub fn config(&self, kind: ModuleKind) -> &ModuleConfig {
         match kind {
-            ModuleKind::Regular => &self.regular_module_config,
+            ModuleKind::Regular | ModuleKind::CompilerDuplicated => &self.regular_module_config,
             ModuleKind::Metadata => &self.metadata_module_config,
             ModuleKind::Allocator => &self.allocator_module_config,
             ModuleKind::Isolator => &self.isolator_module_config,
@@ -432,6 +432,7 @@ fn generate_lto_work<B: ExtraBackendMethods>(
 
 pub struct CompiledModules {
     pub modules: Vec<CompiledModule>,
+    pub duplicate_modules: Vec<CompiledModule>,
     pub allocator_module: Option<CompiledModule>,
     pub isolator_module: Option<CompiledModule>,
 }
@@ -1316,6 +1317,7 @@ fn start_executing_work<B: ExtraBackendMethods>(
         // This is where we collect codegen units that have gone all the way
         // through codegen and LLVM.
         let mut compiled_modules = vec![];
+        let mut duplicate_modules = vec![];
         let mut compiled_allocator_module = None;
         let mut compiled_isolator_module = None;
         let mut needs_link = Vec::new();
@@ -1593,6 +1595,9 @@ fn start_executing_work<B: ExtraBackendMethods>(
                                     assert!(needs_link.is_empty());
                                     compiled_modules.push(compiled_module);
                                 }
+                                ModuleKind::CompilerDuplicated => {
+                                    duplicate_modules.push(compiled_module);
+                                }
                                 ModuleKind::Allocator => {
                                     assert!(compiled_allocator_module.is_none());
                                     compiled_allocator_module = Some(compiled_module);
@@ -1665,6 +1670,7 @@ fn start_executing_work<B: ExtraBackendMethods>(
 
         Ok(CompiledModules {
             modules: compiled_modules,
+            duplicate_modules: duplicate_modules,
             allocator_module: compiled_allocator_module,
             isolator_module: compiled_isolator_module,
         })
@@ -2032,6 +2038,7 @@ impl<B: ExtraBackendMethods> OngoingCodegen<B> {
                 crate_info: self.crate_info,
 
                 modules: compiled_modules.modules,
+                duplicate_modules: compiled_modules.duplicate_modules,
                 allocator_module: compiled_modules.allocator_module,
                 isolator_module: compiled_modules.isolator_module,
                 metadata_module: self.metadata_module,
