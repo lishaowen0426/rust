@@ -359,12 +359,14 @@ fn link_rlib<'a>(
             ab.add_file(obj);
         }
 
+        /*
         for m in &codegen_results.duplicate_modules {
             if let Some(obj) = m.object.as_ref() {
                 info!("duplicate module:{:?}", obj);
                 ab.add_file(obj);
             }
         }
+        */
     }
 
     match flavor {
@@ -2005,6 +2007,8 @@ fn add_local_crate_duplicated_objects(cmd: &mut dyn Linker, codegen_results: &Co
         cmd.add_object(obj);
     }
 }
+
+fn add_isolate_objects(cmd: &mut dyn Linker) {}
 
 /// Add object files for allocator code linked once for the whole crate tree.
 fn add_local_crate_allocator_objects(cmd: &mut dyn Linker, codegen_results: &CodegenResults) {

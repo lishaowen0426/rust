@@ -23,7 +23,7 @@ use rustc_middle::ty::{AssocItemContainer, SymbolName};
 use rustc_middle::util::common::to_readable_str;
 use rustc_monomorphize::isolate_cgu_name;
 use rustc_serialize::{opaque, Decodable, Decoder, Encodable, Encoder};
-use rustc_session::config::{CrateType, OptLevel};
+use rustc_session::config::{CrateType, OptLevel, OutputType};
 use rustc_span::hygiene::HygieneEncodeContext;
 use rustc_span::symbol::sym;
 use rustc_span::{
@@ -1921,12 +1921,18 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
         self.lazy_array(lib_features.to_sorted_vec())
     }
 
+    #[instrument(level = "info", skip_all)]
     fn encode_isolate_cgu_names(&mut self) -> LazyArray<Symbol> {
         empty_proc_macro!(self);
         let mut syms = vec![];
         if self.tcx.sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate) {
             let cgu_name_builder = &mut CodegenUnitNameBuilder::new(self.tcx);
-            syms.push(isolate_cgu_name(cgu_name_builder));
+            let name = isolate_cgu_name(cgu_name_builder);
+            let name =
+                self.tcx.output_filenames(()).temp_path(OutputType::Object, Some(name.as_str()));
+            let name = Symbol::intern(name.to_str().unwrap());
+            info!("rmete encoded isolate cgu_name:{:?}", name);
+            syms.push(name);
         };
         self.lazy_array(syms)
     }

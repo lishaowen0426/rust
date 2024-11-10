@@ -171,6 +171,10 @@ impl CStore {
         })
     }
 
+    pub fn insert_isolate_object_path(&mut self, isolate: PathBuf) {
+        self.isolates.push(isolate)
+    }
+
     fn intern_stable_crate_id(&mut self, root: &CrateRoot) -> Result<CrateNum, CrateError> {
         assert_eq!(self.metas.len(), self.stable_crate_ids.len());
         let num = CrateNum::new(self.stable_crate_ids.len());
@@ -461,8 +465,14 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
                     error!(source=?source);
                     return Err(CrateError::WrongLibraryType);
                 }
+
                 for sym in crate_root.decode_isolate_cgu_name(&metadata) {
-                    let _ = extract_object_from_ar(source.rlib.as_ref().unwrap().0.as_path(), sym);
+                    //     let isolate_path =
+                    //         extract_object_from_ar(source.rlib.as_ref().unwrap().0.as_path(), sym)?;
+                    let mut isolate_path = PathBuf::new();
+                    isolate_path.push(sym.as_str());
+                    info!("insert isolate_path into cstore: {:?}", isolate_path);
+                    self.cstore.insert_isolate_object_path(isolate_path);
                 }
             }
         }
