@@ -927,6 +927,8 @@ pub(crate) enum CrateError {
     DlSym(String, String),
     LocatorCombined(Box<CombinedLocatorError>),
     NotFound(Symbol),
+    ArError(String),
+    WrongLibraryType,
 }
 
 enum MetadataError<'a> {
@@ -951,6 +953,12 @@ impl CrateError {
     pub(crate) fn report(self, sess: &Session, span: Span, missing_core: bool) {
         let dcx = sess.dcx();
         match self {
+            CrateError::WrongLibraryType => {
+                dcx.emit_err(errors::WrongLibraryType { span });
+            }
+            CrateError::ArError(err) => {
+                dcx.emit_err(errors::ArError { span, err });
+            }
             CrateError::NonAsciiName(crate_name) => {
                 dcx.emit_err(errors::NonAsciiName { span, crate_name });
             }

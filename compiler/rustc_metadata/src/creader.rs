@@ -1,5 +1,5 @@
 //! Validates all used crates and extern libraries and loads their metadata
-
+#![allow(dead_code)]
 use crate::errors;
 use crate::locator::{CrateError, CrateLocator, CratePaths};
 use crate::rmeta::{CrateDep, CrateMetadata, CrateNumMap, CrateRoot, MetadataBlob};
@@ -17,7 +17,8 @@ use rustc_hir::def_id::{CrateNum, LocalDefId, StableCrateId, StableCrateIdMap, L
 use rustc_hir::definitions::Definitions;
 use rustc_index::IndexVec;
 use rustc_middle::ty::TyCtxt;
-use rustc_session::config::{self, CrateType, ExternLocation};
+use rustc_session::config::CrateType;
+use rustc_session::config::{self, ExternLocation};
 use rustc_session::cstore::{CrateDepKind, CrateSource, ExternCrate, ExternCrateSource};
 use rustc_session::lint;
 use rustc_session::output::validate_crate_name;
@@ -30,7 +31,9 @@ use rustc_target::spec::{PanicStrategy, Target, TargetTriple};
 use proc_macro::bridge::client::ProcMacro;
 use std::error::Error;
 use std::ops::Fn;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::str::from_utf8_unchecked;
 use std::time::Duration;
 use std::{cmp, iter};
 
@@ -66,6 +69,10 @@ pub struct CStore {
 
     /// Unused externs of the crate
     unused_externs: Vec<Symbol>,
+
+    ///path to isolate objects extracted from ar
+    ///these will be passed to the linker
+    isolates: Vec<PathBuf>,
 }
 
 impl std::fmt::Debug for CStore {
@@ -308,6 +315,41 @@ impl CStore {
             has_alloc_error_handler: false,
             stable_crate_ids,
             unused_externs: Vec::new(),
+            isolates: Vec::new(),
+        }
+    }
+}
+
+fn extract_object_from_ar(archive: &Path, member: Symbol) -> Result<PathBuf, CrateError> {
+    let list_members = Command::new("ar")
+        .arg("-t")
+        .arg(archive)
+        .output()
+        .map_err(|e| CrateError::ArError(e.kind().to_string()))?;
+    info!(list_members =?list_members);
+    unsafe {
+        let target = from_utf8_unchecked(&list_members.stdout)
+            .lines()
+            .find(|&l| l.contains(member.as_str()));
+        if let Some(t) = target {
+            info!(target=?t);
+            let _ = Command::new("ar")
+                .arg("-x")
+                .arg(archive)
+                .arg(t)
+                .output()
+                .map_err(|e| CrateError::ArError(e.kind().to_string()))?;
+
+            let parent_dir = archive
+                .parent()
+                .ok_or(CrateError::ArError(format!("archive has wrong path:{:?}", archive)))?;
+            let mut p = PathBuf::new();
+            p.push(parent_dir);
+            p.push(t);
+            info!(extract_to=?p);
+            return Ok(p);
+        } else {
+            return Err(CrateError::ArError(format!("{:?} not found", member)));
         }
     }
 }
@@ -403,9 +445,26 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
         let Library { source, metadata } = lib;
         info!(crate_source=?source);
         let crate_root = metadata.get_root();
-        info!("isolate cgu name:");
-        for sym in crate_root.decode_isolate_cgu_name(&metadata) {
-            info!(symbol=?sym)
+        {
+            info!("isolate cgu name:");
+            for sym in crate_root.decode_isolate_cgu_name(&metadata) {
+                info!(symbol=?sym)
+            }
+
+            if self.tcx.crate_types().contains(&CrateType::Executable) {
+                if crate_root.decode_isolate_cgu_name(&metadata).len() > 0 && source.rlib.is_none()
+                {
+                    error!("isolate cgu name:");
+                    for sym in crate_root.decode_isolate_cgu_name(&metadata) {
+                        error!(symbol=?sym)
+                    }
+                    error!(source=?source);
+                    return Err(CrateError::WrongLibraryType);
+                }
+                for sym in crate_root.decode_isolate_cgu_name(&metadata) {
+                    let _ = extract_object_from_ar(source.rlib.as_ref().unwrap().0.as_path(), sym);
+                }
+            }
         }
         let host_hash = host_lib.as_ref().map(|lib| lib.metadata.get_root().hash());
 

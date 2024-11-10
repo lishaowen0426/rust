@@ -471,6 +471,20 @@ pub struct NonAsciiName {
 }
 
 #[derive(Diagnostic)]
+#[diag(metadata_ar_error)]
+pub struct ArError {
+    #[primary_span]
+    pub span: Span,
+    pub err: String,
+}
+#[derive(Diagnostic)]
+#[diag(metadata_wrong_library_type)]
+pub struct WrongLibraryType {
+    #[primary_span]
+    pub span: Span,
+}
+
+#[derive(Diagnostic)]
 #[diag(metadata_extern_location_not_exist)]
 pub struct ExternLocationNotExist<'a> {
     #[primary_span]

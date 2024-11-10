@@ -57,6 +57,12 @@ metadata_empty_renaming_target =
 metadata_extern_location_not_exist =
     extern location for {$crate_name} does not exist: {$location}
 
+metadata_ar_error = 
+    extract isolate member from archive failed
+
+metadata_wrong_library_type =  
+    wrong library type(not rlib?)
+
 metadata_extern_location_not_file =
     extern location for {$crate_name} is not a file: {$location}
 

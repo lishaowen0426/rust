@@ -1923,8 +1923,12 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
 
     fn encode_isolate_cgu_names(&mut self) -> LazyArray<Symbol> {
         empty_proc_macro!(self);
-        let cgu_name_builder = &mut CodegenUnitNameBuilder::new(self.tcx);
-        self.lazy_array(vec![isolate_cgu_name(cgu_name_builder)])
+        let mut syms = vec![];
+        if self.tcx.sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate) {
+            let cgu_name_builder = &mut CodegenUnitNameBuilder::new(self.tcx);
+            syms.push(isolate_cgu_name(cgu_name_builder));
+        };
+        self.lazy_array(syms)
     }
 
     fn encode_stability_implications(&mut self) -> LazyArray<(Symbol, Symbol)> {

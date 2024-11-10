@@ -317,6 +317,14 @@ where
         codegen_units.insert(cgu_name, CodegenUnit::new(cgu_name, false));
     }
 
+    if cx.tcx.sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate) {
+        if isolate_cgu.is_none() {
+            // ensure the file is there if isolate is enabled even with no symbols actually needed
+            let cgu_name = isolate_cgu_name(cgu_name_builder);
+            isolate_cgu = Some(CodegenUnit::new(cgu_name, true));
+        }
+    }
+
     let mut codegen_units: Vec<_> = codegen_units.into_values().collect();
     codegen_units.sort_by(|a, b| a.name().as_str().cmp(b.name().as_str()));
 
