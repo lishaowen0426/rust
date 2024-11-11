@@ -169,6 +169,7 @@ pub struct CrateInfo {
     pub used_libraries: Vec<NativeLib>,
     pub used_crate_source: UnordMap<CrateNum, Lrc<CrateSource>>,
     pub used_crates: Vec<CrateNum>,
+    pub used_crates_isolates: UnordMap<CrateNum, PathBuf>,
     pub dependency_formats: Lrc<Dependencies>,
     pub windows_subsystem: Option<String>,
     pub natvis_debugger_visualizers: BTreeSet<DebuggerVisualizerFile>,

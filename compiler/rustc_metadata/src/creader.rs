@@ -10,6 +10,7 @@ use rustc_data_structures::fx::FxHashSet;
 use rustc_data_structures::owned_slice::OwnedSlice;
 use rustc_data_structures::svh::Svh;
 use rustc_data_structures::sync::{self, FreezeReadGuard, FreezeWriteGuard};
+use rustc_data_structures::unord::UnordMap;
 use rustc_errors::DiagCtxt;
 use rustc_expand::base::SyntaxExtension;
 use rustc_fs_util::try_canonicalize;
@@ -72,7 +73,7 @@ pub struct CStore {
 
     ///path to isolate objects extracted from ar
     ///these will be passed to the linker
-    isolates: Vec<PathBuf>,
+    isolates: UnordMap<CrateNum, PathBuf>,
 }
 
 impl std::fmt::Debug for CStore {
@@ -171,8 +172,13 @@ impl CStore {
         })
     }
 
-    pub fn insert_isolate_object_path(&mut self, isolate: PathBuf) {
-        self.isolates.push(isolate)
+    pub fn insert_isolate_object_path(&mut self, cn: CrateNum, isolate: PathBuf) {
+        if self.isolates.insert(cn, isolate.clone()).is_some() {
+            panic!("{}", format!("crate {:?} isolate:{:?} exists", cn, isolate));
+        }
+    }
+    pub fn get_isolate_object_path(&self, cn: CrateNum) -> Option<PathBuf> {
+        self.isolates.get(&cn).map(std::clone::Clone::clone)
     }
 
     fn intern_stable_crate_id(&mut self, root: &CrateRoot) -> Result<CrateNum, CrateError> {
@@ -319,7 +325,7 @@ impl CStore {
             has_alloc_error_handler: false,
             stable_crate_ids,
             unused_externs: Vec::new(),
-            isolates: Vec::new(),
+            isolates: Default::default(),
         }
     }
 }
@@ -454,27 +460,6 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
             for sym in crate_root.decode_isolate_cgu_name(&metadata) {
                 info!(symbol=?sym)
             }
-
-            if self.tcx.crate_types().contains(&CrateType::Executable) {
-                if crate_root.decode_isolate_cgu_name(&metadata).len() > 0 && source.rlib.is_none()
-                {
-                    error!("isolate cgu name:");
-                    for sym in crate_root.decode_isolate_cgu_name(&metadata) {
-                        error!(symbol=?sym)
-                    }
-                    error!(source=?source);
-                    return Err(CrateError::WrongLibraryType);
-                }
-
-                for sym in crate_root.decode_isolate_cgu_name(&metadata) {
-                    //     let isolate_path =
-                    //         extract_object_from_ar(source.rlib.as_ref().unwrap().0.as_path(), sym)?;
-                    let mut isolate_path = PathBuf::new();
-                    isolate_path.push(sym.as_str());
-                    info!("insert isolate_path into cstore: {:?}", isolate_path);
-                    self.cstore.insert_isolate_object_path(isolate_path);
-                }
-            }
         }
         let host_hash = host_lib.as_ref().map(|lib| lib.metadata.get_root().hash());
 
@@ -495,6 +480,26 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
             cnum,
             private_dep
         );
+
+        if self.tcx.crate_types().contains(&CrateType::Executable) {
+            if crate_root.decode_isolate_cgu_name(&metadata).len() > 0 && source.rlib.is_none() {
+                error!("isolate cgu name:");
+                for sym in crate_root.decode_isolate_cgu_name(&metadata) {
+                    error!(symbol=?sym)
+                }
+                error!(source=?source);
+                return Err(CrateError::WrongLibraryType);
+            }
+
+            for sym in crate_root.decode_isolate_cgu_name(&metadata) {
+                //     let isolate_path =
+                //         extract_object_from_ar(source.rlib.as_ref().unwrap().0.as_path(), sym)?;
+                let mut isolate_path = PathBuf::new();
+                isolate_path.push(sym.as_str());
+                info!("insert isolate_path into cstore: {:?}", isolate_path);
+                self.cstore.insert_isolate_object_path(cnum, isolate_path);
+            }
+        }
 
         // Maintain a reference to the top most crate.
         // Stash paths for top-most crate locally if necessary.

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use rustc_arena::TypedArena;
 use rustc_ast::CRATE_NODE_ID;
 use rustc_data_structures::fx::{FxIndexMap, FxIndexSet};
@@ -2008,7 +2009,7 @@ fn add_local_crate_duplicated_objects(cmd: &mut dyn Linker, codegen_results: &Co
     }
 }
 
-fn add_isolate_objects(cmd: &mut dyn Linker) {}
+fn add_isolate_objects(_cmd: &mut dyn Linker) {}
 
 /// Add object files for allocator code linked once for the whole crate tree.
 fn add_local_crate_allocator_objects(cmd: &mut dyn Linker, codegen_results: &CodegenResults) {
@@ -2197,7 +2198,12 @@ fn linker_with_args<'a>(
     // in this DAG so far because they can only depend on other native libraries
     // and such dependencies are also required to be specified.
     add_local_crate_regular_objects(cmd, codegen_results);
-    add_local_crate_duplicated_objects(cmd, codegen_results);
+
+    // linker_with_args is only called with executable(or dylib), so it technically has no duplicated object file
+    //add_local_crate_duplicated_objects(cmd, codegen_results);
+    // it's dependencies duplicated object files will be add later
+    // check add_upstream_rust_crates
+
     add_local_crate_metadata_objects(cmd, crate_type, codegen_results);
     add_local_crate_isolator_objects(cmd, codegen_results);
     add_local_crate_allocator_objects(cmd, codegen_results);
@@ -2819,6 +2825,7 @@ fn rehome_sysroot_lib_dir<'a>(sess: &'a Session, lib_dir: &Path) -> PathBuf {
 // Note, however, that if we're not doing LTO we can just pass the rlib
 // blindly to the linker (fast) because it's fine if it's not actually
 // included as we're at the end of the dependency chain.
+#[instrument(level = "info", skip_all)]
 fn add_static_crate<'a>(
     cmd: &mut dyn Linker,
     sess: &'a Session,
@@ -2839,6 +2846,14 @@ fn add_static_crate<'a>(
             fix_windows_verbatim_for_gcc(path)
         };
         cmd.link_staticlib_by_path(&rlib_path, false);
+
+        {
+            //check if the rlib has isolate object file
+            if let Some(isolate) = codegen_results.crate_info.used_crates_isolates.get(&cnum) {
+                info!("link isolate: {:?}", isolate);
+                cmd.link_staticlib_by_path(&isolate, false);
+            }
+        }
     };
 
     if !are_upstream_rust_objects_already_included(sess)

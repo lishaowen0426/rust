@@ -15,7 +15,6 @@ use crate::mir::operand::OperandValue;
 use crate::mir::place::PlaceRef;
 use crate::traits::*;
 use crate::{CachedModuleCodegen, CompiledModule, CrateInfo, MemFlags, ModuleCodegen, ModuleKind};
-
 use rustc_ast::expand::allocator::{global_fn_name, AllocatorKind, ALLOCATOR_METHODS};
 use rustc_attr as attr;
 use rustc_data_structures::fx::{FxHashMap, FxIndexSet};
@@ -25,6 +24,7 @@ use rustc_data_structures::unord::UnordMap;
 use rustc_hir as hir;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::lang_items::LangItem;
+use rustc_metadata::creader::CStore;
 use rustc_metadata::EncodedMetadata;
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrs;
 use rustc_middle::middle::debugger_visualizer::{DebuggerVisualizerFile, DebuggerVisualizerType};
@@ -829,6 +829,7 @@ pub fn codegen_crate<B: ExtraBackendMethods>(
 }
 
 impl CrateInfo {
+    #[instrument(level = "info", skip_all, name = "crateinfo_new")]
     pub fn new(tcx: TyCtxt<'_>, target_cpu: String) -> CrateInfo {
         let crate_types = tcx.crate_types().to_vec();
         let exported_symbols = crate_types
@@ -876,8 +877,46 @@ impl CrateInfo {
         // `compiler_builtins` are always placed last to ensure that they're linked correctly.
         used_crates.extend(compiler_builtins);
 
+        {
+            //for debug
+
+            info!("{:?} used crates", local_crate_name);
+            for c in used_crates.iter() {
+                info!(crate_name = ?(tcx.crate_name(*c)));
+            }
+
+            info!("native libs");
+            tcx.native_libraries(LOCAL_CRATE).iter().for_each(|nl| info!(native_lib=?nl));
+        }
+
         let crates = tcx.crates(());
         let n_crates = crates.len();
+
+        let used_crates_isolates = {
+            //create used_crate_isolates
+            let mut used_crates_isolates = UnordMap::with_capacity(n_crates);
+            let isolates = tcx.isolate_crates(());
+            let cstore = CStore::from_tcx(tcx);
+
+            for &cnum in isolates.iter() {
+                if let Some(pb) = cstore.get_isolate_object_path(cnum) {
+                    if let Some(_) = used_crates_isolates.insert(cnum, pb.clone()) {
+                        panic!(
+                            "{}",
+                            format!(
+                                "crate {:?}'s isolate has been inserted: {:?}",
+                                tcx.crate_name(cnum),
+                                pb
+                            )
+                        );
+                    }
+                }
+            }
+
+            used_crates_isolates
+        };
+        info!(used_crates_isolates = ?used_crates_isolates);
+
         let mut info = CrateInfo {
             target_cpu,
             crate_types,
@@ -892,6 +931,7 @@ impl CrateInfo {
             crate_name: UnordMap::with_capacity(n_crates),
             used_crates,
             used_crate_source: UnordMap::with_capacity(n_crates),
+            used_crates_isolates,
             dependency_formats: tcx.dependency_formats(()).clone(),
             windows_subsystem,
             natvis_debugger_visualizers: Default::default(),
