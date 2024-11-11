@@ -182,6 +182,9 @@ pub trait Linker {
         search_paths: &SearchPaths,
     );
     fn link_staticlib_by_path(&mut self, path: &Path, whole_archive: bool);
+    fn link_staticlib_by_path_and_isolate(&mut self, _path: &Path, _isolate: bool) {
+        unimplemented!();
+    }
     fn include_path(&mut self, path: &Path);
     fn framework_path(&mut self, path: &Path);
     fn output_filename(&mut self, path: &Path);
@@ -519,6 +522,16 @@ impl<'a> Linker for GccLinker<'a> {
             self.linker_arg("--whole-archive");
             self.linker_arg(path);
             self.linker_arg("--no-whole-archive");
+        }
+    }
+
+    fn link_staticlib_by_path_and_isolate(&mut self, path: &Path, isolate: bool) {
+        if !isolate {
+            self.link_staticlib_by_path(path, false);
+        } else {
+            self.hint_static();
+            self.linker_arg("--isolate");
+            self.linker_arg(path);
         }
     }
 

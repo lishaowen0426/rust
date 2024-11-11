@@ -2851,7 +2851,7 @@ fn add_static_crate<'a>(
             //check if the rlib has isolate object file
             if let Some(isolate) = codegen_results.crate_info.used_crates_isolates.get(&cnum) {
                 info!("link isolate: {:?}", isolate);
-                cmd.link_staticlib_by_path(&isolate, false);
+                cmd.link_staticlib_by_path_and_isolate(&isolate, true);
             }
         }
     };
