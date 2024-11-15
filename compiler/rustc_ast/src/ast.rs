@@ -2872,12 +2872,12 @@ impl Drop for DuplicateDest {
 }
 
 impl DuplicateDest {
-    pub fn new(p: &P<Item>) -> Self {
-        Self { src: &(**p) as *const Item as usize }
+    pub fn new<K>(p: &P<Item<K>>) -> Self {
+        Self { src: &(**p) as *const Item<K> as usize }
     }
 
-    pub fn to_item(&self) -> &Item {
-        unsafe { (self.src as *const Item).as_ref().unwrap() }
+    pub fn to_item<K>(&self) -> &Item<K> {
+        unsafe { (self.src as *const Item<K>).as_ref().unwrap() }
     }
 }
 
@@ -2920,6 +2920,14 @@ pub struct Item<K = ItemKind> {
 pub fn duplicate_suffix() -> &'static str {
     "_duplicated_by_sbd"
 }
+impl AssocItem {
+    pub fn duplicated_to(&self) -> Option<&Self> {
+        match self.duplicated_to.as_ref() {
+            None => None,
+            Some(src) => Some(src.to_item()),
+        }
+    }
+}
 
 impl Item {
     /// Return the span that encompasses the attributes.
@@ -2927,8 +2935,58 @@ impl Item {
         self.attrs.iter().fold(self.span, |acc, attr| acc.to(attr.span))
     }
 
-    pub fn duplicate_fn(&self) -> Option<P<Self>> {
-        match &self.kind {
+    pub fn duplicate_item(&mut self, result: &mut ThinVec<P<Item>>, param: Param) {
+        match &mut self.kind {
+            ItemKind::Fn(_) => {
+                let mut copied = self.clone();
+                let mut original_name = copied.ident.to_string();
+                original_name.push_str(&duplicate_suffix());
+                copied.ident = Ident::from_str(original_name.as_str());
+                copied.is_duplicated = true;
+
+                match &mut copied.kind {
+                    ItemKind::Fn(fn_ptr) => {
+                        fn_ptr.sig.decl.inputs.insert(0usize, param.clone());
+                    }
+                    _ => {}
+                }
+
+                let p_copied = P(copied);
+                self.duplicated_to = Some(DuplicateDest::new(&p_copied));
+
+                result.push(p_copied);
+            }
+            ItemKind::Impl(imp) => {
+                let mut stores: ThinVec<P<AssocItem>> = ThinVec::new();
+                for i in imp.items.iter_mut() {
+                    match i.kind {
+                        AssocItemKind::Fn(_) => {
+                            let mut copied = i.clone();
+                            let mut original_name = copied.ident.to_string();
+                            original_name.push_str(&duplicate_suffix());
+                            copied.ident = Ident::from_str(original_name.as_str());
+                            copied.is_duplicated = true;
+
+                            match &mut copied.kind {
+                                AssocItemKind::Fn(fn_ptr) => {
+                                    fn_ptr.sig.decl.inputs.insert(0usize, param.clone());
+                                }
+                                _ => {}
+                            }
+                            i.duplicated_to = Some(DuplicateDest::new(&copied));
+                            stores.push(copied);
+                        }
+                        _ => {}
+                    }
+                }
+                imp.items.append(&mut stores);
+            }
+
+            _ => {}
+        }
+    }
+    pub fn duplicate_fn(&mut self) -> Option<P<Self>> {
+        match &mut self.kind {
             ItemKind::Fn(_) => {
                 let mut copied = self.clone();
                 let mut original_name = copied.ident.to_string();
@@ -2949,6 +3007,7 @@ impl Item {
 
                 Some(P(copied))
             }
+
             _ => None,
         }
     }

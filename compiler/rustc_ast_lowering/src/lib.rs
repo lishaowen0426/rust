@@ -437,27 +437,60 @@ fn duplicate_map<'tcx>(
     let mut duplicate_set = LocalDefIdSet::default();
     let (resolver, krate) = &*tcx.resolver_for_lowering(()).borrow();
     for item in krate.items.iter() {
-        if let Some(duplicate_to) = item.duplicated_to() {
-            debug!(
-                "duplicate from {:?}/{:?} to {:?}/{:?}",
-                item.id,
-                resolver.node_id_to_def_id[&item.id],
-                duplicate_to.id,
-                resolver.node_id_to_def_id[&duplicate_to.id]
-            );
-            if duplicate_map
-                .insert(
-                    resolver.node_id_to_def_id[&item.id],
-                    resolver.node_id_to_def_id[&duplicate_to.id],
-                )
-                .is_some()
-            {
-                panic!("an item has been duplicated more than once");
-            }
+        match &item.kind {
+            ItemKind::Fn(_) => {
+                if let Some(duplicate_to) = item.duplicated_to() {
+                    debug!(
+                        "duplicate from {:?}/{:?} to {:?}/{:?}",
+                        item.id,
+                        resolver.node_id_to_def_id[&item.id],
+                        duplicate_to.id,
+                        resolver.node_id_to_def_id[&duplicate_to.id]
+                    );
+                    if duplicate_map
+                        .insert(
+                            resolver.node_id_to_def_id[&item.id],
+                            resolver.node_id_to_def_id[&duplicate_to.id],
+                        )
+                        .is_some()
+                    {
+                        panic!("an item has been duplicated more than once");
+                    }
 
-            if !duplicate_set.insert(resolver.node_id_to_def_id[&duplicate_to.id]) {
-                panic!("an item has been duplicated more than once(already in the set)");
+                    if !duplicate_set.insert(resolver.node_id_to_def_id[&duplicate_to.id]) {
+                        panic!("an item has been duplicated more than once(already in the set)");
+                    }
+                }
             }
+            ItemKind::Impl(imp) => {
+                for i in imp.items.iter() {
+                    if let Some(duplicate_to) = i.duplicated_to() {
+                        debug!(
+                            "duplicate from {:?}/{:?} to {:?}/{:?}",
+                            item.id,
+                            resolver.node_id_to_def_id[&i.id],
+                            duplicate_to.id,
+                            resolver.node_id_to_def_id[&duplicate_to.id]
+                        );
+                        if duplicate_map
+                            .insert(
+                                resolver.node_id_to_def_id[&i.id],
+                                resolver.node_id_to_def_id[&duplicate_to.id],
+                            )
+                            .is_some()
+                        {
+                            panic!("an item has been duplicated more than once");
+                        }
+
+                        if !duplicate_set.insert(resolver.node_id_to_def_id[&duplicate_to.id]) {
+                            panic!(
+                                "an item has been duplicated more than once(already in the set)"
+                            );
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
     }
     (&*tcx.arena.alloc(duplicate_map), &*tcx.arena.alloc(duplicate_set))

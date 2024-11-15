@@ -6,7 +6,7 @@ use crate::interface::{Compiler, Result};
 use crate::{errors, passes, util};
 
 use rustc_ast::ptr::P;
-use rustc_ast::{self as ast, ast::DuplicateDest, Crate, Item, ItemKind, Param};
+use rustc_ast::{self as ast, AssocItemKind, Crate, Item, ItemKind, Param};
 use rustc_codegen_ssa::traits::CodegenBackend;
 use rustc_codegen_ssa::CodegenResults;
 use rustc_data_structures::steal::Steal;
@@ -139,7 +139,17 @@ impl<'tcx> Queries<'tcx> {
         match &mut item.kind {
             ItemKind::Fn(fn_ptr) => {
                 assert!(!fn_ptr.sig.decl.has_self(), "cannot duplicate method(with self)");
-                fn_ptr.sig.decl.inputs.insert(0usize, param);
+                fn_ptr.sig.decl.inputs.insert(0usize, param.clone());
+            }
+            ItemKind::Impl(imp) => {
+                for i in imp.items.iter_mut() {
+                    match &mut i.kind {
+                        AssocItemKind::Fn(fn_ptr) => {
+                            fn_ptr.sig.decl.inputs.insert(0usize, param.clone());
+                        }
+                        _ => {}
+                    }
+                }
             }
             _ => {}
         }
@@ -149,14 +159,9 @@ impl<'tcx> Queries<'tcx> {
         let mut duplicated_fns = ThinVec::new();
         let param = self.mk_param_for_duplication();
         for item in krate.items.iter_mut() {
-            if let Some(mut dup) = item.duplicate_fn() {
-                self.adjust_duplicated_fn_param(&mut dup, param.clone());
-                item.duplicated_to = Some(DuplicateDest::new(&dup));
-                //debug!("duplicated item:{:?}", dup);
-
-                duplicated_fns.push(dup);
-            }
+            item.duplicate_item(&mut duplicated_fns, param.clone());
         }
+
         krate.items.append(&mut duplicated_fns);
     }
 
