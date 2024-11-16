@@ -26,6 +26,7 @@ pub fn provide(providers: &mut Providers) {
     providers.mir_shims = make_shim;
 }
 
+#[instrument(level = "debug", name = "make_shim", skip_all)]
 fn make_shim<'tcx>(tcx: TyCtxt<'tcx>, instance: ty::InstanceDef<'tcx>) -> Body<'tcx> {
     debug!("make_shim({:?})", instance);
 

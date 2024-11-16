@@ -9,6 +9,7 @@ use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_hir::def_id::{DefId, LocalDefId};
 use rustc_index::IndexVec;
 use rustc_middle::mir::visit::{MutVisitor, PlaceContext};
+use rustc_middle::mir::CastKind;
 use rustc_middle::mir::{
     AggregateKind, BasicBlock, BasicBlockData, BasicBlocks, Body, BorrowKind, CallSource, Const,
     ConstOperand, HasLocalDecls, Local, LocalDecl, Location, MutBorrowKind, Operand, Place,
@@ -16,7 +17,9 @@ use rustc_middle::mir::{
     UnwindAction,
 };
 use rustc_middle::ty::GenericArgs;
-use rustc_middle::ty::{self, GenericParamDefKind, Ty, TyCtxt, TypeVisitableExt, UintTy};
+use rustc_middle::ty::{
+    self, adjustment::PointerCoercion, GenericParamDefKind, Ty, TyCtxt, TypeVisitableExt, UintTy,
+};
 use rustc_span::source_map::dummy_spanned;
 use rustc_target::abi::FieldIdx;
 
@@ -27,8 +30,7 @@ pub struct DomainSwitch;
 
 impl<'tcx> MirPass<'tcx> for DomainSwitch {
     fn is_enabled(&self, sess: &rustc_session::Session) -> bool {
-        // sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate)
-        false
+        sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate)
     }
     #[instrument(level = "debug", skip_all)]
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
@@ -209,10 +211,57 @@ fn create_cast_to_ptr<'tcx>(
     tcx: TyCtxt<'tcx>,
     tuple: Local,
     trans_to_ptr: DefId,
+    duplicate_to: LocalDefId,
     body: &mut Body<'tcx>,
     target: usize,
-) -> (Local, BasicBlockData<'tcx>) {
+) -> (Local, Local, BasicBlockData<'tcx>) {
     let body_span = body.span;
+
+    let (callee_ptr, fn_ptr_cast, callee_ptr_cast) = {
+        let callee_sig = tcx.fn_sig(duplicate_to.to_def_id()).instantiate_identity();
+
+        let generic_args =
+            GenericArgs::for_item(tcx, duplicate_to.to_def_id(), |param, _| match param.kind {
+                GenericParamDefKind::Lifetime => tcx.lifetimes.re_erased.into(),
+                _ => tcx.mk_param_from_def(param),
+            });
+        let func_ty = Ty::new_fn_def(tcx, duplicate_to.to_def_id(), generic_args);
+        //create callee fn ptr
+        let fn_ptr =
+            body.local_decls.push(LocalDecl::new(Ty::new_fn_ptr(tcx, callee_sig), body_span));
+        let callee_ptr = body
+            .local_decls
+            .push(LocalDecl::new(Ty::new_mut_ptr(tcx, Ty::new_uint(tcx, UintTy::U8)), body_span));
+        let fn_ptr_cast = Statement {
+            source_info: SourceInfo::outermost(body_span),
+            kind: StatementKind::Assign(Box::new((
+                Place::from(fn_ptr),
+                Rvalue::Cast(
+                    CastKind::PointerCoercion(PointerCoercion::ReifyFnPointer),
+                    Operand::Constant(Box::new(ConstOperand {
+                        span: body_span,
+                        user_ty: None,
+                        const_: Const::zero_sized(func_ty),
+                    })),
+                    Ty::new_fn_ptr(tcx, callee_sig),
+                ),
+            ))),
+        };
+
+        let callee_ptr_cast = Statement {
+            source_info: SourceInfo::outermost(body_span),
+            kind: StatementKind::Assign(Box::new((
+                Place::from(callee_ptr),
+                Rvalue::Cast(
+                    CastKind::FnPtrToPtr,
+                    Operand::Move(Place::from(fn_ptr)),
+                    Ty::new_mut_ptr(tcx, Ty::new_uint(tcx, UintTy::U8)),
+                ),
+            ))),
+        };
+        (callee_ptr, fn_ptr_cast, callee_ptr_cast)
+    };
+
     let tuple_ty = body.local_decls[tuple].ty;
     let tuple_fields = body.args_iter().map(|loc| Operand::Copy(Place::from(loc))).collect();
 
@@ -254,7 +303,7 @@ fn create_cast_to_ptr<'tcx>(
     let func = Operand::function_handle(tcx, trans_to_ptr, inst_args, body_span);
 
     let cast_block = BasicBlockData {
-        statements: vec![tuple_init_stmt, tuple_cast_stmt],
+        statements: vec![fn_ptr_cast, callee_ptr_cast, tuple_init_stmt, tuple_cast_stmt],
         terminator: Some(Terminator {
             source_info: SourceInfo::outermost(body_span),
             kind: TerminatorKind::Call {
@@ -269,7 +318,7 @@ fn create_cast_to_ptr<'tcx>(
         }),
         is_cleanup: false,
     };
-    (tuple_ptr, cast_block)
+    (tuple_ptr, callee_ptr, cast_block)
 }
 
 fn create_dup_call_blk<'tcx>(
@@ -334,8 +383,8 @@ impl DomainSwitch {
         let tuple_loc = body.local_decls.push(LocalDecl::new(tuple_ty, body_span));
 
         let trans_to_ptr = tcx.lang_items().transmute_to_pointer().unwrap();
-        let (tuple_ptr, cast_block) =
-            create_cast_to_ptr(tcx, tuple_loc, trans_to_ptr, body, 1usize);
+        let (tuple_ptr, callee_ptr, cast_block) =
+            create_cast_to_ptr(tcx, tuple_loc, trans_to_ptr, duplicate_to, body, 1usize);
         debug!("cast_block:{:?}", cast_block);
         let (dup_ret, call_block) =
             create_dup_call_blk(tcx, duplicate_from, duplicate_to, tuple_ptr, body, 2usize);

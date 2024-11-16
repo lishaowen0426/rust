@@ -20,6 +20,7 @@
 #![allow(unused_mut)]
 pub use crate::format::*;
 pub use crate::util::parser::ExprPrecedence;
+use rustc_span::sym::{Rust, C};
 pub use rustc_span::AttrId;
 use std::fmt::{Error, Formatter};
 pub use GenericArgs::*;
@@ -2935,9 +2936,14 @@ impl Item {
         self.attrs.iter().fold(self.span, |acc, attr| acc.to(attr.span))
     }
 
+    #[instrument(level = "debug", skip_all)]
     pub fn duplicate_item(&mut self, result: &mut ThinVec<P<Item>>, param: Param) {
         match &mut self.kind {
-            ItemKind::Fn(_) => {
+            ItemKind::Fn(f) => {
+                if !f.is_c_or_rust() {
+                    return;
+                }
+
                 let mut copied = self.clone();
                 let mut original_name = copied.ident.to_string();
                 original_name.push_str(&duplicate_suffix());
@@ -2959,8 +2965,11 @@ impl Item {
             ItemKind::Impl(imp) => {
                 let mut stores: ThinVec<P<AssocItem>> = ThinVec::new();
                 for i in imp.items.iter_mut() {
-                    match i.kind {
-                        AssocItemKind::Fn(_) => {
+                    match &i.kind {
+                        AssocItemKind::Fn(f) => {
+                            if !f.is_c_or_rust() {
+                                continue;
+                            }
                             let mut copied = i.clone();
                             let mut original_name = copied.ident.to_string();
                             original_name.push_str(&duplicate_suffix());
@@ -3068,6 +3077,17 @@ impl Extern {
             Some(name) => Extern::Explicit(name, span),
             None => Extern::Implicit(span),
         }
+    }
+    pub fn is_c_or_rust(&self) -> bool {
+        match *self {
+            Self::Explicit(s, _) => {
+                if s.symbol != C && s.symbol != Rust {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+        return true;
     }
 }
 
@@ -3183,6 +3203,12 @@ pub struct Fn {
     pub generics: Generics,
     pub sig: FnSig,
     pub body: Option<P<Block>>,
+}
+
+impl Fn {
+    pub fn is_c_or_rust(&self) -> bool {
+        self.sig.header.ext.is_c_or_rust()
+    }
 }
 
 #[derive(Clone, Encodable, Decodable, Debug)]

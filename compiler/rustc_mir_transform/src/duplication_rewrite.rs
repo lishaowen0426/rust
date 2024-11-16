@@ -23,8 +23,7 @@ pub struct DuplicationRewrite;
 
 impl<'tcx> MirPass<'tcx> for DuplicationRewrite {
     fn is_enabled(&self, sess: &rustc_session::Session) -> bool {
-        //sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate)
-        false
+        sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate)
     }
 
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
