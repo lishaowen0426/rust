@@ -2,13 +2,15 @@
 //!
 #![stable(feature = "rust1", since = "1.0.0")]
 
+use libc::c_void;
+
 #[link(name = "context_switch")]
 extern "C" {
     #[cfg(target_arch = "x86_64")]
     #[stable(feature = "isolate_domain", since = "1.0.0")]
     #[cfg_attr(all(not(bootstrap)), lang = "context_switch")]
     #[allow(missing_docs)]
-    pub fn context_switch(param: *mut u8, fp: *mut u8, next_stack: *mut u8);
+    pub fn context_switch(param: *mut c_void, fp: *mut c_void, next_stack: *mut c_void);
 
 }
 

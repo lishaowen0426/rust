@@ -4,6 +4,7 @@ use std::path::PathBuf;
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
+    /*
     {
         println!("cargo::rerun-if-changed=ContextSwitch.s");
         let out_dir = env::var("OUT_DIR").unwrap();
@@ -14,6 +15,21 @@ fn main() {
         println!("cargo::rustc-link-search={}", path.to_str().unwrap());
         println!("cargo::rustc-link-lib=context_switch");
         cc::Build::new().file("ContextSwitch.s").out_dir(path).compile("context_switch");
+    }
+    */
+    {
+        println!("cargo::rerun-if-changed=context_switch.c");
+        let out_dir = env::var("OUT_DIR").unwrap();
+        let mut path = PathBuf::new();
+        path.push(out_dir);
+        path.push("context_switch_sbd"); //OUT_DIR/context_switch_sbd is our output dir
+        println!("cargo::rustc-link-search={}", path.to_str().unwrap());
+        println!("cargo::rustc-link-lib=context_switch");
+        cc::Build::new()
+            .compiler("/usr/bin/gcc")
+            .file("context_switch.c")
+            .out_dir(path)
+            .compile("context_switch");
     }
 
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").expect("CARGO_CFG_TARGET_ARCH was not set");
