@@ -2,6 +2,7 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 #![allow(unused_mut)]
+
 use crate::duplication_rewrite::create_tuple_parameter_ty;
 use crate::MirPass;
 use rustc_ast::Mutability;
@@ -16,10 +17,10 @@ use rustc_middle::mir::{
     ProjectionElem, Rvalue, SourceInfo, Statement, StatementKind, Terminator, TerminatorKind,
     UnwindAction,
 };
-use rustc_middle::ty::GenericArgs;
 use rustc_middle::ty::{
     self, adjustment::PointerCoercion, GenericParamDefKind, Ty, TyCtxt, TypeVisitableExt, UintTy,
 };
+use rustc_middle::ty::{GenericArg, GenericArgKind, GenericArgs};
 use rustc_span::source_map::dummy_spanned;
 use rustc_target::abi::FieldIdx;
 
@@ -30,8 +31,7 @@ pub struct DomainSwitch;
 
 impl<'tcx> MirPass<'tcx> for DomainSwitch {
     fn is_enabled(&self, sess: &rustc_session::Session) -> bool {
-        //sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate)
-        false
+        sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate)
     }
     #[instrument(level = "debug", skip_all)]
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
@@ -265,19 +265,179 @@ impl DomainSwitch {
         let mut new_bb: IndexVec<BasicBlock, BasicBlockData<'tcx>> = IndexVec::new();
 
         let tuple_ty = create_tuple_parameter_ty(tcx, body, false);
-        debug!("tuple typ: {:?}", tuple_ty);
+        let return_field_idx = body.arg_count;
+        let return_field_ty = Ty::new_mut_ptr(tcx, body.local_decls[RETURN_LOCAL].ty);
         let tuple_loc = body.local_decls.push(LocalDecl::new(tuple_ty, body_span));
 
-        let trans_to_ptr = tcx.lang_items().transmute_to_pointer().unwrap();
-        let (tuple_ptr, callee_ptr, cast_block) =
-            create_cast_to_ptr(tcx, tuple_loc, trans_to_ptr, duplicate_to, body, 1usize);
-        debug!("cast_block:{:?}", cast_block);
-        //let (dup_ret, call_block) =
-        //    create_dup_call_blk(tcx, duplicate_from, duplicate_to, tuple_ptr, body, 2usize);
-        let (dup_ret, call_block) =
-            create_context_switch_call_blk(tcx, tuple_ptr, callee_ptr, body, 2usize);
-        new_bb.push(cast_block);
-        new_bb.push(call_block);
+        let tuple_field_place = |idx: usize, ty: Ty<'tcx>| {
+            let mut tuple = Place::from(tuple_loc);
+            tuple.projection =
+                tcx.mk_place_elems(&[ProjectionElem::Field(FieldIdx::from_usize(idx), ty)]);
+            tuple
+        };
+
+        let source_info = SourceInfo::outermost(body_span);
+
+        let tuple_ptr = {
+            // block 0: initialize the tuple
+            let mut statements = vec![];
+            let return_ptr_local = body.local_decls.push(LocalDecl::new(
+                Ty::new_mut_ptr(tcx, body.local_decls[RETURN_LOCAL].ty),
+                body_span,
+            ));
+
+            let return_ptr_assign = Statement {
+                source_info,
+                kind: StatementKind::Assign(Box::new((
+                    Place::from(return_ptr_local),
+                    Rvalue::AddressOf(Mutability::Mut, Place::from(RETURN_LOCAL)),
+                ))),
+            };
+
+            statements.push(return_ptr_assign);
+
+            let mut tuple_fields: IndexVec<FieldIdx, Operand<'tcx>> =
+                body.args_iter().map(|loc| Operand::Copy(Place::from(loc))).collect();
+
+            tuple_fields.push(Operand::Copy(Place::from(return_ptr_local)));
+
+            let tuple_init_stmt = Statement {
+                source_info,
+                kind: StatementKind::Assign(Box::new((
+                    Place::from(tuple_loc),
+                    Rvalue::Aggregate(Box::new(AggregateKind::Tuple), tuple_fields),
+                ))),
+            };
+            statements.push(tuple_init_stmt);
+
+            let tuple_ref = body.local_decls.push(LocalDecl::new(
+                Ty::new_mut_ref(tcx, tcx.lifetimes.re_erased, tuple_ty),
+                body_span,
+            ));
+
+            let tuple_ref_assign = Statement {
+                source_info,
+                kind: StatementKind::Assign(Box::new((
+                    Place::from(tuple_ref),
+                    Rvalue::Ref(
+                        tcx.lifetimes.re_erased,
+                        BorrowKind::Mut { kind: MutBorrowKind::Default },
+                        Place::from(tuple_loc),
+                    ),
+                ))),
+            };
+            statements.push(tuple_ref_assign);
+
+            let tuple_ptr = body
+                .local_decls
+                .push(LocalDecl::new(Ty::new_mut_ptr(tcx, tcx.types.u8), body_span));
+
+            let func = Operand::function_handle(
+                tcx,
+                tcx.lang_items().transmute_to_pointer().unwrap(),
+                [GenericArg::from(tuple_ty)],
+                body_span,
+            );
+
+            let bba = BasicBlockData {
+                statements,
+                terminator: Some(Terminator {
+                    source_info,
+                    kind: TerminatorKind::Call {
+                        func,
+                        args: vec![dummy_spanned(Operand::Copy(Place::from(tuple_ref)))],
+                        destination: Place::from(tuple_ptr),
+                        target: Some(BasicBlock::from_u32(1)),
+                        unwind: UnwindAction::Continue,
+                        call_source: CallSource::Normal,
+                        fn_span: body_span,
+                    },
+                }),
+                is_cleanup: false,
+            };
+
+            new_bb.push(bba);
+            tuple_ptr
+        };
+
+        {
+            //block1: get callee fn ptr and call context_switch
+            let mut statements = vec![];
+            let callee_sig = tcx.fn_sig(duplicate_to.to_def_id()).instantiate_identity();
+
+            let generic_args =
+                GenericArgs::for_item(tcx, duplicate_to.to_def_id(), |param, _| match param.kind {
+                    GenericParamDefKind::Lifetime => tcx.lifetimes.re_erased.into(),
+                    _ => tcx.mk_param_from_def(param),
+                });
+            let func_ty = Ty::new_fn_def(tcx, duplicate_to.to_def_id(), generic_args);
+            //create callee fn ptr
+            let fn_ptr =
+                body.local_decls.push(LocalDecl::new(Ty::new_fn_ptr(tcx, callee_sig), body_span));
+            let callee_ptr = body
+                .local_decls
+                .push(LocalDecl::new(Ty::new_mut_ptr(tcx, tcx.types.u8), body_span));
+
+            let fn_ptr_cast = Statement {
+                source_info: SourceInfo::outermost(body_span),
+                kind: StatementKind::Assign(Box::new((
+                    Place::from(fn_ptr),
+                    Rvalue::Cast(
+                        CastKind::PointerCoercion(PointerCoercion::ReifyFnPointer),
+                        Operand::Constant(Box::new(ConstOperand {
+                            span: body_span,
+                            user_ty: None,
+                            const_: Const::zero_sized(func_ty),
+                        })),
+                        Ty::new_fn_ptr(tcx, callee_sig),
+                    ),
+                ))),
+            };
+            statements.push(fn_ptr_cast);
+
+            let callee_ptr_cast = Statement {
+                source_info: SourceInfo::outermost(body_span),
+                kind: StatementKind::Assign(Box::new((
+                    Place::from(callee_ptr),
+                    Rvalue::Cast(
+                        CastKind::FnPtrToPtr,
+                        Operand::Move(Place::from(fn_ptr)),
+                        Ty::new_mut_ptr(tcx, tcx.types.u8),
+                    ),
+                ))),
+            };
+            statements.push(callee_ptr_cast);
+
+            let cs = tcx.lang_items().context_switch().unwrap();
+            let cs_sig = tcx.fn_sig(cs).no_bound_vars().unwrap();
+            let func = Operand::function_handle(tcx, cs, vec![], body_span);
+
+            let mut args = vec![
+                dummy_spanned(Operand::Copy(Place::from(tuple_ptr))),
+                dummy_spanned(Operand::Copy(Place::from(callee_ptr))),
+                dummy_spanned(Operand::Copy(Place::from(callee_ptr))),
+            ];
+
+            let output_local = body.local_decls.push(LocalDecl::new(Ty::new_unit(tcx), body_span));
+
+            let call_block = BasicBlockData {
+                statements,
+                terminator: Some(Terminator {
+                    source_info: SourceInfo::outermost(body_span),
+                    kind: TerminatorKind::Call {
+                        func,
+                        args,
+                        destination: Place::from(output_local),
+                        target: Some(BasicBlock::from_usize(2usize)),
+                        unwind: UnwindAction::Continue,
+                        call_source: CallSource::Normal,
+                        fn_span: body_span,
+                    },
+                }),
+                is_cleanup: false,
+            };
+            new_bb.push(call_block);
+        }
 
         let return_block = BasicBlockData {
             statements: vec![],

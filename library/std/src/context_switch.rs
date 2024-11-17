@@ -8,7 +8,6 @@ use libc::c_void;
 extern "C" {
     #[stable(feature = "isolate_domain", since = "1.0.0")]
     #[allow(missing_docs)]
-    #[link_name = "context_switch"]
     pub fn _context_switch(param: *mut c_void, fp: *mut c_void, next_stack: *mut c_void) -> ();
 
 }
