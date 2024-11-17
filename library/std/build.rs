@@ -1,3 +1,4 @@
+#![allow(unreachable_code)]
 use std::env;
 use std::path::PathBuf;
 
@@ -23,6 +24,7 @@ fn main() {
         let mut path = PathBuf::new();
         path.push(out_dir);
         path.push("context_switch_sbd"); //OUT_DIR/context_switch_sbd is our output dir
+        println!("cargo::warning={:?}", path);
         println!("cargo::rustc-link-search={}", path.to_str().unwrap());
         println!("cargo::rustc-link-lib=context_switch");
         cc::Build::new()

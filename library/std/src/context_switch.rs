@@ -6,14 +6,20 @@ use libc::c_void;
 
 #[link(name = "context_switch")]
 extern "C" {
-    #[cfg(target_arch = "x86_64")]
     #[stable(feature = "isolate_domain", since = "1.0.0")]
-    #[cfg_attr(all(not(bootstrap)), lang = "context_switch")]
     #[allow(missing_docs)]
-    pub fn context_switch(param: *mut c_void, fp: *mut c_void, next_stack: *mut c_void);
+    #[link_name = "context_switch"]
+    pub fn _context_switch(param: *mut c_void, fp: *mut c_void, next_stack: *mut c_void) -> ();
 
 }
 
+#[stable(feature = "isolate_domain", since = "1.0.0")]
+#[cfg_attr(all(not(bootstrap)), lang = "context_switch")]
+#[allow(missing_docs)]
+#[inline(never)]
+pub fn context_switch(param: *mut u8, fp: *mut u8, next_stack: *mut u8) -> () {
+    unsafe { _context_switch(param as *mut c_void, fp as *mut c_void, next_stack as *mut c_void) }
+}
 #[stable(feature = "isolate_domain", since = "1.0.0")]
 #[cfg_attr(all(not(bootstrap)), lang = "transmute_to_ref")]
 #[allow(missing_docs)]

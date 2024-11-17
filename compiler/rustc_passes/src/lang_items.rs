@@ -242,6 +242,7 @@ impl<'ast, 'tcx> LanguageItemCollector<'ast, 'tcx> {
 }
 
 /// Traverses and collects all the lang items in all crates.
+#[instrument(level = "info", skip_all)]
 fn get_lang_items(tcx: TyCtxt<'_>, (): ()) -> LanguageItems {
     let resolver = tcx.resolver_for_lowering(()).borrow();
     let (resolver, krate) = &*resolver;
@@ -252,6 +253,7 @@ fn get_lang_items(tcx: TyCtxt<'_>, (): ()) -> LanguageItems {
     // Collect lang items in other crates.
     for &cnum in tcx.used_crates(()).iter() {
         for &(def_id, lang_item) in tcx.defined_lang_items(cnum).iter() {
+            info!("lang_item:{}", lang_item.name());
             collector.collect_item(lang_item, def_id, None);
         }
     }

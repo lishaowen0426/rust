@@ -30,7 +30,8 @@ pub struct DomainSwitch;
 
 impl<'tcx> MirPass<'tcx> for DomainSwitch {
     fn is_enabled(&self, sess: &rustc_session::Session) -> bool {
-        sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate)
+        //sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate)
+        false
     }
     #[instrument(level = "debug", skip_all)]
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
@@ -167,6 +168,45 @@ fn create_cast_to_ptr<'tcx>(
     (tuple_ptr, callee_ptr, cast_block)
 }
 
+fn create_context_switch_call_blk<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    tuple_ptr: Local,
+    fn_ptr: Local,
+    body: &mut Body<'tcx>,
+    target: usize,
+) -> (Local, BasicBlockData<'tcx>) {
+    let body_span = body.span;
+    let cs = tcx.lang_items().context_switch().unwrap();
+    let cs_sig = tcx.fn_sig(cs).instantiate_identity();
+    let output_ty = tcx.instantiate_bound_regions_with_erased(cs_sig.output());
+    let output_local = body.local_decls.push(LocalDecl::new(output_ty, body_span));
+    let func = Operand::function_handle(tcx, cs, vec![], body_span);
+    let mut args = vec![
+        dummy_spanned(Operand::Copy(Place::from(tuple_ptr))),
+        dummy_spanned(Operand::Copy(Place::from(fn_ptr))),
+        dummy_spanned(Operand::Copy(Place::from(fn_ptr))),
+    ];
+
+    let call_block = BasicBlockData {
+        statements: vec![],
+        terminator: Some(Terminator {
+            source_info: SourceInfo::outermost(body_span),
+            kind: TerminatorKind::Call {
+                func,
+                args,
+                destination: Place::from(output_local),
+                target: Some(BasicBlock::from_usize(target)),
+                unwind: UnwindAction::Continue,
+                call_source: CallSource::Normal,
+                fn_span: body_span,
+            },
+        }),
+        is_cleanup: false,
+    };
+
+    (output_local, call_block)
+}
+
 fn create_dup_call_blk<'tcx>(
     tcx: TyCtxt<'tcx>,
     duplicate_from: LocalDefId,
@@ -232,44 +272,15 @@ impl DomainSwitch {
         let (tuple_ptr, callee_ptr, cast_block) =
             create_cast_to_ptr(tcx, tuple_loc, trans_to_ptr, duplicate_to, body, 1usize);
         debug!("cast_block:{:?}", cast_block);
+        //let (dup_ret, call_block) =
+        //    create_dup_call_blk(tcx, duplicate_from, duplicate_to, tuple_ptr, body, 2usize);
         let (dup_ret, call_block) =
-            create_dup_call_blk(tcx, duplicate_from, duplicate_to, tuple_ptr, body, 2usize);
+            create_context_switch_call_blk(tcx, tuple_ptr, callee_ptr, body, 2usize);
         new_bb.push(cast_block);
         new_bb.push(call_block);
-        /*
-         */
-        /*
-
-        let args = body.args_iter().map(|a| dummy_spanned(Operand::Copy(Place::from(a)))).collect();
-
-        let call_block = BasicBlockData {
-            statements: vec![],
-            terminator: Some(Terminator {
-                source_info: SourceInfo::outermost(body_span),
-                kind: TerminatorKind::Call {
-                    func,
-                    args,
-                    destination: Place::from(RETURN_LOCAL),
-                    target: Some(BasicBlock::from_usize(1usize)),
-                    unwind: UnwindAction::Continue,
-                    call_source: CallSource::Normal,
-                    fn_span: body_span,
-                },
-            }),
-            is_cleanup: false,
-        };
-        new_bb.push(call_block);
-
-        */
 
         let return_block = BasicBlockData {
-            statements: vec![Statement {
-                source_info: SourceInfo::outermost(body_span),
-                kind: StatementKind::Assign(Box::new((
-                    Place::from(RETURN_LOCAL),
-                    Rvalue::Use(Operand::Move(Place::from(dup_ret))),
-                ))),
-            }],
+            statements: vec![],
             terminator: Some(Terminator {
                 source_info: SourceInfo::outermost(body_span),
                 kind: TerminatorKind::Return,
