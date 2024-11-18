@@ -29,6 +29,7 @@ fn main() {
         println!("cargo::rustc-link-lib=context_switch");
         cc::Build::new()
             .compiler("/usr/bin/gcc")
+            .debug(true)
             .file("context_switch.c")
             .out_dir(path)
             .compile("context_switch");

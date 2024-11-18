@@ -102,7 +102,6 @@ impl<'tcx> DuplicationRewrite {
                 Rvalue::Use(Operand::Copy(tuple_ret)),
             ))),
         };
-        body.basic_blocks.as_mut().raw[0].statements.insert(0, tuple_ret_assign_stmt);
 
         let mut assign_ret = TupleAssignVisitor {
             tcx,
@@ -114,6 +113,7 @@ impl<'tcx> DuplicationRewrite {
             src_ptr_local,
             return_ty: body.local_decls[RETURN_PLACE].ty,
             tuple_ret_local,
+            tuple_ret_assign_stmt,
         };
         assign_ret.visit_body(body);
     }
@@ -244,6 +244,7 @@ struct TupleAssignVisitor<'tcx> {
     src_ptr_local: Local,
     return_ty: Ty<'tcx>,
     tuple_ret_local: Local,
+    tuple_ret_assign_stmt: Statement<'tcx>,
 }
 
 impl<'tcx> MutVisitor<'tcx> for TupleAssignVisitor<'tcx> {
@@ -264,61 +265,6 @@ impl<'tcx> MutVisitor<'tcx> for TupleAssignVisitor<'tcx> {
         }
     }
 
-    /*
-    fn visit_basic_block_data(&mut self, block: BasicBlock, data: &mut BasicBlockData<'tcx>) {
-        if let Some(term) = data.terminator.as_ref() {
-            match term.kind {
-                TerminatorKind::Return => {
-                    //get copy size
-                    let assign_size = Statement {
-                        source_info: SourceInfo::outermost(self.span),
-                        kind: StatementKind::Assign(Box::new((
-                            Place::from(self.copy_size_local),
-                            Rvalue::NullaryOp(rustc_middle::mir::NullOp::SizeOf, self.return_ty),
-                        ))),
-                    };
-
-                    // get src ptr
-                    let address_of = Statement {
-                        source_info: SourceInfo::outermost(self.span),
-                        kind: StatementKind::Assign(Box::new((
-                            Place::from(self.src_ptr_local),
-                            Rvalue::AddressOf(Mutability::Not, Place::from(RETURN_PLACE)),
-                        ))),
-                    };
-
-                    let mut tuple_ret = Place::from(self.tuple);
-                    let projs = self
-                        .tcx
-                        .mk_place_elems(&[
-                            ProjectionElem::Deref,
-                            ProjectionElem::Field(self.idx, self.ty),
-                        ])
-                        .to_vec();
-                    tuple_ret.projection = self.tcx.mk_place_elems(&projs);
-                    // memcpy
-                    let copy_bytes = Statement {
-                        source_info: SourceInfo::outermost(self.span),
-                        kind: StatementKind::Intrinsic(Box::new(
-                            rustc_middle::mir::NonDivergingIntrinsic::CopyNonOverlapping(
-                                CopyNonOverlapping {
-                                    src: Operand::Copy(Place::from(self.src_ptr_local)),
-                                    dst: Operand::Copy(tuple_ret),
-                                    count: Operand::Copy(Place::from(self.copy_size_local)),
-                                },
-                            ),
-                        )),
-                    };
-
-                    data.statements.push(assign_size);
-                    data.statements.push(address_of);
-                    data.statements.push(copy_bytes);
-                }
-                _ => {}
-            }
-        }
-    }
-    */
     fn visit_basic_block_data(&mut self, block: BasicBlock, data: &mut BasicBlockData<'tcx>) {
         let assign_to_return = data.statements.iter_mut().filter(|stmt| match &stmt.kind {
             StatementKind::Assign(s) if s.0.local == RETURN_PLACE => {
@@ -331,12 +277,19 @@ impl<'tcx> MutVisitor<'tcx> for TupleAssignVisitor<'tcx> {
             _ => false,
         });
 
+        let mut is_empty = true;
+
         assign_to_return.for_each(|stmt| {
             let mut tuple_ret = Place::from(self.tuple_ret_local);
             let projs = self.tcx.mk_place_elems(&[ProjectionElem::Deref]).to_vec();
             tuple_ret.projection = self.tcx.mk_place_elems(&projs);
             let rval = stmt.kind.as_assign().unwrap().1.clone();
             stmt.kind = StatementKind::Assign(Box::new((tuple_ret, rval)));
+            is_empty = false;
         });
+
+        if !is_empty {
+            data.statements.insert(0, self.tuple_ret_assign_stmt.clone());
+        }
     }
 }
