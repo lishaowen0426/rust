@@ -1930,7 +1930,9 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
             let name = isolate_cgu_name(cgu_name_builder);
             let name =
                 self.tcx.output_filenames(()).temp_path(OutputType::Object, Some(name.as_str()));
-            let name = Symbol::intern(name.to_str().unwrap());
+            let filename =
+                name.as_path().file_name().expect("isolate object file cannot be extracted");
+            let name = Symbol::intern(filename.to_str().unwrap());
             info!("rmete encoded isolate cgu_name:{:?}", name);
             syms.push(name);
         };

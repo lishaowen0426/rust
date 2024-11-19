@@ -360,14 +360,12 @@ fn link_rlib<'a>(
             ab.add_file(obj);
         }
 
-        /*
         for m in &codegen_results.duplicate_modules {
             if let Some(obj) = m.object.as_ref() {
                 info!("duplicate module:{:?}", obj);
                 ab.add_file(obj);
             }
         }
-        */
     }
 
     match flavor {
