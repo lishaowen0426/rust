@@ -532,7 +532,7 @@ impl<'a> Linker for GccLinker<'a> {
             self.hint_static();
             self.linker_arg("--isolate");
             self.linker_arg(path);
-            self.linker_arg("--no-isolate");
+            //self.linker_arg("--no-isolate");
         }
     }
 

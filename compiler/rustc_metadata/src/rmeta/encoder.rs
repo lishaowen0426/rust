@@ -13,7 +13,6 @@ use rustc_hir_pretty::id_to_string;
 use rustc_middle::middle::dependency_format::Linkage;
 use rustc_middle::middle::exported_symbols::metadata_symbol_name;
 use rustc_middle::mir::interpret;
-use rustc_middle::mir::mono::CodegenUnitNameBuilder;
 use rustc_middle::query::LocalCrate;
 use rustc_middle::query::Providers;
 use rustc_middle::traits::specialization_graph;
@@ -21,9 +20,8 @@ use rustc_middle::ty::codec::TyEncoder;
 use rustc_middle::ty::fast_reject::{self, TreatParams};
 use rustc_middle::ty::{AssocItemContainer, SymbolName};
 use rustc_middle::util::common::to_readable_str;
-use rustc_monomorphize::isolate_cgu_name;
 use rustc_serialize::{opaque, Decodable, Decoder, Encodable, Encoder};
-use rustc_session::config::{CrateType, OptLevel, OutputType};
+use rustc_session::config::{CrateType, OptLevel};
 use rustc_span::hygiene::HygieneEncodeContext;
 use rustc_span::symbol::sym;
 use rustc_span::{
@@ -1924,7 +1922,8 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
     #[instrument(level = "info", skip_all)]
     fn encode_isolate_cgu_names(&mut self) -> LazyArray<Symbol> {
         empty_proc_macro!(self);
-        let mut syms = vec![];
+        let syms: Vec<Symbol> = vec![];
+        /*
         if self.tcx.sess.opts.unstable_opts.isolate.is_some_and(|isolate| isolate) {
             let cgu_name_builder = &mut CodegenUnitNameBuilder::new(self.tcx);
             let name = isolate_cgu_name(cgu_name_builder);
@@ -1936,6 +1935,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
             info!("rmete encoded isolate cgu_name:{:?}", name);
             syms.push(name);
         };
+        */
         self.lazy_array(syms)
     }
 

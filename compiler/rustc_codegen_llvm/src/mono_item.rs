@@ -5,6 +5,8 @@ use crate::errors::SymbolAlreadyDefined;
 use crate::llvm;
 use crate::type_of::LayoutLlvmExt;
 use rustc_codegen_ssa::traits::*;
+use rustc_data_structures::small_c_str::SmallCStr;
+use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_middle::mir::mono::{Linkage, Visibility};
 use rustc_middle::ty::layout::{FnAbiOf, LayoutOf};
@@ -41,6 +43,7 @@ impl<'tcx> PreDefineMethods<'tcx> for CodegenCx<'_, 'tcx> {
         self.instances.borrow_mut().insert(instance, g);
     }
 
+    #[instrument(level = "info", skip(self, linkage, visibility, instance))]
     fn predefine_fn(
         &self,
         instance: Instance<'tcx>,
@@ -55,6 +58,30 @@ impl<'tcx> PreDefineMethods<'tcx> for CodegenCx<'_, 'tcx> {
         unsafe { llvm::LLVMRustSetLinkage(lldecl, base::linkage_to_llvm(linkage)) };
         let attrs = self.tcx.codegen_fn_attrs(instance.def_id());
         base::set_link_section(lldecl, attrs);
+
+        {
+            let (_, duplicates) = self.tcx.duplicate_map(());
+            let def_id = instance.def_id();
+            if def_id.is_local() && duplicates.contains(&def_id.expect_local()) {
+                match self.tcx.def_kind(def_id) {
+                    DefKind::Fn | DefKind::AssocFn => {
+                        let buf = SmallCStr::new(
+                            format!(
+                                ".text.isolate.{}.{}",
+                                self.tcx.crate_name(LOCAL_CRATE),
+                                symbol_name
+                            )
+                            .as_str(),
+                        );
+                        unsafe {
+                            llvm::LLVMSetSection(lldecl, buf.as_ptr());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         if linkage == Linkage::LinkOnceODR || linkage == Linkage::WeakODR {
             llvm::SetUniqueComdat(self.llmod, lldecl);
         }

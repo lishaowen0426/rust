@@ -229,13 +229,17 @@ where
     let cgu_name_cache = &mut FxHashMap::default();
 
     for mono_item in mono_items {
+        info!("mono_item:{:?}", mono_item);
         // Handle only root (GloballyShared) items directly here. Inlined (LocalCopy) items
         // are handled at the bottom of the loop based on reachability, with one exception.
         // The #[lang = "start"] item is the program entrypoint, so there are no calls to it in MIR.
         // So even if its mode is LocalCopy, we need to treat it like a root.
         match mono_item.instantiation_mode(cx.tcx) {
-            InstantiationMode::GloballyShared { .. } => {}
+            InstantiationMode::GloballyShared { .. } => {
+                info!("globally shared");
+            }
             InstantiationMode::LocalCopy => {
+                info!("local copy");
                 if Some(mono_item.def_id()) != cx.tcx.lang_items().start_fn() {
                     continue;
                 }
@@ -266,7 +270,8 @@ where
         info!(?cgu_name);
 
         let cgu = if mono_item.is_duplicated_for_isolation(cx.tcx) {
-            isolate_cgu.get_or_insert(CodegenUnit::new(cgu_name, true))
+            //isolate_cgu.get_or_insert(CodegenUnit::new(cgu_name, true))
+            codegen_units.entry(cgu_name).or_insert_with(|| CodegenUnit::new(cgu_name, true))
         } else {
             codegen_units.entry(cgu_name).or_insert_with(|| CodegenUnit::new(cgu_name, false))
         };
@@ -296,17 +301,16 @@ where
         // Add those inlined items. It's possible an inlined item is reachable
         // from multiple root items within a CGU, which is fine, it just means
         // the `insert` will be a no-op.
-        if !mono_item.is_duplicated_for_isolation(cx.tcx) {
-            //no inline items for duplicated item cgu
-            for inlined_item in reachable_inlined_items {
-                // This is a CGU-private copy.
-                cgu.items_mut().entry(inlined_item).or_insert_with(|| MonoItemData {
-                    inlined: true,
-                    linkage: Linkage::Internal,
-                    visibility: Visibility::Default,
-                    size_estimate: inlined_item.size_estimate(cx.tcx),
-                });
-            }
+        //no inline items for duplicated item cgu
+        for inlined_item in reachable_inlined_items {
+            // This is a CGU-private copy.
+            info!("inline item: {:?}", inlined_item);
+            cgu.items_mut().entry(inlined_item).or_insert_with(|| MonoItemData {
+                inlined: true,
+                linkage: Linkage::Internal,
+                visibility: Visibility::Default,
+                size_estimate: inlined_item.size_estimate(cx.tcx),
+            });
         }
     }
 
