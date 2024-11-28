@@ -1730,6 +1730,8 @@ options! {
         the same values as the target option of the same name"),
     meta_stats: bool = (false, parse_bool, [UNTRACKED],
         "gather metadata statistics (default: no)"),
+    mimalloc: Option<String> = (None, parse_opt_string, [TRACKED],
+        "the full path of mimalloc object file"),
     mir_emit_retag: bool = (false, parse_bool, [TRACKED],
         "emit Retagging MIR statements, interpreted e.g., by miri; implies -Zmir-opt-level=0 \
         (default: no)"),

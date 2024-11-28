@@ -2159,6 +2159,10 @@ fn linker_with_args<'a>(
     // Pre-link CRT objects.
     add_pre_link_objects(cmd, sess, flavor, link_output_kind, self_contained_crt_objects);
 
+    if let Some(mimalloc) = sess.opts.unstable_opts.mimalloc.as_ref() {
+        cmd.add_object(&Path::new(mimalloc));
+    }
+
     add_linked_symbol_object(
         cmd,
         sess,
