@@ -71,14 +71,14 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         //
         // First we build all the statements in the block.
         let mut let_scope_stack = Vec::with_capacity(8);
-        let outer_source_scope = this.source_scope;
-        let outer_in_scope_unsafe = this.in_scope_unsafe;
+        // let outer_source_scope = this.source_scope;
+        //let outer_in_scope_unsafe = this.in_scope_unsafe;
         // This scope information is kept for breaking out of the parent remainder scope in case
         // one let-else pattern matching fails.
         // By doing so, we can be sure that even temporaries that receive extended lifetime
         // assignments are dropped, too.
         let mut last_remainder_scope = region_scope;
-        this.update_source_scope_for_safety_mode(span, safety_mode);
+        //this.update_source_scope_for_safety_mode(span, safety_mode);
 
         let source_info = this.source_info(span);
         for stmt in stmts {
@@ -363,11 +363,12 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             unpack!(block = this.pop_scope((*scope, source_info), block));
         }
         // Restore the original source scope.
-        this.source_scope = outer_source_scope;
-        this.in_scope_unsafe = outer_in_scope_unsafe;
+        //this.source_scope = outer_source_scope;
+        //this.in_scope_unsafe = outer_in_scope_unsafe;
         block.unit()
     }
 
+    /*
     /// If we are entering an unsafe block, create a new source scope
     fn update_source_scope_for_safety_mode(&mut self, span: Span, safety_mode: BlockSafety) {
         debug!("update_source_scope_for({:?}, {:?})", span, safety_mode);
@@ -382,4 +383,5 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
         self.source_scope = self.new_source_scope(span, LintLevel::Inherited, Some(new_unsafety));
     }
+    */
 }

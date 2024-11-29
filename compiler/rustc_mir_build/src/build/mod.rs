@@ -1,4 +1,5 @@
 #![allow(unused_variables)]
+#![allow(dead_code)]
 use crate::build::expr::as_place::PlaceBuilder;
 use crate::build::scope::DropKind;
 use itertools::Itertools;
@@ -12,6 +13,7 @@ use rustc_hir as hir;
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LocalDefId};
 use rustc_hir::Node;
+use rustc_hir::Unsafety;
 use rustc_index::bit_set::GrowableBitSet;
 use rustc_index::{Idx, IndexSlice, IndexVec};
 use rustc_infer::infer::{InferCtxt, TyCtxtInferExt};
@@ -200,7 +202,7 @@ struct Builder<'a, 'tcx> {
     block_context: BlockContext,
 
     /// The current unsafe block in scope
-    in_scope_unsafe: Safety,
+    //in_scope_unsafe: Safety,
 
     /// The vector of all scopes that we have created thus far;
     /// we track this for debuginfo later.
@@ -391,6 +393,7 @@ impl LocalsForNode {
 
 struct CFG<'tcx> {
     basic_blocks: IndexVec<BasicBlock, BasicBlockData<'tcx>>,
+    safety_stack: Vec<Unsafety>,
 }
 
 rustc_index::newtype_index! {
@@ -532,6 +535,8 @@ fn construct_fn<'tcx>(
         coroutine,
     );
 
+    builder.push_safety(fn_sig.unsafety);
+
     let call_site_scope =
         region::Scope { id: body_id.hir_id.local_id, data: region::ScopeData::CallSite };
     let arg_scope =
@@ -599,6 +604,10 @@ fn construct_fn<'tcx>(
         builder.build_drop_trees();
         return_block.unit()
     }));
+
+    if builder.cfg.safety_stack.len() != 1 {
+        panic!("cfg safty_stack has more than one safety at the end");
+    }
 
     let mut body = builder.finish();
 
@@ -766,7 +775,7 @@ fn construct_error(tcx: TyCtxt<'_>, def_id: LocalDefId, guar: ErrorGuaranteed) -
     let local_decls = IndexVec::from_iter(
         [output].iter().chain(&inputs).map(|ty| LocalDecl::with_source_info(*ty, source_info)),
     );
-    let mut cfg = CFG { basic_blocks: IndexVec::new() };
+    let mut cfg = CFG { basic_blocks: IndexVec::new(), safety_stack: Vec::new() };
     let mut source_scopes = IndexVec::new();
 
     cfg.start_new_block();
@@ -836,7 +845,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             hir_id,
             parent_module: tcx.parent_module(hir_id).to_def_id(),
             check_overflow,
-            cfg: CFG { basic_blocks: IndexVec::new() },
+            cfg: CFG { basic_blocks: IndexVec::new(), safety_stack: Vec::new() },
             fn_span: span,
             arg_count,
             coroutine,
@@ -847,7 +856,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             guard_context: vec![],
             fixed_temps: Default::default(),
             fixed_temps_scope: None,
-            in_scope_unsafe: safety,
             local_decls: IndexVec::from_elem_n(LocalDecl::new(return_ty, return_span), 1),
             canonical_user_type_annotations: IndexVec::new(),
             upvars: CaptureMap::new(),
@@ -956,6 +964,13 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             .collect();
     }
 
+    fn push_safety(&mut self, safety: Unsafety) {
+        self.cfg.safety_stack.push(safety);
+    }
+
+    fn pop_safety(&mut self) -> Option<Unsafety> {
+        self.cfg.safety_stack.pop()
+    }
     #[instrument(level = "debug", skip_all)]
     fn args_and_body(
         &mut self,

@@ -1,10 +1,19 @@
 //! Routines for manipulating the control-flow graph.
 
 use crate::build::CFG;
+use rustc_hir::Unsafety;
 use rustc_middle::mir::*;
 use rustc_middle::ty::TyCtxt;
 
 impl<'tcx> CFG<'tcx> {
+    pub fn peek_safety(&self) -> Unsafety {
+        if self.safety_stack.is_empty() {
+            panic!("empty safety_stack");
+        } else {
+            self.safety_stack[self.safety_stack.len() - 1]
+        }
+    }
+
     pub(crate) fn block_data(&self, blk: BasicBlock) -> &BasicBlockData<'tcx> {
         &self.basic_blocks[blk]
     }
