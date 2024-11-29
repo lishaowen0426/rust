@@ -107,6 +107,7 @@ mod ssa;
 mod check_alignment;
 mod domain_switch;
 mod duplication_rewrite;
+mod propagate_unsafety;
 pub mod simplify;
 mod simplify_branches;
 mod simplify_comparison_integral;
@@ -620,6 +621,7 @@ fn run_optimization_passes<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
             &add_call_guards::CriticalCallEdges,
             &duplication_rewrite::DuplicationRewrite,
             &domain_switch::DomainSwitch,
+            &propagate_unsafety::PropagateUnsafety,
             // Cleanup for human readability, off by default.
             &prettify::ReorderBasicBlocks,
             &prettify::ReorderLocals,

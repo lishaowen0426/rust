@@ -29,6 +29,7 @@ pub struct UnsafetyChecker<'a, 'tcx> {
 }
 
 impl<'a, 'tcx> UnsafetyChecker<'a, 'tcx> {
+    #[instrument(level = "info", skip_all, name = "unsafety_checker_new")]
     fn new(
         body: &'a Body<'tcx>,
         body_did: LocalDefId,
@@ -533,6 +534,7 @@ fn report_unused_unsafe(tcx: TyCtxt<'_>, kind: UnusedUnsafe, id: HirId) {
     tcx.emit_node_span_lint(UNUSED_UNSAFE, id, span, errors::UnusedUnsafe { span, nested_parent });
 }
 
+#[instrument(level = "info", skip_all, name = "check_unsafety_mir_transform")]
 pub fn check_unsafety(tcx: TyCtxt<'_>, def_id: LocalDefId) {
     debug!("check_unsafety({:?})", def_id);
 

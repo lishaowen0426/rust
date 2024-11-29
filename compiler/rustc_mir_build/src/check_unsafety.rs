@@ -907,6 +907,7 @@ impl UnsafeOpKind {
     }
 }
 
+#[instrument(level = "info", skip_all, name = "check_unsafety_mir_build")]
 pub fn check_unsafety(tcx: TyCtxt<'_>, def: LocalDefId) {
     // THIR unsafeck can be disabled with `-Z thir-unsafeck=off`
     if !tcx.sess.opts.unstable_opts.thir_unsafeck {
