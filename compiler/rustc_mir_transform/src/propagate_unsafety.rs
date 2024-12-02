@@ -2,8 +2,11 @@
 #![allow(dead_code)]
 use rustc_data_structures::fx::FxHashSet;
 use rustc_hir::def_id::LOCAL_CRATE;
+use rustc_index::IndexVec;
 use rustc_middle::mir::{visit::MutVisitor, Body, MirPass};
-use rustc_middle::mir::{Local, Location, Safety, Statement};
+use rustc_middle::mir::{
+    ClearCrossCrate, Local, Location, Safety, SourceScope, SourceScopeData, Statement,
+};
 use rustc_middle::ty::TyCtxt;
 use std::sync::OnceLock;
 
@@ -115,33 +118,50 @@ impl<'tcx> MirPass<'tcx> for PropagateUnsafety {
         true
     }
 
+    #[instrument(level = "info", skip_all, name = "propagate_unsafety_run_pass")]
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
         let crate_name = tcx.crate_name(LOCAL_CRATE);
         if white_list_crates().contains(crate_name.as_str()) {
             return;
         }
+
+        info!(crate_name=?crate_name);
+        info!(source=?body.source);
+
+        let mut collector = UnsafeLocalCollector {
+            unsafe_loc: FxHashSet::default(),
+            tcx,
+            scopes: body.source_scopes.clone(),
+        };
+        collector.visit_body(body);
     }
 }
 
-struct UnsafeLocalCollector<'tcx, 'a> {
+struct UnsafeLocalCollector<'tcx> {
     unsafe_loc: FxHashSet<Local>,
     tcx: TyCtxt<'tcx>,
-    body: &'a Body<'tcx>,
+    scopes: IndexVec<SourceScope, SourceScopeData<'tcx>>,
 }
 
-impl<'tcx, 'a> MutVisitor<'tcx> for UnsafeLocalCollector<'tcx, 'a> {
+impl<'tcx> MutVisitor<'tcx> for UnsafeLocalCollector<'tcx> {
     fn tcx(&self) -> TyCtxt<'tcx> {
         self.tcx
     }
 
+    #[instrument(level = "info", skip(self, location), name = "unsafe_collector_visit_statement")]
     fn visit_statement(&mut self, statement: &mut Statement<'tcx>, location: Location) {
-        let safety = self.body.source_scopes[statement.source_info.scope]
-            .local_data
-            .as_ref()
-            .assert_crate_local()
-            .safety;
+        if let ClearCrossCrate::Set(ld) =
+            self.scopes[statement.source_info.scope].local_data.as_ref()
+        {
+            let safety = ld.safety;
+            if let Safety::Safe = safety {
+                info!("safe statement:{:?}", statement);
+                return;
+            }
 
-        if let Safety::Safe = safety {
+            info!("unsafe statement:{:?}", statement);
+        } else {
+            info!("clear cross crate: {:?}", statement);
             return;
         }
     }

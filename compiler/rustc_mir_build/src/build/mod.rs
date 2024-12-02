@@ -554,51 +554,6 @@ fn construct_fn<'tcx>(
                 }))
             }));
 
-        #[cfg(not(bootstrap))]
-        let return_block = if false {
-            let exit_domain_def_id = tcx.lang_items().domain_exit().unwrap();
-            debug!("insert domain_exit(def_id = {:?})", exit_domain_def_id);
-            let exit_domain_fn_sig = tcx.fn_sig(exit_domain_def_id).instantiate_identity();
-            let exit_domain_instance = ty::InstanceDef::Item(exit_domain_def_id);
-            let exit_domain_def_span = tcx.def_span(exit_domain_def_id);
-            let args = exit_domain_fn_sig
-                .inputs()
-                .no_bound_vars()
-                .unwrap()
-                .iter()
-                .map(|a| a.clone())
-                .collect::<Vec<_>>();
-            let return_ty = exit_domain_fn_sig.output().no_bound_vars().unwrap();
-
-            let local = builder.local_decls.push(LocalDecl::new(return_ty, builder.fn_span));
-            let place = Place::from(local);
-
-            let func_ty = Ty::new_fn_def(tcx, exit_domain_def_id, args);
-            let func = Operand::Constant(Box::new(ConstOperand {
-                span: exit_domain_def_span,
-                user_ty: None,
-                const_: Const::zero_sized(func_ty),
-            }));
-
-            let new_block = builder.cfg.start_new_block();
-            builder.cfg.terminate(
-                return_block,
-                SourceInfo::outermost(builder.fn_span),
-                TerminatorKind::Call {
-                    func,
-                    args: vec![],
-                    destination: place,
-                    target: Some(new_block),
-                    unwind: UnwindAction::Continue,
-                    call_source: CallSource::Normal,
-                    fn_span: builder.fn_span,
-                },
-            );
-            new_block
-        } else {
-            return_block
-        };
-
         let source_info = builder.source_info(fn_end);
         builder.cfg.terminate(return_block, source_info, TerminatorKind::Return);
         builder.build_drop_trees();
@@ -1071,55 +1026,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             self.source_scope = source_scope;
         }
 
-        #[cfg(not(bootstrap))]
-        let block = if false {
-            let enter_domain_def_id = self.tcx.lang_items().domain_enter().unwrap();
-            debug!("insert domain_enter(def_id = {:?})", enter_domain_def_id);
-            let enter_domain_fn_sig = self.tcx.fn_sig(enter_domain_def_id).instantiate_identity();
-            let enter_domain_instance = ty::InstanceDef::Item(enter_domain_def_id);
-            let enter_domain_def_span = self.tcx.def_span(enter_domain_def_id);
-            let args = enter_domain_fn_sig
-                .inputs()
-                .no_bound_vars()
-                .unwrap()
-                .iter()
-                .map(|a| a.clone())
-                .collect::<Vec<_>>();
-            let return_ty = enter_domain_fn_sig.output().no_bound_vars().unwrap();
-
-            //create return local
-            let local = self.local_decls.push(LocalDecl::new(return_ty, self.fn_span));
-            let place = Place::from(local);
-
-            self.schedule_drop(self.fn_span, argument_scope, local, DropKind::Value);
-
-            let func_ty = Ty::new_fn_def(self.tcx, enter_domain_def_id, args);
-            let func = Operand::Constant(Box::new(ConstOperand {
-                span: enter_domain_def_span,
-                user_ty: None,
-                const_: Const::zero_sized(func_ty),
-            }));
-
-            let start_block = block;
-            let new_block = self.cfg.start_new_block();
-            self.cfg.terminate(
-                start_block,
-                SourceInfo::outermost(self.fn_span),
-                TerminatorKind::Call {
-                    func,
-                    args: vec![],
-                    destination: place,
-                    target: Some(new_block),
-                    unwind: UnwindAction::Continue,
-                    call_source: CallSource::Normal,
-                    fn_span: self.fn_span,
-                },
-            );
-            new_block
-        } else {
-            debug!("not insert domain_enter");
-            block
-        };
         self.expr_into_dest(Place::return_place(), block, expr_id)
     }
 
