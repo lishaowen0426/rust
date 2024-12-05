@@ -564,6 +564,35 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         block.and(rv)
     }
 
+    #[instrument(level = "info", skip(self, f))]
+    pub(crate) fn in_safety_scope<F, R>(
+        &mut self,
+        region_scope: (region::Scope, SourceInfo),
+        lint_level: LintLevel,
+        safety: Safety,
+        f: F,
+    ) -> BlockAnd<R>
+    where
+        F: FnOnce(&mut Builder<'a, 'tcx>) -> BlockAnd<R>,
+    {
+        match safety {
+            Safety::Safe => self.in_scope(region_scope, lint_level, f),
+            _ => {
+                let source_scope = self.source_scope;
+                self.source_scope =
+                    self.new_source_scope(region_scope.1.span, lint_level, Some(safety));
+
+                self.push_scope(region_scope);
+                let mut block;
+                let rv = unpack!(block = f(self));
+                unpack!(block = self.pop_scope(region_scope, block));
+                self.source_scope = source_scope;
+                debug!(?block);
+                block.and(rv)
+            }
+        }
+    }
+
     /// Push a scope onto the stack. You can then build code in this
     /// scope and call `pop_scope` afterwards. Note that these two
     /// calls must be paired; using `in_scope` as a convenience

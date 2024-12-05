@@ -1447,6 +1447,12 @@ pub struct SourceScopeLocalData {
     pub safety: Safety,
 }
 
+impl SourceScopeLocalData {
+    pub fn is_unsafe(&self) -> bool {
+        self.safety != Safety::Safe
+    }
+}
+
 /// A collection of projections into user types.
 ///
 /// They are projections because a binding can occur a part of a

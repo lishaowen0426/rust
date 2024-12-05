@@ -573,6 +573,13 @@ pub fn dump_mir_def_ids(tcx: TyCtxt<'_>, single: Option<DefId>) -> Vec<DefId> {
 ///////////////////////////////////////////////////////////////////////////
 // Basic blocks and their parts (statements, terminators, ...)
 
+#[derive(Debug)]
+enum MirPrintStatementSafety {
+    Safe,
+    Unsafe,
+    Unknown,
+}
+
 /// Write out a human-readable textual representation for the given basic block.
 pub fn write_basic_block<'tcx, F>(
     tcx: TyCtxt<'tcx>,
@@ -594,7 +601,21 @@ where
     let mut current_location = Location { block, statement_index: 0 };
     for statement in &data.statements {
         extra_data(PassWhere::BeforeLocation(current_location), w)?;
-        let indented_body = format!("{INDENT}{INDENT}{statement:?};");
+
+        let statement_safety = {
+            if let ClearCrossCrate::Set(ld) =
+                body.source_scopes[statement.source_info.scope].local_data.as_ref()
+            {
+                match ld.safety {
+                    Safety::Safe => MirPrintStatementSafety::Safe,
+                    _ => MirPrintStatementSafety::Unsafe,
+                }
+            } else {
+                MirPrintStatementSafety::Unknown
+            }
+        };
+
+        let indented_body = format!("{INDENT}{INDENT}{statement:?}{INDENT}{statement_safety:?};");
         if tcx.sess.opts.unstable_opts.mir_include_spans {
             writeln!(
                 w,

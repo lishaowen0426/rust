@@ -15,10 +15,30 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     ) -> BlockAnd<()> {
         let Block { region_scope, span, ref stmts, expr, targeted_by_break, safety_mode } =
             self.thir[ast_block];
-        self.in_scope((region_scope, source_info), LintLevel::Inherited, move |this| {
-            if targeted_by_break {
-                this.in_breakable_scope(None, destination, span, |this| {
-                    Some(this.ast_block_stmts(
+        let safety = match safety_mode {
+            BlockSafety::Safe => Safety::Safe,
+            BlockSafety::BuiltinUnsafe => Safety::BuiltinUnsafe,
+            BlockSafety::ExplicitUnsafe(id) => Safety::ExplicitUnsafe(id),
+        };
+        self.in_safety_scope(
+            (region_scope, source_info),
+            LintLevel::Inherited,
+            safety,
+            move |this| {
+                if targeted_by_break {
+                    this.in_breakable_scope(None, destination, span, |this| {
+                        Some(this.ast_block_stmts(
+                            destination,
+                            block,
+                            span,
+                            stmts,
+                            expr,
+                            safety_mode,
+                            region_scope,
+                        ))
+                    })
+                } else {
+                    this.ast_block_stmts(
                         destination,
                         block,
                         span,
@@ -26,22 +46,13 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                         expr,
                         safety_mode,
                         region_scope,
-                    ))
-                })
-            } else {
-                this.ast_block_stmts(
-                    destination,
-                    block,
-                    span,
-                    stmts,
-                    expr,
-                    safety_mode,
-                    region_scope,
-                )
-            }
-        })
+                    )
+                }
+            },
+        )
     }
 
+    #[instrument(level = "info", skip_all)]
     fn ast_block_stmts(
         &mut self,
         destination: Place<'tcx>,
@@ -83,6 +94,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let source_info = this.source_info(span);
         for stmt in stmts {
             let Stmt { ref kind } = this.thir[*stmt];
+            info!(kind=?kind);
             match kind {
                 StmtKind::Expr { scope, expr } => {
                     this.block_context.push(BlockFrame::Statement { ignores_expr_result: true });

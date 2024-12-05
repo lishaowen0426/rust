@@ -7,7 +7,8 @@ pub struct RemoveStorageMarkers;
 
 impl<'tcx> MirPass<'tcx> for RemoveStorageMarkers {
     fn is_enabled(&self, sess: &rustc_session::Session) -> bool {
-        sess.mir_opt_level() > 0 && !sess.emit_lifetime_markers()
+        (sess.mir_opt_level() > 0 && !sess.emit_lifetime_markers())
+            || sess.opts.unstable_opts.maintain_storage_marker
     }
 
     fn run_pass(&self, _tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {

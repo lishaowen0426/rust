@@ -1722,6 +1722,9 @@ options! {
         (space separated)"),
     macro_backtrace: bool = (false, parse_bool, [UNTRACKED],
         "show macro backtraces (default: no)"),
+    maintain_storage_marker: bool = (false, parse_bool, [TRACKED],
+        "check remove_storage_marker.rs \
+        (default: no)"),
     maximal_hir_to_mir_coverage: bool = (false, parse_bool, [TRACKED],
         "save as much information as possible about the correspondence between MIR and HIR \
         as source scopes (default: no)"),
@@ -1854,6 +1857,8 @@ options! {
     remark_dir: Option<PathBuf> = (None, parse_opt_pathbuf, [UNTRACKED],
         "directory into which to write optimization remarks (if not specified, they will be \
 written to standard error output)"),
+    ref_prop: bool = (false, parse_bool, [UNTRACKED],
+        "enable reference propagation mir optimization, check ref_prop.rs, default false"),
     sanitizer: SanitizerSet = (SanitizerSet::empty(), parse_sanitizers, [TRACKED],
         "use a sanitizer"),
     sanitizer_cfi_canonical_jump_tables: Option<bool> = (Some(true), parse_opt_bool, [TRACKED],

@@ -71,7 +71,7 @@ pub struct ReferencePropagation;
 
 impl<'tcx> MirPass<'tcx> for ReferencePropagation {
     fn is_enabled(&self, sess: &rustc_session::Session) -> bool {
-        sess.mir_opt_level() >= 2
+        sess.mir_opt_level() >= 2 || sess.opts.unstable_opts.ref_prop
     }
 
     #[instrument(level = "trace", skip(self, tcx, body))]
