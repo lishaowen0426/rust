@@ -1988,6 +1988,8 @@ written to standard error output)"),
         and set the maximum number of chunks for which this is allowed (default: 16)"),
     unleash_the_miri_inside_of_you: bool = (false, parse_bool, [TRACKED],
         "take the brakes off const evaluation. NOTE: this is unsound (default: no)"),
+    unsafe_heap: bool = (false, parse_bool, [TRACKED],
+        "unsafe_heap (default:no)"),
     unpretty: Option<String> = (None, parse_unpretty, [UNTRACKED],
         "present the input source, unstable (and less-pretty) variants;
         `normal`, `identified`,

@@ -44,3 +44,19 @@ pub fn transmute_to_pointer<'a, T>(r: &mut T) -> *mut u8 {
 pub fn try_to_print() {
     println!("try_to_print");
 }
+
+#[stable(feature = "isolate_domain", since = "1.0.0")]
+#[cfg_attr(all(not(bootstrap)), lang = "set_mimalloc_unsafe")]
+#[allow(missing_docs)]
+#[inline(never)]
+#[linkage = "weak"]
+#[no_mangle]
+pub extern "C" fn set_rust_unsafe() {}
+
+#[stable(feature = "isolate_domain", since = "1.0.0")]
+#[cfg_attr(all(not(bootstrap)), lang = "clear_mimalloc_unsafe")]
+#[allow(missing_docs)]
+#[inline(never)]
+#[linkage = "weak"]
+#[no_mangle]
+pub extern "C" fn clear_rust_unsafe() {}

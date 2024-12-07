@@ -1,15 +1,20 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
+#![allow(rustc::potential_query_instability)]
 use rustc_data_structures::fx::FxHashSet;
 use rustc_hir::def_id::LOCAL_CRATE;
+use rustc_index::IndexVec;
 use rustc_middle::mir::visit::NonMutatingUseContext;
-use rustc_middle::mir::{traversal, Operand};
+use rustc_middle::mir::{traversal, LocalDecl, Operand, SourceInfo};
 use rustc_middle::mir::{
-    visit::{MutatingUseContext, PlaceContext, Visitor},
-    BasicBlock, BasicBlockData, Body, MirPass, Place, PlaceRef, Rvalue, StatementKind,
+    visit::{MutVisitor, MutatingUseContext, PlaceContext, Visitor},
+    BasicBlock, BasicBlockData, Body, CallSource, MirPass, Place, PlaceRef, Rvalue, StatementKind,
+    UnwindAction,
 };
 use rustc_middle::mir::{ClearCrossCrate, Local, Location, Statement, Terminator, TerminatorKind};
+use rustc_middle::ty::Ty;
 use rustc_middle::ty::TyCtxt;
+use rustc_span::DUMMY_SP;
 use std::fmt::Debug;
 use std::sync::OnceLock;
 
@@ -118,20 +123,22 @@ pub struct PropagateUnsafety;
 
 impl<'tcx> MirPass<'tcx> for PropagateUnsafety {
     fn is_enabled(&self, sess: &rustc_session::Session) -> bool {
-        true
+        sess.opts.unstable_opts.unsafe_heap
     }
 
     #[instrument(level = "info", skip_all, name = "propagate_unsafety_run_pass")]
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
         let crate_name = tcx.crate_name(LOCAL_CRATE);
+        /*
         if white_list_crates().contains(crate_name.as_str()) {
             return;
         }
+        */
 
         info!(crate_name=?crate_name);
         info!(source=?body.source);
 
-        let mut collector = BackwardUnsafeLocalCollector {
+        let mut backward_collector = BackwardUnsafeLocalCollector {
             unsafe_loc: FxHashSet::default(),
             tcx,
             unsafe_stack: Vec::new(),
@@ -139,9 +146,91 @@ impl<'tcx> MirPass<'tcx> for PropagateUnsafety {
         };
 
         for (bb, data) in traversal::postorder(body) {
-            collector.visit_basic_block_data(bb, data);
+            backward_collector.visit_basic_block_data(bb, data);
         }
-        info!("result:\n    {:?}", collector);
+        let mut forward_collector = ForwardUnsafeLocalCollector {
+            unsafe_loc: backward_collector.unsafe_loc.clone(),
+            tcx,
+            rvalue_unsafe: None,
+            body: body,
+        };
+
+        for (bb, data) in traversal::reverse_postorder(body) {
+            forward_collector.visit_basic_block_data(bb, data);
+        }
+
+        let mut result = FxHashSet::default();
+        for loc in backward_collector.unsafe_loc.union(&forward_collector.unsafe_loc) {
+            result.insert(loc);
+        }
+        for (loc, decl) in body.local_decls.iter_enumerated() {
+            info!(
+                "{} {:?}: {:?}",
+                if result.contains(&loc) { "UNSAFE" } else { "SAFE" },
+                loc,
+                decl.ty
+            );
+        }
+
+        let mut new_locals: IndexVec<Local, LocalDecl<'tcx>> = IndexVec::new();
+        let cur_loc = body.local_decls.len();
+        let mut new_blocks = Vec::new();
+        let cur_blk = body.basic_blocks.len();
+
+        for block in body.basic_blocks_mut() {
+            match block.terminator_mut().kind {
+                TerminatorKind::Call { target: Some(ref mut bb), ref destination, .. }
+                    if result.contains(&destination.local) =>
+                {
+                    let set_dest = Local::from_usize(
+                        cur_loc
+                            + new_locals
+                                .push(LocalDecl::new(Ty::new_unit(tcx), DUMMY_SP))
+                                .as_usize(),
+                    );
+                    let clear_dest = Local::from_usize(
+                        cur_loc
+                            + new_locals
+                                .push(LocalDecl::new(Ty::new_unit(tcx), DUMMY_SP))
+                                .as_usize(),
+                    );
+
+                    let original_call_idx = cur_blk + new_blocks.len();
+                    let original_call_target = *bb;
+                    let clear_call_idx = original_call_idx + 1;
+                    *bb = BasicBlock::from_usize(clear_call_idx);
+
+                    let original_terminator = block.terminator().clone();
+                    let original_call_blk = BasicBlockData {
+                        statements: vec![],
+                        is_cleanup: block.is_cleanup,
+                        terminator: Some(original_terminator),
+                    };
+
+                    let (set_term, clear_term) = create_mimalloc_call_terminators(
+                        tcx,
+                        set_dest,
+                        clear_dest,
+                        BasicBlock::from_usize(original_call_idx),
+                        original_call_target,
+                    );
+
+                    *block.terminator_mut() = set_term;
+                    let clear_blk = BasicBlockData {
+                        statements: vec![],
+                        is_cleanup: block.is_cleanup,
+                        terminator: Some(clear_term),
+                    };
+
+                    new_blocks.push(original_call_blk);
+                    new_blocks.push(clear_blk);
+                }
+                _ => {}
+            }
+        }
+
+        body.basic_blocks_mut().extend(new_blocks);
+        body.local_decls.extend(new_locals);
 
         let mut vis = TestVisitor;
         vis.visit_body(body);
@@ -223,15 +312,13 @@ impl<'tcx, 'a> Visitor<'tcx> for BackwardUnsafeLocalCollector<'tcx, 'a> {
             );
         }
     }
-    #[instrument(level = "info", skip(self, location), name = "unsafe_collector_visit_statement")]
+    #[instrument(level = "debug", skip(self, location), name = "unsafe_collector_visit_statement")]
     fn visit_statement(&mut self, statement: &Statement<'tcx>, location: Location) {
         if let ClearCrossCrate::Set(ld) =
             self.body.source_scopes[statement.source_info.scope].local_data.clone().as_ref()
         {
             match &statement.kind {
                 StatementKind::Assign(box (place, rvalue)) => {
-                    let ty = self.body.local_decls[place.local].ty;
-
                     if ld.is_unsafe() {
                         self.add_unsafe(place.local);
                     }
@@ -279,7 +366,6 @@ impl<'tcx, 'a> Visitor<'tcx> for BackwardUnsafeLocalCollector<'tcx, 'a> {
                             _ => {}
                         }
                     }
-                    self.super_terminator(terminator, location);
                     self.exit_scope();
                 }
                 //should consider yield
@@ -324,6 +410,205 @@ impl<'tcx, 'a> Visitor<'tcx> for BackwardUnsafeLocalCollector<'tcx, 'a> {
     }
 }
 
+struct ForwardUnsafeLocalCollector<'tcx, 'a> {
+    unsafe_loc: FxHashSet<Local>,
+    tcx: TyCtxt<'tcx>,
+    rvalue_unsafe: Option<bool>,
+    body: &'a Body<'tcx>,
+}
+
+impl<'tcx, 'a> ForwardUnsafeLocalCollector<'tcx, 'a> {
+    fn mark_rvalue_unsafe(&mut self) {
+        self.rvalue_unsafe = Some(true);
+    }
+
+    fn clear_rvalue_unsafe(&mut self) {
+        self.rvalue_unsafe = None;
+    }
+
+    fn is_rvalue_unsafe(&self) -> bool {
+        self.rvalue_unsafe.is_some_and(|s| s)
+    }
+
+    fn add_unsafe(&mut self, lo: Local) {
+        self.unsafe_loc.insert(lo);
+    }
+
+    fn is_local_unsafe(&self, lo: Local) -> bool {
+        self.unsafe_loc.contains(&lo)
+    }
+}
+impl<'tcx, 'a> Debug for ForwardUnsafeLocalCollector<'tcx, 'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (loc, decl) in self.body.local_decls.iter_enumerated() {
+            writeln!(
+                f,
+                "{} {:?}: {:?}",
+                if self.unsafe_loc.contains(&loc) { "UNSAFE" } else { "SAFE" },
+                loc,
+                decl.ty
+            )?;
+        }
+        Ok(())
+    }
+}
+
+impl<'tcx, 'a> Visitor<'tcx> for ForwardUnsafeLocalCollector<'tcx, 'a> {
+    fn visit_basic_block_data(&mut self, block: BasicBlock, data: &BasicBlockData<'tcx>) {
+        self.super_basic_block_data(block, data);
+    }
+    #[instrument(level = "info", skip(self))]
+    fn visit_statement(&mut self, statement: &Statement<'tcx>, location: Location) {
+        if let ClearCrossCrate::Set(ld) =
+            self.body.source_scopes[statement.source_info.scope].local_data.clone().as_ref()
+        {
+            if ld.is_unsafe() {
+                //unsafe statement should be processed in backward
+                return;
+            } else {
+                match &statement.kind {
+                    StatementKind::Assign(box (place, rvalue)) => {
+                        self.visit_rvalue(rvalue, location);
+                        info!("is place indirect:{}", place.is_indirect());
+                        if self.is_rvalue_unsafe() && !place.is_indirect() {
+                            self.add_unsafe(place.local);
+                        }
+                        self.clear_rvalue_unsafe();
+                    }
+                    _ => {}
+                }
+            }
+        } else {
+            info!("clear cross crate: {:?}", statement);
+            return;
+        }
+    }
+
+    fn visit_terminator(&mut self, terminator: &Terminator<'tcx>, location: Location) {
+        if let ClearCrossCrate::Set(ld) =
+            self.body.source_scopes[terminator.source_info.scope].local_data.clone().as_ref()
+        {
+            match &terminator.kind {
+                TerminatorKind::Call { func, args, destination, .. } => {
+                    if ld.is_unsafe() {
+                        return;
+                    }
+                    for a in args.iter() {
+                        match &a.node {
+                            Operand::Copy(p) => {
+                                self.visit_place(
+                                    p,
+                                    PlaceContext::NonMutatingUse(NonMutatingUseContext::Copy),
+                                    location,
+                                );
+                            }
+                            Operand::Move(p) => {
+                                self.visit_place(
+                                    p,
+                                    PlaceContext::NonMutatingUse(NonMutatingUseContext::Move),
+                                    location,
+                                );
+                            }
+                            _ => {}
+                        }
+                        if self.is_rvalue_unsafe() && !destination.is_indirect() {
+                            self.add_unsafe(destination.local);
+                        }
+                        self.clear_rvalue_unsafe();
+                    }
+                }
+                //should consider yield
+                _ => {}
+            }
+        } else {
+            info!("clear cross crate: {:?}", terminator);
+            return;
+        }
+    }
+
+    #[instrument(level = "info", skip(self))]
+    fn visit_place(&mut self, place: &Place<'tcx>, context: PlaceContext, location: Location) {
+        //this should be the place in rvalue and call arguments
+        let is_unsafe = match context {
+            PlaceContext::NonMutatingUse(NonMutatingUseContext::Copy)
+            | PlaceContext::NonMutatingUse(NonMutatingUseContext::Move)
+            | PlaceContext::NonMutatingUse(NonMutatingUseContext::AddressOf)
+            | PlaceContext::NonMutatingUse(NonMutatingUseContext::SharedBorrow)
+            | PlaceContext::MutatingUse(MutatingUseContext::AddressOf)
+            | PlaceContext::MutatingUse(MutatingUseContext::Borrow) => {
+                self.is_local_unsafe(place.local)
+            }
+            _ => false,
+        };
+
+        if is_unsafe {
+            self.mark_rvalue_unsafe();
+        }
+    }
+}
+
+struct SetMimallocUnsafe<'tcx> {
+    unsafe_locals: FxHashSet<Local>,
+    tcx: TyCtxt<'tcx>,
+}
+
+impl<'tcx> MutVisitor<'tcx> for SetMimallocUnsafe<'tcx> {
+    fn tcx<'a>(&'a self) -> TyCtxt<'tcx> {
+        self.tcx
+    }
+
+    fn visit_basic_block_data(&mut self, block: BasicBlock, data: &mut BasicBlockData<'tcx>) {}
+}
+
+fn create_mimalloc_call_terminators<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    set_dest: Local,
+    clear_dest: Local,
+    set_target: BasicBlock,
+    clear_target: BasicBlock,
+) -> (Terminator<'tcx>, Terminator<'tcx>) {
+    let set = Operand::function_handle(
+        tcx,
+        tcx.lang_items().set_mimalloc_unsafe().unwrap(),
+        vec![],
+        DUMMY_SP,
+    );
+
+    let set_term = Terminator {
+        source_info: SourceInfo::outermost(DUMMY_SP),
+        kind: TerminatorKind::Call {
+            func: set,
+            args: vec![],
+            destination: Place::from(set_dest),
+            target: Some(set_target),
+            unwind: UnwindAction::Continue,
+            call_source: CallSource::Normal,
+            fn_span: DUMMY_SP,
+        },
+    };
+
+    let clear = Operand::function_handle(
+        tcx,
+        tcx.lang_items().clear_mimalloc_unsafe().unwrap(),
+        vec![],
+        DUMMY_SP,
+    );
+
+    let clear_term = Terminator {
+        source_info: SourceInfo::outermost(DUMMY_SP),
+        kind: TerminatorKind::Call {
+            func: clear,
+            args: vec![],
+            destination: Place::from(clear_dest),
+            target: Some(clear_target),
+            unwind: UnwindAction::Continue,
+            call_source: CallSource::Normal,
+            fn_span: DUMMY_SP,
+        },
+    };
+    (set_term, clear_term)
+}
+
 struct TestVisitor;
 impl<'tcx> Visitor<'tcx> for TestVisitor {
     #[instrument(level = "debug", skip(self), name = "test_visitor_visit_projection")]
@@ -349,6 +634,16 @@ impl<'tcx> Visitor<'tcx> for TestVisitor {
 
     #[instrument(level = "debug", skip(self), name = "test_visitor_visit_local")]
     fn visit_local(&mut self, _local: Local, _context: PlaceContext, _location: Location) {}
+
+    #[instrument(level = "debug", skip(self), name = "test_visitor_visit_local_decl")]
+    fn visit_local_decl(&mut self, local: Local, local_decl: &rustc_middle::mir::LocalDecl<'tcx>) {
+        debug!(
+            "ty: {}, is any ptr:{}, is box:{}",
+            local_decl.ty,
+            local_decl.ty.is_any_ptr(),
+            local_decl.ty.is_box()
+        );
+    }
 
     #[instrument(level = "debug", skip(self), name = "test_visitor_visit_terminator")]
     fn visit_terminator(&mut self, terminator: &Terminator<'tcx>, location: Location) {
