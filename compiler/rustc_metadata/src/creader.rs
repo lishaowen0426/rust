@@ -181,11 +181,19 @@ impl CStore {
         self.isolates.get(&cn).map(std::clone::Clone::clone)
     }
 
+    #[instrument(level = "info", skip_all)]
     fn intern_stable_crate_id(&mut self, root: &CrateRoot) -> Result<CrateNum, CrateError> {
+        info!("crate header name:{:?}", root.header.name);
+        info!(
+            "meta len:{}, stable_crate_ids len:{}",
+            self.metas.len(),
+            self.stable_crate_ids.len()
+        );
         assert_eq!(self.metas.len(), self.stable_crate_ids.len());
         let num = CrateNum::new(self.stable_crate_ids.len());
         if let Some(&existing) = self.stable_crate_ids.get(&root.stable_crate_id()) {
             // Check for (potential) conflicts with the local crate
+            info!(existing=?existing);
             if existing == LOCAL_CRATE {
                 Err(CrateError::SymbolConflictsCurrent(root.name()))
             } else if let Some(crate_name1) = self.metas[existing].as_ref().map(|data| data.name())
@@ -197,6 +205,7 @@ impl CStore {
             }
         } else {
             self.metas.push(None);
+            info!("insert to stable_crate_id: key:{:?}, value:{:?}", root.stable_crate_id(), num);
             self.stable_crate_ids.insert(root.stable_crate_id(), num);
             Ok(num)
         }
@@ -217,6 +226,7 @@ impl CStore {
         self.metas[cnum].as_mut().unwrap_or_else(|| panic!("Failed to get crate data for {cnum:?}"))
     }
 
+    #[instrument(level = "info", skip(self, data))]
     fn set_crate_data(&mut self, cnum: CrateNum, data: CrateMetadata) {
         assert!(self.metas[cnum].is_none(), "Overwriting crate metadata entry");
         self.metas[cnum] = Some(Box::new(data));
@@ -373,17 +383,18 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
         CrateLoader { tcx, cstore, used_extern_options }
     }
 
+    #[instrument(level = "info", skip(self))]
     fn existing_match(&self, name: Symbol, hash: Option<Svh>, kind: PathKind) -> Option<CrateNum> {
         for (cnum, data) in self.cstore.iter_crate_data() {
             if data.name() != name {
-                trace!("{} did not match {}", data.name(), name);
+                info!("{} did not match {}", data.name(), name);
                 continue;
             }
 
             match hash {
                 Some(hash) if hash == data.hash() => return Some(cnum),
                 Some(hash) => {
-                    debug!("actual hash {} did not match expected {}", hash, data.hash());
+                    info!("actual hash {} did not match expected {}", hash, data.hash());
                     continue;
                 }
                 None => {}
@@ -400,6 +411,7 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
             // from the strings on the command line.
             let source = self.cstore.get_crate_data(cnum).cdata.source();
             if let Some(entry) = self.sess.opts.externs.get(name.as_str()) {
+                info!(extern_entry=?entry);
                 // Only use `--extern crate_name=path` here, not `--extern crate_name`.
                 if let Some(mut files) = entry.files() {
                     if files.any(|l| {
@@ -430,7 +442,7 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
             if kind.matches(prev_kind) {
                 return Some(cnum);
             } else {
-                debug!(
+                info!(
                     "failed to load existing crate {}; kind {:?} did not match prev_kind {:?}",
                     name, kind, prev_kind
                 );
@@ -462,6 +474,7 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
             }
         }
         let host_hash = host_lib.as_ref().map(|lib| lib.metadata.get_root().hash());
+        info!(host_hash=?host_hash);
 
         let private_dep = self
             .sess
@@ -471,8 +484,10 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
             .map_or(private_dep.unwrap_or(false), |e| e.is_private_dep)
             && private_dep.unwrap_or(true);
 
+        info!(private_dep = ?private_dep);
         // Claim this crate number and cache it
         let cnum = self.cstore.intern_stable_crate_id(&crate_root)?;
+        info!(private_dep = ?private_dep);
 
         info!(
             "register crate `{}` (cnum = {}. private_dep = {})",
@@ -483,11 +498,11 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
 
         if self.tcx.crate_types().contains(&CrateType::Executable) {
             if crate_root.decode_isolate_cgu_name(&metadata).len() > 0 && source.rlib.is_none() {
-                error!("isolate cgu name:");
+                info!("isolate cgu name:");
                 for sym in crate_root.decode_isolate_cgu_name(&metadata) {
-                    error!(symbol=?sym)
+                    info!(symbol=?sym)
                 }
-                error!(source=?source);
+                info!(source=?source);
                 return Err(CrateError::WrongLibraryType);
             }
 
@@ -500,6 +515,8 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
                 self.cstore.insert_isolate_object_path(cnum, isolate_path);
             }
         }
+
+        info!("pass check for isolate cgu name");
 
         // Maintain a reference to the top most crate.
         // Stash paths for top-most crate locally if necessary.
@@ -547,6 +564,7 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
         Ok(cnum)
     }
 
+    #[instrument(level = "info", skip(self, locator))]
     fn load_proc_macro<'b>(
         &self,
         locator: &mut CrateLocator<'b>,
@@ -606,6 +624,7 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
         }))
     }
 
+    #[instrument(level = "info", skip(self, span))]
     fn resolve_crate(
         &mut self,
         name: Symbol,
@@ -619,6 +638,7 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
                 Some(cnum)
             }
             Err(err) => {
+                info!("maybe_resolve_crate returns err");
                 let missing_core =
                     self.maybe_resolve_crate(sym::core, CrateDepKind::Explicit, None).is_err();
                 err.report(self.sess, span, missing_core);
@@ -627,7 +647,7 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
         }
     }
 
-    #[instrument(level = "debug", skip(self, dep))]
+    #[instrument(level = "info", skip(self, dep))]
     fn maybe_resolve_crate<'b>(
         &'b mut self,
         name: Symbol,
@@ -717,6 +737,7 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
         // don't know why and the original author doesn't remember ...
         let can_reuse_cratenum =
             locator.triple == self.sess.opts.target_triple || locator.is_proc_macro;
+        info!(can_reuse_cratenum = can_reuse_cratenum);
         Ok(Some(if can_reuse_cratenum {
             let mut result = LoadResult::Loaded(library);
             for (cnum, data) in self.cstore.iter_crate_data() {
@@ -744,8 +765,10 @@ impl<'a, 'tcx> CrateLoader<'a, 'tcx> {
     ) -> Result<CrateNumMap, CrateError> {
         debug!("resolving deps of external crate");
         if crate_root.is_proc_macro_crate() {
+            info!("is proc_macro_crate");
             return Ok(CrateNumMap::new());
         }
+        info!("not proc_macro_crate");
 
         // The map from crate numbers in the crate we're resolving to local crate numbers.
         // We map 0 and all other holes in the map to our parent crate. The "additional"
@@ -1195,6 +1218,7 @@ fn format_dlopen_err(e: &(dyn std::error::Error + 'static)) -> String {
 // proc-macro DLL with `Error::LoadLibraryExW`. It is suspected that something in the
 // system still holds a lock on the file, so we retry a few times before calling it
 // an error.
+#[instrument(level = "info")]
 fn load_dylib(path: &Path, max_attempts: usize) -> Result<libloading::Library, String> {
     assert!(max_attempts > 0);
 
@@ -1204,11 +1228,7 @@ fn load_dylib(path: &Path, max_attempts: usize) -> Result<libloading::Library, S
         match unsafe { libloading::Library::new(&path) } {
             Ok(lib) => {
                 if attempt > 0 {
-                    debug!(
-                        "Loaded proc-macro `{}` after {} attempts.",
-                        path.display(),
-                        attempt + 1
-                    );
+                    info!("Loaded proc-macro `{}` after {} attempts.", path.display(), attempt + 1);
                 }
                 return Ok(lib);
             }
@@ -1220,12 +1240,12 @@ fn load_dylib(path: &Path, max_attempts: usize) -> Result<libloading::Library, S
 
                 last_error = Some(err);
                 std::thread::sleep(Duration::from_millis(100));
-                debug!("Failed to load proc-macro `{}`. Retrying.", path.display());
+                info!("Failed to load proc-macro `{}`. Retrying.", path.display());
             }
         }
     }
 
-    debug!("Failed to load proc-macro `{}` even after {} attempts.", path.display(), max_attempts);
+    info!("Failed to load proc-macro `{}` even after {} attempts.", path.display(), max_attempts);
 
     let last_error = last_error.unwrap();
     let message = if let Some(src) = last_error.source() {
@@ -1250,14 +1270,18 @@ impl From<DylibError> for CrateError {
     }
 }
 
+#[instrument(level = "info")]
 pub unsafe fn load_symbol_from_dylib<T: Copy>(
     path: &Path,
     sym_name: &str,
 ) -> Result<T, DylibError> {
     // Make sure the path contains a / or the linker will search for it.
     let path = try_canonicalize(path).unwrap();
-    let lib =
-        load_dylib(&path, 5).map_err(|err| DylibError::DlOpen(path.display().to_string(), err))?;
+    let lib = load_dylib(&path, 5).map_err(|err| {
+        info!(load_dylib_err = err);
+        DylibError::DlOpen(path.display().to_string(), err)
+    })?;
+    info!(load_dylib=?lib);
 
     let sym = unsafe { lib.get::<T>(sym_name.as_bytes()) }
         .map_err(|err| DylibError::DlSym(path.display().to_string(), format_dlopen_err(&err)))?;

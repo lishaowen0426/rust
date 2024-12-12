@@ -13,6 +13,8 @@ use crate::intrinsics;
 use crate::marker::DiscriminantKind;
 use crate::ptr;
 
+mod unsafe_heap;
+
 mod manually_drop;
 #[stable(feature = "manually_drop", since = "1.20.0")]
 pub use manually_drop::ManuallyDrop;

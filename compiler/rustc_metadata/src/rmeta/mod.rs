@@ -244,7 +244,7 @@ pub(crate) struct CrateHeader {
 #[derive(MetadataEncodable, MetadataDecodable)]
 pub(crate) struct CrateRoot {
     /// A header used to detect if this is the right crate to load.
-    header: CrateHeader,
+    pub header: CrateHeader,
 
     extra_filename: String,
     stable_crate_id: StableCrateId,

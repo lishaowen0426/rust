@@ -179,9 +179,9 @@ impl<'tcx> MirPass<'tcx> for PropagateUnsafety {
 
         for block in body.basic_blocks_mut() {
             match block.terminator_mut().kind {
-                TerminatorKind::Call { target: Some(ref mut bb), ref destination, .. }
-                    if result.contains(&destination.local) =>
-                {
+                TerminatorKind::Call {
+                    target: Some(ref mut bb), ref destination, unwind, ..
+                } if result.contains(&destination.local) => {
                     let set_dest = Local::from_usize(
                         cur_loc
                             + new_locals
@@ -213,6 +213,7 @@ impl<'tcx> MirPass<'tcx> for PropagateUnsafety {
                         clear_dest,
                         BasicBlock::from_usize(original_call_idx),
                         original_call_target,
+                        unwind,
                     );
 
                     *block.terminator_mut() = set_term;
@@ -566,6 +567,7 @@ fn create_mimalloc_call_terminators<'tcx>(
     clear_dest: Local,
     set_target: BasicBlock,
     clear_target: BasicBlock,
+    unwind: UnwindAction,
 ) -> (Terminator<'tcx>, Terminator<'tcx>) {
     let set = Operand::function_handle(
         tcx,
@@ -581,7 +583,7 @@ fn create_mimalloc_call_terminators<'tcx>(
             args: vec![],
             destination: Place::from(set_dest),
             target: Some(set_target),
-            unwind: UnwindAction::Continue,
+            unwind,
             call_source: CallSource::Normal,
             fn_span: DUMMY_SP,
         },
@@ -601,7 +603,7 @@ fn create_mimalloc_call_terminators<'tcx>(
             args: vec![],
             destination: Place::from(clear_dest),
             target: Some(clear_target),
-            unwind: UnwindAction::Continue,
+            unwind,
             call_source: CallSource::Normal,
             fn_span: DUMMY_SP,
         },

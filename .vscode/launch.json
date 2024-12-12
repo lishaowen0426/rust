@@ -10,19 +10,44 @@
             "name": "Debug",
             "program": "/home/swli/rust-isolation/rust/build/host/stage2/bin/rustc",
             "args": [
+                "--crate-name",
+                "async_stream",
+                "--edition=2021",
+                "/home/swli/.cargo/registry/src/index.crates.io-6f17d22bba15001f/async-stream-0.3.6/src/lib.rs",
                 "--crate-type",
                 "lib",
+                "--emit=dep-info,metadata,link",
+                "-C",
+                "embed-bitcode=no",
+                "-C",
+                "opt-level=3",
+                "-C",
+                "metadata=ffc591a61ce4b520",
+                "-C",
+                "extra-filename=-ffc591a61ce4b520",
                 "--out-dir",
-                "/home/swli/rust-isolation/lib_demo/output",
-                "-Zisolate",
-                "-Zunpretty=mir",
-                "-Zisolate_crate=lib1,lib2",
-                "/home/swli/rust-isolation/lib_demo/src/lib.rs"
+                "/home/swli/rust-isolation/benchmark/tokio/target/release/deps",
+                "-C",
+                "strip=debuginfo",
+                "-L",
+                "dependency=/home/swli/rust-isolation/benchmark/tokio/target/release/deps",
+                "--extern",
+                "async_stream_impl=/home/swli/rust-isolation/benchmark/tokio/target/release/deps/libasync_stream_impl-e1ce92bc7e1bb927.so",
+                "--extern",
+                "futures_core=/home/swli/rust-isolation/benchmark/tokio/target/release/deps/libfutures_core-f573fb0e30e13cad.rmeta",
+                "--extern",
+                "pin_project_lite=/home/swli/rust-isolation/benchmark/tokio/target/release/deps/libpin_project_lite-7b8441e52e71b56b.rmeta",
+                "--cap-lints",
+                "allow",
+                "-Zunstable-options",
+                "-Copt-level=2",
+                "-Zunsafe_heap",
+                "-Zmimalloc=/home/swli/rust-isolation/mimalloc/out/debug/mimalloc-debug.o"
             ],
             "env": {
-                "RUSTC_LOG": "rustc_mir_transform=debug"
+                "RUSTC_LOG": "[resolve_crate]=info"
             },
-            "cwd": "/home/swli/rust-isolation/lib_demo"
+            "cwd": "/home/swli/rust-isolation/benchmark/tokio"
         }
     ]
 }

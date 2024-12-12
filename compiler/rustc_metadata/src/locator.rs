@@ -301,6 +301,7 @@ impl IntoDiagnosticArg for CrateFlavor {
 }
 
 impl<'a> CrateLocator<'a> {
+    #[instrument(level = "info", skip(sess, metadata_loader), name = "cratelocator_new")]
     pub(crate) fn new(
         sess: &'a Session,
         metadata_loader: &'a dyn MetadataLoader,
@@ -511,6 +512,7 @@ impl<'a> CrateLocator<'a> {
             rlib: self.extract_one(rlibs, CrateFlavor::Rlib, &mut slot)?,
             dylib: self.extract_one(dylibs, CrateFlavor::Dylib, &mut slot)?,
         };
+        info!(source=?source, is_slot_none= slot.is_none());
         Ok(slot.map(|(svh, metadata, _)| (svh, Library { source, metadata })))
     }
 

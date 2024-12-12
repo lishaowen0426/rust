@@ -2160,7 +2160,12 @@ fn linker_with_args<'a>(
     add_pre_link_objects(cmd, sess, flavor, link_output_kind, self_contained_crt_objects);
 
     if let Some(mimalloc) = sess.opts.unstable_opts.mimalloc.as_ref() {
-        cmd.add_object(&Path::new(mimalloc));
+        match link_output_kind {
+            LinkOutputKind::DynamicDylib | LinkOutputKind::StaticDylib => {}
+            _ => {
+                cmd.add_object(&Path::new(mimalloc));
+            }
+        }
     }
 
     add_linked_symbol_object(
