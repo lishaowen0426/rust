@@ -2161,7 +2161,11 @@ fn linker_with_args<'a>(
 
     if let Some(mimalloc) = sess.opts.unstable_opts.mimalloc.as_ref() {
         match link_output_kind {
-            LinkOutputKind::DynamicDylib | LinkOutputKind::StaticDylib => {}
+            LinkOutputKind::DynamicDylib | LinkOutputKind::StaticDylib => {
+                //when load dylib using dlopen
+                //it the dylib contains any tls, it will fail
+                //
+            }
             _ => {
                 cmd.add_object(&Path::new(mimalloc));
             }

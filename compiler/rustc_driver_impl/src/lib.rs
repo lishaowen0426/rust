@@ -455,6 +455,10 @@ fn run_compiler(
                 sess.code_stats.print_vtable_sizes(crate_name);
             }
 
+            if sess.opts.unstable_opts.print_unsafe_locals {
+                sess.code_stats.print_unsafe_and_safe_locals();
+            }
+
             Ok(Some(linker))
         })?;
 

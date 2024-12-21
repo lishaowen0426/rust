@@ -163,14 +163,26 @@ impl<'tcx> MirPass<'tcx> for PropagateUnsafety {
         for loc in backward_collector.unsafe_loc.union(&forward_collector.unsafe_loc) {
             result.insert(loc);
         }
+
+        let mut unsafe_count = 0usize;
+        let mut safe_count = 0usize;
         for (loc, decl) in body.local_decls.iter_enumerated() {
             info!(
                 "{} {:?}: {:?}",
-                if result.contains(&loc) { "UNSAFE" } else { "SAFE" },
+                if result.contains(&loc) {
+                    unsafe_count += 1;
+                    "UNSAFE"
+                } else {
+                    safe_count += 1;
+                    "SAFE"
+                },
                 loc,
                 decl.ty
             );
         }
+
+        tcx.sess.code_stats.record_unsafe_locals(unsafe_count);
+        tcx.sess.code_stats.record_safe_locals(safe_count);
 
         let mut new_locals: IndexVec<Local, LocalDecl<'tcx>> = IndexVec::new();
         let cur_loc = body.local_decls.len();

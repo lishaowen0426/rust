@@ -1824,6 +1824,8 @@ options! {
         "print the result of the monomorphization collection pass"),
     print_type_sizes: bool = (false, parse_bool, [UNTRACKED],
         "print layout information for each type encountered (default: no)"),
+    print_unsafe_locals: bool = (false, parse_bool, [UNTRACKED],
+        "print the count of unsafe locals"),
     print_vtable_sizes: bool = (false, parse_bool, [UNTRACKED],
         "print size comparison between old and new vtable layouts (default: no)"),
     proc_macro_backtrace: bool = (false, parse_bool, [UNTRACKED],

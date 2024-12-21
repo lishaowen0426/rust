@@ -139,6 +139,8 @@ pub fn extract(attrs: &[ast::Attribute]) -> Option<(Symbol, Span)> {
 
 language_item_table! {
 //  Variant name,            Name,                     Getter method name,         Target                  Generic requirements;
+    PkeyClearUnsafe,         sym::pkey_clear_unsafe,   pkey_clear_unsafe,          Target::Fn,             GenericRequirement::None;
+    PkeySetUnsafe,           sym::pkey_set_unsafe,     pkey_set_unsafe,            Target::Fn,             GenericRequirement::None;
     ClearMimallocUnsafe,     sym::clear_mimalloc_unsafe,clear_mimalloc_unsafe,     Target::Fn,             GenericRequirement::None;
     SetMimallocUnsafe,       sym::set_mimalloc_unsafe, set_mimalloc_unsafe,        Target::Fn,             GenericRequirement::None;
     TransmuteToPointer,      sym::transmute_to_pointer,transmute_to_pointer,       Target::Fn,             GenericRequirement::None;

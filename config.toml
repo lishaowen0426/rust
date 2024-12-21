@@ -8,6 +8,7 @@ tools = [
     "rustfmt",
     "rust-analyzer",
     "rust-analyzer-proc-macro-srv",
+    "miri",
 ]
 
 verbose = 1

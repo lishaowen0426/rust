@@ -1284,6 +1284,8 @@ symbols! {
         pic,
         pie,
         pin,
+        pkey_clear_unsafe,
+        pkey_set_unsafe,
         platform_intrinsics,
         plugin,
         plugin_registrar,

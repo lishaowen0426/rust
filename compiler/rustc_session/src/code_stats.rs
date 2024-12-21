@@ -89,6 +89,8 @@ pub struct VTableSizeInfo {
 pub struct CodeStats {
     type_sizes: Lock<FxHashSet<TypeSizeInfo>>,
     vtable_sizes: Lock<FxHashMap<DefId, VTableSizeInfo>>,
+    unsafe_local_count: Lock<usize>,
+    safe_local_count: Lock<usize>,
 }
 
 impl CodeStats {
@@ -127,6 +129,24 @@ impl CodeStats {
         assert!(
             prev.is_none(),
             "size of vtable for `{trait_name}` ({trait_did:?}) is already recorded"
+        );
+    }
+
+    pub fn record_unsafe_locals(&self, count: usize) {
+        *self.unsafe_local_count.borrow_mut() += count;
+    }
+    pub fn record_safe_locals(&self, count: usize) {
+        *self.safe_local_count.borrow_mut() += count;
+    }
+
+    pub fn print_unsafe_and_safe_locals(&self) {
+        let unsafe_count = self.unsafe_local_count.borrow();
+        let safe_count = self.safe_local_count.borrow();
+        println!(
+            "UNSAFE LOCAL: {}, SAFE LOCAL:{}, TOTAL: {}",
+            *unsafe_count,
+            *safe_count,
+            *unsafe_count + *safe_count
         );
     }
 
