@@ -48,6 +48,96 @@
                 "RUSTC_LOG": "[resolve_crate]=info"
             },
             "cwd": "/home/swli/rust-isolation/benchmark/tokio"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Cargo-miri",
+            "program": "/home/swli/rust-isolation/rust/build/x86_64-unknown-linux-gnu/stage2/bin/cargo-miri",
+            "args": [
+                "runner",
+                "/home/swli/rust-isolation/lib_demo/target/miri/x86_64-unknown-linux-gnu/debug/lib_demo"
+            ],
+            "cwd": "/home/swli/rust-isolation/lib_demo",
+            "env": {
+                "MIRI_VERBOSE": "2",
+            },
+            "setupCommands": [
+                {
+                    "text": "set follow-fork-mode child"
+                }
+            ]
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Miri",
+            "program": "/home/swli/rust-isolation/rust/build/x86_64-unknown-linux-gnu/stage2/bin/miri",
+            "args": [
+                "--crate-name",
+                "lib_demo",
+                "--edition=2021",
+                "src/main.rs",
+                "--diagnostic-width=153",
+                "--crate-type",
+                "bin",
+                "--emit=dep-info,link",
+                "-C",
+                "embed-bitcode=no",
+                "-C",
+                "debuginfo=2",
+                "--check-cfg",
+                "cfg(docsrs)",
+                "--check-cfg",
+                "cfg(feature, values())",
+                "-C",
+                "metadata=e05e037b5833ab33",
+                "-C",
+                "extra-filename=-e05e037b5833ab33",
+                "--out-dir",
+                "/home/swli/rust-isolation/lib_demo/target/miri/x86_64-unknown-linux-gnu/debug/deps",
+                "--target",
+                "x86_64-unknown-linux-gnu",
+                "-C",
+                "linker=clang",
+                "-C",
+                "incremental=/home/swli/rust-isolation/lib_demo/target/miri/x86_64-unknown-linux-gnu/debug/incremental",
+                "-L",
+                "dependency=/home/swli/rust-isolation/lib_demo/target/miri/x86_64-unknown-linux-gnu/debug/deps",
+                "-L",
+                "dependency=/home/swli/rust-isolation/lib_demo/target/miri/debug/deps",
+                "--extern",
+                "lib_demo=/home/swli/rust-isolation/lib_demo/target/miri/x86_64-unknown-linux-gnu/debug/deps/liblib_demo-f07708db826b55dd.rmeta",
+                "-Zunstable-options",
+                "-Copt-level=0",
+                "-Zunsafe_heap",
+                "-Zprint_unsafe_locals",
+                "-Zref_prop",
+                "-Zmaintain_storage_marker",
+                "-Zlinker-verbose",
+                "-Zthir-unsafeck=true",
+                "-Zmimalloc=/home/swli/rust-isolation/mimalloc/out/debug/mimalloc-debug.o",
+                "-Csave-temps",
+                "-Clinker-plugin-lto=no",
+                "-Clink-arg=-fuse-ld=/home/swli/rust-isolation/mold/build/mold",
+                "-Clink-arg=-Wl,--verbose",
+                "-Ccodegen-units=1",
+                "--"
+            ],
+            "cwd": "/home/swli/rust-isolation/lib_demo",
+            "env": {
+                "MIRI_SYSROOT": "/home/swli/rust-isolation/rust/build/x86_64-unknown-linux-gnu/stage2",
+                "RUSTC": "/home/swli/rust-isolation/rust/build/x86_64-unknown-linux-gnu/stage2/bin/rustc",
+                "RUSTC_LOG": "[interp_step]=info"
+            },
+            "setupCommands": [
+                {
+                    "text": "set follow-fork-mode child"
+                }
+            ],
+            "sourceLanguages": [
+                "rust"
+            ]
         }
-    ]
+    ],
 }

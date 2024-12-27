@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use std::env;
 use std::ffi::OsString;
 use std::fs::File;
@@ -8,6 +9,7 @@ use std::process::Command;
 
 use cargo_metadata::{Metadata, MetadataCommand};
 use serde::{Deserialize, Serialize};
+use tracing::{info, instrument};
 
 pub use crate::arg::*;
 

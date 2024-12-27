@@ -10,8 +10,10 @@ mod setup;
 use std::{env, iter};
 
 use crate::phases::*;
+use tracing_subscriber::fmt;
 
 fn main() {
+    fmt::init();
     // Rustc does not support non-UTF-8 arguments so we make no attempt either.
     // (We do support non-UTF-8 environment variables though.)
     let mut args = std::env::args();

@@ -19,6 +19,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
     ///
     /// This is marked `#inline(always)` to work around adversarial codegen when `opt-level = 3`
     #[inline(always)]
+    #[instrument(level = "info", name = "interp_step", skip_all)]
     pub fn step(&mut self) -> InterpResult<'tcx, bool> {
         if self.stack().is_empty() {
             return Ok(false);
@@ -32,6 +33,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             return Ok(true);
         };
         let basic_block = &self.body().basic_blocks[loc.block];
+        info!("body source: {:?}", self.body().source);
 
         if let Some(stmt) = basic_block.statements.get(loc.statement_index) {
             let old_frames = self.frame_idx();
@@ -54,6 +56,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
     /// statement counter.
     ///
     /// This does NOT move the statement counter forward, the caller has to do that!
+    #[instrument(level = "info", name = "eval_statement", skip(self))]
     pub fn statement(&mut self, stmt: &mir::Statement<'tcx>) -> InterpResult<'tcx> {
         info!("{:?}", stmt);
 
@@ -140,7 +143,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         let dest = self.eval_place(place)?;
         // FIXME: ensure some kind of non-aliasing between LHS and RHS?
         // Also see https://github.com/rust-lang/rust/issues/68364.
-
+        info!(rvalue=?rvalue);
         use rustc_middle::mir::Rvalue::*;
         match *rvalue {
             ThreadLocalRef(did) => {

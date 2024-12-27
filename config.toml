@@ -20,6 +20,9 @@ optimize = true
 debug = true
 codegen-units = 0
 channel ="nightly"
+debuginfo-level-rustc = 2
+debuginfo-level-std = 1
+debuginfo-level-tools = 2
 
 [llvm]
 download-ci-llvm = false
