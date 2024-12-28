@@ -181,6 +181,27 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         Ok(())
     }
 
+    fn mark_place_unsafe(&mut self, place: &PlaceTy<'tcx, M::Provenance>) {
+        use crate::interpret::place::Place;
+
+        if let Some(def_id) = self.body().source.def_id().as_local() {
+            match place.place() {
+                Place::Ptr(mplace) => {
+                    if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id(mplace.ptr) {
+                        let copied = self
+                            .get_locals_from_alloc_id(alloc_id)
+                            .collect::<Vec<rustc_middle::mir::Local>>();
+                        for loc in copied {
+                            self.mark_unsafe_local(def_id, loc);
+                        }
+                    }
+                }
+                Place::Local { local, .. } => {
+                    self.mark_unsafe_local(def_id, *local);
+                }
+            }
+        }
+    }
     /// Evaluate an assignment statement.
     ///
     /// There is no separate `eval_rvalue` function. Instead, the code for handling each rvalue
@@ -189,10 +210,13 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         &mut self,
         rvalue: &mir::Rvalue<'tcx>,
         place: mir::Place<'tcx>,
-        _is_stmt_unsafe: bool,
+        is_stmt_unsafe: bool,
         _is_local_crate: bool,
     ) -> InterpResult<'tcx> {
         let dest = self.eval_place(place)?;
+        if is_stmt_unsafe {
+            self.mark_place_unsafe(&dest);
+        }
         // FIXME: ensure some kind of non-aliasing between LHS and RHS?
         // Also see https://github.com/rust-lang/rust/issues/68364.
         info!(rvalue=?rvalue);

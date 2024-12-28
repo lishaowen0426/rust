@@ -947,6 +947,13 @@ where
                         // the place refers to, i.e. we do this before we apply `offset`.
                         *self.stack_mut()[frame].locals[local].access_mut().unwrap() =
                             Operand::Indirect(mplace.mplace);
+
+                        {
+                            //add the new allocation to our map
+                            if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id(mplace.mplace.ptr) {
+                                self.map_alloc_id_to_local(alloc_id, local);
+                            }
+                        }
                         mplace.mplace
                     }
                     &mut Operand::Indirect(mplace) => mplace, // this already was an indirect local

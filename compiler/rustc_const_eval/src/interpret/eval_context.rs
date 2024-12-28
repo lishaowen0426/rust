@@ -1,10 +1,13 @@
+#![allow(rustc::potential_query_instability)]
 use std::cell::Cell;
 use std::{fmt, mem};
 
 use either::{Either, Left, Right};
 
 use hir::CRATE_HIR_ID;
+use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_errors::DiagCtxt;
+use rustc_hir::def_id::LocalDefId;
 use rustc_hir::{self as hir, def_id::DefId, definitions::DefPathData};
 use rustc_index::IndexVec;
 use rustc_middle::mir::interpret::{
@@ -50,6 +53,18 @@ pub struct InterpCx<'mir, 'tcx, M: Machine<'mir, 'tcx>> {
 
     /// The recursion limit (cached from `tcx.recursion_limit(())`)
     pub recursion_limit: Limit,
+
+    /// map from AllocId to Local
+    /// A live LocalValue can be either immediate or indirect
+    /// An indirect local is associated with a Pointer
+    /// This is the map from the Pointer's AllocId to the local
+    ///
+    /// currently, i don't know if this is a one-to-one mapping
+    /// so i use a FxHashSet
+    pub alloc_id_to_local: FxHashMap<AllocId, FxHashSet<Local>>,
+
+    /// map from a local def id to its unsafe locals
+    pub local_def_id_to_unsafe_local: FxHashMap<LocalDefId, FxHashSet<Local>>,
 }
 
 // The Phantomdata exists to prevent this type from being `Send`. If it were sent across a thread
@@ -464,6 +479,49 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             param_env,
             memory: Memory::new(),
             recursion_limit: tcx.recursion_limit(),
+            alloc_id_to_local: FxHashMap::default(),
+            local_def_id_to_unsafe_local: FxHashMap::default(),
+        }
+    }
+
+    pub fn map_alloc_id_to_local(&mut self, id: AllocId, local: Local) {
+        self.alloc_id_to_local.entry(id).or_insert_with(FxHashSet::default).insert(local);
+    }
+
+    pub fn get_locals_from_alloc_id(
+        &self,
+        id: AllocId,
+    ) -> impl Iterator<Item = rustc_middle::mir::Local> + '_ {
+        self.alloc_id_to_local.get(&id).map(|s| s.iter().cloned()).into_iter().flatten()
+    }
+
+    pub fn remove_local_from_alloc_id(&mut self, id: AllocId, local: Local) {
+        self.alloc_id_to_local.entry(id).and_modify(|s| {
+            s.remove(&local);
+        });
+    }
+
+    pub fn mark_unsafe_local(&mut self, id: LocalDefId, local: Local) {
+        self.local_def_id_to_unsafe_local
+            .entry(id)
+            .or_insert_with(FxHashSet::default)
+            .insert(local);
+    }
+
+    pub fn get_unsafe_locals(
+        &self,
+        id: LocalDefId,
+    ) -> impl Iterator<Item = rustc_middle::mir::Local> + '_ {
+        self.local_def_id_to_unsafe_local.get(&id).map(|s| s.iter().cloned()).into_iter().flatten()
+    }
+
+    #[instrument(level = "info", skip_all)]
+    pub fn print_unsafe_locals(&self) {
+        for (def_id, locals) in self.local_def_id_to_unsafe_local.iter() {
+            info!("Unsafe locals: LocalDefId: {:?}", def_id);
+            for loc in locals.iter() {
+                info!(local=?loc);
+            }
         }
     }
 
@@ -968,6 +1026,11 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             }
         }
 
+        {
+            //clear the alloc id map
+            self.alloc_id_to_local = FxHashMap::default();
+        }
+
         // All right, now it is time to actually pop the frame.
         // Note that its locals are gone already, but that's fine.
         let frame =
@@ -1092,6 +1155,13 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             }
             // Need to allocate some memory, since `Immediate::Uninit` cannot be unsized.
             let dest_place = self.allocate_dyn(layout, MemoryKind::Stack, meta)?;
+            {
+                //store this alloc id
+                if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id(dest_place.ptr()) {
+                    self.map_alloc_id_to_local(alloc_id, local);
+                }
+            }
+
             Operand::Indirect(*dest_place.mplace())
         } else {
             assert!(!meta.has_meta()); // we're dropping the metadata
@@ -1152,6 +1222,10 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                 // Locals always have a `alloc_id` (they are never the result of a int2ptr).
                 self.dump_alloc(ptr.provenance.unwrap().get_alloc_id().unwrap())
             );
+
+            if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id(ptr) {
+                self.remove_local_from_alloc_id(alloc_id, loc);
+            }
 
             self.deallocate_ptr(ptr, None, MemoryKind::Stack)?;
         };
@@ -1262,6 +1336,7 @@ impl<'a, 'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> std::fmt::Debug
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.place {
             Place::Local { frame, local, offset } => {
+                write!(fmt, "Place::Local: ")?;
                 let mut allocs = Vec::new();
                 write!(fmt, "{local:?}")?;
                 if let Some(offset) = offset {
@@ -1310,9 +1385,10 @@ impl<'a, 'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> std::fmt::Debug
             }
             Place::Ptr(mplace) => match mplace.ptr.provenance.and_then(Provenance::get_alloc_id) {
                 Some(alloc_id) => {
+                    write!(fmt, "Place::Ptr: ")?;
                     write!(fmt, "by ref {:?}: {:?}", mplace.ptr, self.ecx.dump_alloc(alloc_id))
                 }
-                ptr => write!(fmt, " integral by ref: {ptr:?}"),
+                ptr => write!(fmt, "Place::Ptr: integral by ref: {ptr:?}"),
             },
         }
     }

@@ -113,6 +113,7 @@
                 "-Zunsafe_heap",
                 "-Zprint_unsafe_locals",
                 "-Zref_prop",
+                "-Zunpretty=mir",
                 "-Zmaintain_storage_marker",
                 "-Zlinker-verbose",
                 "-Zthir-unsafeck=true",
@@ -128,7 +129,7 @@
             "env": {
                 "MIRI_SYSROOT": "/home/swli/rust-isolation/rust/build/x86_64-unknown-linux-gnu/stage2",
                 "RUSTC": "/home/swli/rust-isolation/rust/build/x86_64-unknown-linux-gnu/stage2/bin/rustc",
-                "RUSTC_LOG": "[print_loc_alloc_id]=info,[print_local]=info,[miri_debug_stmt]=info,[dump_place]=info"
+                "RUSTC_LOG": "[print_loc_alloc_id]=info,[print_local]=info,[miri_debug_stmt]=info,[dump_place]=info,[print_unsafe_locals]=info"
             },
             "setupCommands": [
                 {

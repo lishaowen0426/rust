@@ -454,6 +454,8 @@ pub fn eval_entry<'tcx>(
         EnvVars::cleanup(&mut ecx).expect("error during env var cleanup");
     }
 
+    ecx.print_unsafe_locals();
+
     // Process the result.
     let (return_code, leak_check) = report_error(&ecx, res)?;
     if leak_check && !ignore_leaks {
