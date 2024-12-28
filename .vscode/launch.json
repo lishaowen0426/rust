@@ -128,7 +128,7 @@
             "env": {
                 "MIRI_SYSROOT": "/home/swli/rust-isolation/rust/build/x86_64-unknown-linux-gnu/stage2",
                 "RUSTC": "/home/swli/rust-isolation/rust/build/x86_64-unknown-linux-gnu/stage2/bin/rustc",
-                "RUSTC_LOG": "[interp_step]=info"
+                "RUSTC_LOG": "[print_loc_alloc_id]=info,[print_local]=info,[miri_debug_stmt]=info,[dump_place]=info"
             },
             "setupCommands": [
                 {

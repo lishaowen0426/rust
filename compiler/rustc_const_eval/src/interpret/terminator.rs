@@ -1,14 +1,21 @@
 use std::borrow::Cow;
 
+use super::{
+    eval_context::LocalValue, operand::Operand, place::MemPlace, CtfeProvenance, FnVal, ImmTy,
+    InterpCx, InterpResult, MPlaceTy, Machine, OpTy, PlaceTy, Projectable, Provenance, Scalar,
+    StackPopCleanup,
+};
+use crate::fluent_generated as fluent;
 use rustc_ast::ast::InlineAsmOptions;
 use rustc_middle::{
-    mir,
+    mir::{self, LocalDecl},
     ty::{
         self,
         layout::{FnAbiOf, IntegerExt, LayoutOf, TyAndLayout},
         AdtDef, Instance, Ty,
     },
 };
+use rustc_mir_dataflow::storage::always_storage_live_locals;
 use rustc_span::{source_map::Spanned, sym};
 use rustc_target::abi::{self, FieldIdx};
 use rustc_target::abi::{
@@ -16,12 +23,6 @@ use rustc_target::abi::{
     Integer,
 };
 use rustc_target::spec::abi::Abi;
-
-use super::{
-    CtfeProvenance, FnVal, ImmTy, InterpCx, InterpResult, MPlaceTy, Machine, OpTy, PlaceTy,
-    Projectable, Provenance, Scalar, StackPopCleanup,
-};
-use crate::fluent_generated as fluent;
 
 /// An argment passed to a function.
 #[derive(Clone, Debug)]
@@ -39,6 +40,15 @@ impl<'tcx, Prov: Provenance> FnArg<'tcx, Prov> {
             FnArg::Copy(op) => &op.layout,
             FnArg::InPlace(place) => &place.layout,
         }
+    }
+}
+#[instrument(level = "info", skip_all)]
+fn print_always_live(body: &mir::Body<'_>) {
+    let always_live = always_storage_live_locals(body);
+
+    info!("id: {:?}", body.source.def_id());
+    for local in body.vars_and_temps_iter() {
+        info!("local:{:?} is always alive:{}", local, always_live.contains(local));
     }
 }
 
@@ -489,6 +499,33 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         Ok(())
     }
 
+    pub fn print_loc_alloc_id_helper(
+        &self,
+        loc: mir::Local,
+        decl: &LocalDecl<'tcx>,
+    ) -> InterpResult<'tcx> {
+        let lv = &self.frame().locals[loc];
+        match lv.value {
+            LocalValue::Dead => {
+                info!("local:{:?}, ty: {:?}, dead", loc, decl.ty);
+            }
+            LocalValue::Live(Operand::Indirect(MemPlace { ptr, .. })) => {
+                let (alloc_id, _, _) = self.ptr_get_alloc_id(ptr)?;
+                info!("local:{:?}, ty: {:?}, alloc id:{:?}", loc, decl.ty, alloc_id);
+            }
+            LocalValue::Live(Operand::Immediate(_)) => {
+                info!("local:{:?}, ty: {:?}, immediate", loc, decl.ty);
+            }
+        }
+        Ok(())
+    }
+    #[instrument(level = "info", skip(self))]
+    fn print_loc_alloc_id(&self) -> InterpResult<'tcx> {
+        for (loc, decl) in self.body().local_decls.iter_enumerated() {
+            self.print_loc_alloc_id_helper(loc, decl)?;
+        }
+        Ok(())
+    }
     /// Call this function -- pushing the stack frame and initializing the arguments.
     ///
     /// `caller_fn_abi` is used to determine if all the arguments are passed the proper way.
@@ -736,6 +773,10 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
 
                     // Don't forget to mark "initially live" locals as live.
                     self.storage_live_for_always_live_locals()?;
+
+                    if self.body().source.def_id().is_local() {
+                        self.print_loc_alloc_id()?;
+                    }
                 };
                 match res {
                     Err(err) => {

@@ -7,10 +7,10 @@ use hir::CRATE_HIR_ID;
 use rustc_errors::DiagCtxt;
 use rustc_hir::{self as hir, def_id::DefId, definitions::DefPathData};
 use rustc_index::IndexVec;
-use rustc_middle::mir;
 use rustc_middle::mir::interpret::{
-    CtfeProvenance, ErrorHandled, InvalidMetaKind, ReportedErrorInfo,
+    AllocId, CtfeProvenance, ErrorHandled, InvalidMetaKind, ReportedErrorInfo,
 };
+use rustc_middle::mir::{self, Local};
 use rustc_middle::query::TyCtxtAt;
 use rustc_middle::ty::layout::{
     self, FnAbiError, FnAbiOfHelpers, FnAbiRequest, LayoutError, LayoutOf, LayoutOfHelpers,
@@ -160,7 +160,7 @@ pub enum StackPopCleanup {
 /// State of a local variable including a memoized layout
 #[derive(Clone)]
 pub struct LocalState<'tcx, Prov: Provenance = CtfeProvenance> {
-    value: LocalValue<Prov>,
+    pub(super) value: LocalValue<Prov>,
     /// Don't modify if `Some`, this is only used to prevent computing the layout twice.
     /// Avoids computing the layout of locals that are never actually initialized.
     layout: Cell<Option<TyAndLayout<'tcx>>>,
@@ -766,7 +766,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         self.size_and_align_of(&mplace.meta(), &mplace.layout)
     }
 
-    #[instrument(skip(self, body, return_place, return_to_block), level = "debug")]
+    #[instrument(skip(self, body, return_place, return_to_block), level = "info")]
     pub fn push_stack_frame(
         &mut self,
         instance: ty::Instance<'tcx>,
@@ -859,6 +859,33 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         Ok(())
     }
 
+    /*
+    #[instrument(level = "info", name = "print_local", skip(self))]
+    fn print_local(&self, body_id: LocalDefId) -> Option<()> {
+        let mir_local_to_allocid = |local, l| {
+            if let LocalValue::Live(Operand::Indirect(MemPlace { ptr, .. })) = local {
+                let (alloc_id, _, _) = self.ptr_get_alloc_id(ptr).ok()?;
+                Some(alloc_id)
+            } else {
+                info!("local {:?} is dead", l);
+                if let Some(alloc_id) = self.memory.dead_local_alloc_id.get(&l) {
+                    Some(*alloc_id)
+                } else {
+                    None
+                }
+            }
+        };
+        for (loc, _) in self.body().local_decls.iter_enumerated() {
+            let local_state = &self.frame().locals[loc];
+            let alloc_id = mir_local_to_allocid(local_state.value.clone(), loc);
+            if alloc_id.is_some() {
+                info!(alloc_id=?alloc_id);
+            }
+        }
+        None
+    }
+    */
+
     /// Pops the current frame from the stack, deallocating the
     /// memory for allocated locals.
     ///
@@ -872,9 +899,9 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
     /// `Drop` impls for any locals that have been initialized at this point.
     /// The cleanup block ends with a special `Resume` terminator, which will
     /// cause us to continue unwinding.
-    #[instrument(skip(self), level = "debug")]
+    #[instrument(skip(self, unwinding), level = "info")]
     pub(super) fn pop_stack_frame(&mut self, unwinding: bool) -> InterpResult<'tcx> {
-        info!(
+        debug!(
             "popping stack frame ({})",
             if unwinding { "during unwinding" } else { "returning from function" }
         );
@@ -929,11 +956,15 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             StackPopCleanup::Goto { .. } => true,
             StackPopCleanup::Root { cleanup, .. } => cleanup,
         };
+
+        let _: Option<()> = self.body().source.def_id().as_local().and_then(|_body_id| None);
+
         if cleanup {
             // We need to take the locals out, since we need to mutate while iterating.
             let locals = mem::take(&mut self.frame_mut().locals);
-            for local in &locals {
-                self.deallocate_local(local.value)?;
+
+            for (l, local) in locals.iter_enumerated() {
+                self.deallocate_local(local.value, l)?;
             }
         }
 
@@ -994,6 +1025,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                 self.storage_live(local)?;
             }
         }
+
         Ok(())
     }
 
@@ -1092,12 +1124,25 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
 
         // It is entirely okay for this local to be already dead (at least that's how we currently generate MIR)
         let old = mem::replace(&mut self.frame_mut().locals[local].value, LocalValue::Dead);
-        self.deallocate_local(old)?;
+        self.deallocate_local(old, local)?;
         Ok(())
     }
 
+    fn is_local_crate(&self) -> bool {
+        self.body().source.def_id().is_local()
+    }
+
+    #[instrument(level = "info", skip(self))]
+    fn add_dead_local_id(&mut self, alloc_id: AllocId, loc: Local) {
+        self.memory.dead_local_alloc_id.insert(loc, alloc_id);
+    }
+
     #[instrument(skip(self), level = "debug")]
-    fn deallocate_local(&mut self, local: LocalValue<M::Provenance>) -> InterpResult<'tcx> {
+    fn deallocate_local(
+        &mut self,
+        local: LocalValue<M::Provenance>,
+        loc: Local,
+    ) -> InterpResult<'tcx> {
         if let LocalValue::Live(Operand::Indirect(MemPlace { ptr, .. })) = local {
             // All locals have a backing allocation, even if the allocation is empty
             // due to the local having ZST type. Hence we can `unwrap`.
@@ -1107,6 +1152,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                 // Locals always have a `alloc_id` (they are never the result of a int2ptr).
                 self.dump_alloc(ptr.provenance.unwrap().get_alloc_id().unwrap())
             );
+
             self.deallocate_ptr(ptr, None, MemoryKind::Stack)?;
         };
         Ok(())
@@ -1159,11 +1205,14 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
     }
 
     #[must_use]
+    #[instrument(level = "info", skip(self, place))]
     pub fn dump_place(
         &self,
         place: &PlaceTy<'tcx, M::Provenance>,
     ) -> PlacePrinter<'_, 'mir, 'tcx, M> {
-        PlacePrinter { ecx: self, place: *place.place() }
+        let pp = PlacePrinter { ecx: self, place: *place.place() };
+        info!(pp = ?pp);
+        pp
     }
 
     #[must_use]

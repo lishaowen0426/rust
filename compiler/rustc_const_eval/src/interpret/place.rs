@@ -539,7 +539,9 @@ where
             place = self.project(&place, elem)?
         }
 
-        trace!("{:?}", self.dump_place(&place));
+        if self.body().source.def_id().is_local() {
+            let _ = self.dump_place(&place);
+        }
         // Sanity-check the type we ended up with.
         if cfg!(debug_assertions) {
             let normalized_place_ty = self

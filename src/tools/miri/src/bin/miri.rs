@@ -78,6 +78,7 @@ impl rustc_driver::Callbacks for MiriCompilerCalls {
                 tcx.dcx().fatal("miri only makes sense on bin crates");
             }
 
+
             let (entry_def_id, entry_type) = if let Some(entry_def) = tcx.entry_fn(()) {
                 entry_def
             } else {

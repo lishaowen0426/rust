@@ -5,7 +5,7 @@
 use either::Either;
 
 use rustc_index::IndexSlice;
-use rustc_middle::mir;
+use rustc_middle::mir::{self, ClearCrossCrate};
 use rustc_middle::ty::layout::LayoutOf;
 use rustc_target::abi::{FieldIdx, FIRST_VARIANT};
 
@@ -52,25 +52,72 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         Ok(true)
     }
 
+    fn is_statement_unsafe(&self, stmt: &mir::Statement<'tcx>) -> bool {
+        if let ClearCrossCrate::Set(ld) =
+            self.body().source_scopes[stmt.source_info.scope].local_data.clone().as_ref()
+        {
+            ld.is_unsafe()
+        } else {
+            false
+        }
+    }
+
+    #[instrument(level = "info", skip_all)]
+    fn miri_debug_stmt(&self, stmt: &mir::Statement<'tcx>) -> InterpResult<'tcx> {
+        use rustc_middle::mir::StatementKind::*;
+        let is_local_crate = self.body().source.def_id().is_local();
+        if !is_local_crate {
+            return Ok(());
+        }
+
+        info!(stmt=?stmt);
+        match &stmt.kind {
+            Assign(box (place, _)) => {
+                let decl = &self.body().local_decls[place.local];
+                self.print_loc_alloc_id_helper(place.local, decl)?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     /// Runs the interpretation logic for the given `mir::Statement` at the current frame and
     /// statement counter.
     ///
     /// This does NOT move the statement counter forward, the caller has to do that!
     #[instrument(level = "info", name = "eval_statement", skip(self))]
     pub fn statement(&mut self, stmt: &mir::Statement<'tcx>) -> InterpResult<'tcx> {
-        info!("{:?}", stmt);
-
         use rustc_middle::mir::StatementKind::*;
+        let is_local_crate = self.body().source.def_id().is_local();
+        let is_stmt_unsafe = self.is_statement_unsafe(stmt);
+
+        if is_local_crate {
+            self.miri_debug_stmt(stmt)?;
+        }
 
         match &stmt.kind {
-            Assign(box (place, rvalue)) => self.eval_rvalue_into_place(rvalue, *place)?,
+            Assign(box (place, rvalue)) => {
+                if is_local_crate && is_stmt_unsafe {}
+
+                let ret =
+                    self.eval_rvalue_into_place(rvalue, *place, is_stmt_unsafe, is_local_crate)?;
+                ret
+            }
 
             SetDiscriminant { place, variant_index } => {
+                //this is used internally by rustc to change the active enum variant
+                //so this does not inherently unsafe.
+                //e.g.,
+                //  SetDiscriminant { place: _1, variant_index: 1 }
+                //  (_1.0 = 42)
+                //the unsafety will be handled in subsequent statements (here, the Assign)
                 let dest = self.eval_place(**place)?;
                 self.write_discriminant(*variant_index, &dest)?;
             }
 
             Deinit(place) => {
+                //this is used internally by the compiler
+                //so no effects
                 let dest = self.eval_place(**place)?;
                 self.write_uninit(&dest)?;
             }
@@ -82,6 +129,9 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
 
             // Mark locals as dead
             StorageDead(local) => {
+                if is_local_crate {
+                    info!("StorageDead:{:?}", local);
+                }
                 self.storage_dead(*local)?;
             }
 
@@ -139,6 +189,8 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         &mut self,
         rvalue: &mir::Rvalue<'tcx>,
         place: mir::Place<'tcx>,
+        _is_stmt_unsafe: bool,
+        _is_local_crate: bool,
     ) -> InterpResult<'tcx> {
         let dest = self.eval_place(place)?;
         // FIXME: ensure some kind of non-aliasing between LHS and RHS?
@@ -291,7 +343,9 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             }
         }
 
-        trace!("{:?}", self.dump_place(&dest));
+        if self.body().source.def_id().is_local() {
+            let _ = self.dump_place(&dest);
+        }
 
         Ok(())
     }

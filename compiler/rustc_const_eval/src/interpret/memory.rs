@@ -13,8 +13,10 @@ use std::fmt;
 use std::ptr;
 
 use rustc_ast::Mutability;
+use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::fx::{FxHashSet, FxIndexMap};
 use rustc_middle::mir::display_allocation;
+use rustc_middle::mir::Local;
 use rustc_middle::ty::{self, Instance, ParamEnv, Ty, TyCtxt};
 use rustc_target::abi::{Align, HasDataLayout, Size};
 
@@ -111,6 +113,8 @@ pub struct Memory<'mir, 'tcx, M: Machine<'mir, 'tcx>> {
     /// that do not exist any more.
     // FIXME: this should not be public, but interning currently needs access to it
     pub(super) dead_alloc_map: FxIndexMap<AllocId, (Size, Align)>,
+
+    pub dead_local_alloc_id: FxHashMap<Local, AllocId>,
 }
 
 /// A reference to some allocation that was already bounds-checked for the given region
@@ -137,6 +141,7 @@ impl<'mir, 'tcx, M: Machine<'mir, 'tcx>> Memory<'mir, 'tcx, M> {
             alloc_map: M::MemoryMap::default(),
             extra_fn_ptr_map: FxIndexMap::default(),
             dead_alloc_map: FxIndexMap::default(),
+            dead_local_alloc_id: FxHashMap::default(),
         }
     }
 

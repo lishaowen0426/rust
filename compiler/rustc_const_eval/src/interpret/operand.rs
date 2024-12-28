@@ -351,7 +351,7 @@ impl<'tcx, Prov: Provenance> Projectable<'tcx, Prov> for ImmTy<'tcx, Prov> {
 #[derive(Copy, Clone, Debug)]
 pub(super) enum Operand<Prov: Provenance = CtfeProvenance> {
     Immediate(Immediate<Prov>),
-    Indirect(MemPlace<Prov>),
+    Indirect(MemPlace<Prov>), // i guess this is essentially a fat pointer on the stack (pointer + meta)?
 }
 
 #[derive(Clone)]

@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use std::cmp;
 use std::iter;
 use std::num::NonZero;
@@ -6,7 +7,9 @@ use std::time::Duration;
 use rustc_apfloat::ieee::{Double, Single};
 use rustc_apfloat::Float;
 use rustc_hir::def::{DefKind, Namespace};
+use rustc_hir::def_id::LOCAL_CRATE;
 use rustc_hir::def_id::{DefId, CRATE_DEF_INDEX};
+use rustc_index::bit_set::BitSet;
 use rustc_index::IndexVec;
 use rustc_middle::mir;
 use rustc_middle::ty::{
@@ -387,6 +390,8 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriInterpCxExt<'mir, 'tcx> {
                 caller_abi.name()
             )
         }
+
+        //let from_local_crate = f.def_id().krate == LOCAL_CRATE;
 
         // Push frame.
         let mir = this.load_mir(f.def, None)?;
