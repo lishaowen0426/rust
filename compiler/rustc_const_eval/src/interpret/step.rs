@@ -189,6 +189,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                 Place::Ptr(mplace) => {
                     if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id(mplace.ptr) {
                         let copied = self
+                            .frame()
                             .get_locals_from_alloc_id(alloc_id)
                             .collect::<Vec<rustc_middle::mir::Local>>();
                         for loc in copied {

@@ -113,7 +113,6 @@
                 "-Zunsafe_heap",
                 "-Zprint_unsafe_locals",
                 "-Zref_prop",
-                "-Zunpretty=mir",
                 "-Zmaintain_storage_marker",
                 "-Zlinker-verbose",
                 "-Zthir-unsafeck=true",

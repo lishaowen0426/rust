@@ -951,7 +951,7 @@ where
                         {
                             //add the new allocation to our map
                             if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id(mplace.mplace.ptr) {
-                                self.map_alloc_id_to_local(alloc_id, local);
+                                self.frame_mut().map_alloc_id_to_local(alloc_id, local);
                             }
                         }
                         mplace.mplace

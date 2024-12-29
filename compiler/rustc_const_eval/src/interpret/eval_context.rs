@@ -54,15 +54,6 @@ pub struct InterpCx<'mir, 'tcx, M: Machine<'mir, 'tcx>> {
     /// The recursion limit (cached from `tcx.recursion_limit(())`)
     pub recursion_limit: Limit,
 
-    /// map from AllocId to Local
-    /// A live LocalValue can be either immediate or indirect
-    /// An indirect local is associated with a Pointer
-    /// This is the map from the Pointer's AllocId to the local
-    ///
-    /// currently, i don't know if this is a one-to-one mapping
-    /// so i use a FxHashSet
-    pub alloc_id_to_local: FxHashMap<AllocId, FxHashSet<Local>>,
-
     /// map from a local def id to its unsafe locals
     pub local_def_id_to_unsafe_local: FxHashMap<LocalDefId, FxHashSet<Local>>,
 }
@@ -148,6 +139,13 @@ pub struct Frame<'mir, 'tcx, Prov: Provenance = CtfeProvenance, Extra = ()> {
     ///
     /// Needs to be public because ConstProp does unspeakable things to it.
     pub loc: Either<mir::Location, Span>,
+
+    /// map from AllocId to Local
+    /// A live LocalValue can be either immediate or indirect
+    /// An indirect local is associated with a Pointer
+    /// This is the map from the Pointer's AllocId to the local
+    ///
+    pub alloc_id_to_local: FxHashMap<AllocId, FxHashSet<Local>>,
 }
 
 /// What we store about a frame in an interpreter backtrace.
@@ -258,6 +256,7 @@ impl<'mir, 'tcx, Prov: Provenance> Frame<'mir, 'tcx, Prov> {
             loc: self.loc,
             extra,
             tracing_span: self.tracing_span,
+            alloc_id_to_local: FxHashMap::default(),
         }
     }
 }
@@ -293,6 +292,23 @@ impl<'mir, 'tcx, Prov: Provenance, Extra> Frame<'mir, 'tcx, Prov, Extra> {
                 mir::ClearCrossCrate::Clear => None,
             }
         })
+    }
+
+    pub fn map_alloc_id_to_local(&mut self, id: AllocId, local: Local) {
+        self.alloc_id_to_local.entry(id).or_insert_with(FxHashSet::default).insert(local);
+    }
+
+    pub fn get_locals_from_alloc_id(
+        &self,
+        id: AllocId,
+    ) -> impl Iterator<Item = rustc_middle::mir::Local> + '_ {
+        self.alloc_id_to_local.get(&id).map(|s| s.iter().cloned()).into_iter().flatten()
+    }
+
+    pub fn remove_local_from_alloc_id(&mut self, id: AllocId, local: Local) {
+        self.alloc_id_to_local.entry(id).and_modify(|s| {
+            s.remove(&local);
+        });
     }
 }
 
@@ -479,26 +495,8 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             param_env,
             memory: Memory::new(),
             recursion_limit: tcx.recursion_limit(),
-            alloc_id_to_local: FxHashMap::default(),
             local_def_id_to_unsafe_local: FxHashMap::default(),
         }
-    }
-
-    pub fn map_alloc_id_to_local(&mut self, id: AllocId, local: Local) {
-        self.alloc_id_to_local.entry(id).or_insert_with(FxHashSet::default).insert(local);
-    }
-
-    pub fn get_locals_from_alloc_id(
-        &self,
-        id: AllocId,
-    ) -> impl Iterator<Item = rustc_middle::mir::Local> + '_ {
-        self.alloc_id_to_local.get(&id).map(|s| s.iter().cloned()).into_iter().flatten()
-    }
-
-    pub fn remove_local_from_alloc_id(&mut self, id: AllocId, local: Local) {
-        self.alloc_id_to_local.entry(id).and_modify(|s| {
-            s.remove(&local);
-        });
     }
 
     pub fn mark_unsafe_local(&mut self, id: LocalDefId, local: Local) {
@@ -845,6 +843,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             instance,
             tracing_span: SpanGuard::new(),
             extra: (),
+            alloc_id_to_local: FxHashMap::default(),
         };
         let frame = M::init_frame_extra(self, pre_frame)?;
         self.stack_mut().push(frame);
@@ -1026,11 +1025,6 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             }
         }
 
-        {
-            //clear the alloc id map
-            self.alloc_id_to_local = FxHashMap::default();
-        }
-
         // All right, now it is time to actually pop the frame.
         // Note that its locals are gone already, but that's fine.
         let frame =
@@ -1158,7 +1152,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             {
                 //store this alloc id
                 if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id(dest_place.ptr()) {
-                    self.map_alloc_id_to_local(alloc_id, local);
+                    self.frame_mut().map_alloc_id_to_local(alloc_id, local);
                 }
             }
 
@@ -1224,7 +1218,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             );
 
             if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id(ptr) {
-                self.remove_local_from_alloc_id(alloc_id, loc);
+                self.frame_mut().remove_local_from_alloc_id(alloc_id, loc);
             }
 
             self.deallocate_ptr(ptr, None, MemoryKind::Stack)?;
