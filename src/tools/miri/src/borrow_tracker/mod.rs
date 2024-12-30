@@ -298,6 +298,20 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriInterpCxExt<'mir, 'tcx> {
         }
     }
 
+    fn is_ptr_mutable_by_borrow_tracker(
+        &self,
+        ptr: &Pointer<Provenance>,
+        size: Size,
+    ) -> InterpResult<'tcx, Option<bool>> {
+        let this = self.eval_context_ref();
+        let method = this.machine.borrow_tracker.as_ref().unwrap().borrow().borrow_tracker_method;
+        match method {
+            BorrowTrackerMethod::StackedBorrows =>
+                this.sb_is_ptr_mutable_by_borrow_tracker(ptr, size),
+            BorrowTrackerMethod::TreeBorrows => panic!("tree borrow does not support"),
+        }
+    }
+
     fn retag_place_contents(
         &mut self,
         kind: RetagKind,

@@ -11,8 +11,8 @@ use rustc_middle::{
     mir::{self, LocalDecl},
     ty::{
         self,
-        layout::{FnAbiOf, IntegerExt, LayoutOf, TyAndLayout},
-        AdtDef, Instance, Ty,
+        layout::{FnAbiOf, HasTyCtxt, IntegerExt, LayoutOf, TyAndLayout},
+        AdtDef, FnSig, Instance, Ty,
     },
 };
 use rustc_mir_dataflow::storage::always_storage_live_locals;
@@ -90,6 +90,8 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         terminator: &mir::Terminator<'tcx>,
     ) -> InterpResult<'tcx> {
         use rustc_middle::mir::TerminatorKind::*;
+        let is_terminator_unsafe = self.is_terminator_unsafe(terminator);
+        let is_target_crate = self.is_crate_unsafe_target();
         match terminator.kind {
             Return => {
                 self.pop_stack_frame(/* unwinding */ false)?
@@ -133,11 +135,16 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                 let old_stack = self.frame_idx();
                 let old_loc = self.frame().loc;
                 let func = self.eval_operand(func, None)?;
-                let args = self.eval_fn_call_arguments(args)?;
 
                 let fn_sig_binder = func.layout.ty.fn_sig(*self.tcx);
                 let fn_sig =
                     self.tcx.normalize_erasing_late_bound_regions(self.param_env, fn_sig_binder);
+                let args = self.eval_fn_call_arguments(
+                    args,
+                    is_terminator_unsafe && is_target_crate,
+                    &fn_sig,
+                    terminator,
+                )?;
                 let extra_args = &args[fn_sig.inputs().len()..];
                 let extra_args =
                     self.tcx.mk_type_list_from_iter(extra_args.iter().map(|arg| arg.layout().ty));
@@ -164,6 +171,9 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                 };
 
                 let destination = self.eval_place(destination)?;
+                if is_terminator_unsafe && is_target_crate {
+                    self.mark_place_unsafe(&destination);
+                }
                 self.eval_fn_call(
                     fn_val,
                     (fn_sig.abi, fn_abi),
@@ -249,15 +259,96 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         Ok(())
     }
 
+    #[instrument(level = "info", skip(self))]
+    fn eval_fn_call_place_unsafey(
+        &mut self,
+        place: &PlaceTy<'tcx, M::Provenance>,
+        terminator: &mir::Terminator<'tcx>,
+    ) {
+        use super::{Immediate, Place};
+        let def_id = self.body().source.def_id();
+        let layout = place.layout;
+
+        match place.place() {
+            Place::Ptr(mplace) => {
+                info!("mplace: {:?}", mplace);
+            }
+            Place::Local { local, .. } => {
+                if let Ok(op) = self.frame().locals[*local].access() {
+                    info!("local:{:?}, op: {:?}", local, op);
+                    match op {
+                        Operand::Immediate(Immediate::Scalar(s)) => {
+                            match s {
+                                Scalar::Ptr(ptr, _) => {
+                                    if !layout.ty.is_any_ptr() {
+                                        bug!(
+                                            "scalar is ptr but layout.ty is not any ptr:{:?}, {:?}",
+                                            layout.ty,
+                                            terminator
+                                        );
+                                    }
+                                    if layout.ty.is_mutable_ptr() {
+                                        if let Ok((alloc_id, _, _)) =
+                                            self.ptr_get_alloc_id((*ptr).into())
+                                        {
+                                            self.mark_alloc_id_local_unsafe(def_id, alloc_id);
+                                        }
+                                    }
+                                }
+                                Scalar::Int(s) if layout.ty.is_any_ptr() => {
+                                    // type is ptr, but the value is stored as int in runtime
+                                    // try to inteprete the value as a pointer..
+                                    let addr = s.try_to_target_usize(self.tcx()).expect("layout ty is ptr, scalar is int but canot be casted into u64");
+                                    let p = M::ptr_from_addr_cast(self, addr)
+                                        .expect("addr cannot be casted into pointer");
+                                    if let Ok((alloc_id, _, _)) = self.ptr_try_get_alloc_id(p) {
+                                        self.mark_alloc_id_local_unsafe(def_id, alloc_id);
+                                    } else {
+                                        info!(
+                                            "cannot get alloc id from pointer casted from int, {:?}",
+                                            terminator
+                                        );
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        Operand::Immediate(Immediate::ScalarPair(_s1, _s2)) => {}
+                        Operand::Immediate(Immediate::Uninit) => {}
+                        Operand::Indirect(_mplace) => {}
+                    }
+                }
+            }
+        }
+    }
+
     /// Evaluate the arguments of a function call
     pub(super) fn eval_fn_call_arguments(
-        &self,
+        &mut self,
         ops: &[Spanned<mir::Operand<'tcx>>],
+        is_unsafe_and_target_crate: bool,
+        fn_sig: &FnSig<'tcx>,
+        terminator: &mir::Terminator<'tcx>,
     ) -> InterpResult<'tcx, Vec<FnArg<'tcx, M::Provenance>>> {
+        if fn_sig.inputs().len() != ops.len() {
+            panic!(
+                "length of function sig inputs {:?} not equal to operands {:?}",
+                fn_sig.inputs().len(),
+                ops.len()
+            );
+        }
         ops.iter()
-            .map(|op| {
+            .zip(fn_sig.inputs().iter())
+            .map(|(op, _input_ty)| {
                 Ok(match &op.node {
-                    mir::Operand::Move(place) => FnArg::InPlace(self.eval_place(*place)?),
+                    mir::Operand::Move(place) => {
+                        let p = self.eval_place(*place)?;
+                        if is_unsafe_and_target_crate {
+                            self.eval_fn_call_place_unsafey(&p, terminator);
+                        }
+
+                        FnArg::InPlace(p)
+                    }
                     _ => FnArg::Copy(self.eval_operand(&op.node, None)?),
                 })
             })
@@ -774,7 +865,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                     // Don't forget to mark "initially live" locals as live.
                     self.storage_live_for_always_live_locals()?;
 
-                    if self.body().source.def_id().is_local() {
+                    if self.is_crate_unsafe_target() {
                         self.print_loc_alloc_id()?;
                     }
                 };

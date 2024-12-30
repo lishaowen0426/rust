@@ -865,6 +865,19 @@ pub trait EvalContextExt<'mir, 'tcx: 'mir>: crate::MiriInterpCxExt<'mir, 'tcx> {
         this.sb_retag_reference(val, new_perm, RetagInfo { cause, in_field: false })
     }
 
+    fn sb_is_ptr_mutable_by_borrow_tracker(
+        &self,
+        ptr: &Pointer<Provenance>,
+        size: Size,
+    ) -> InterpResult<'tcx, Option<bool>> {
+        let this = self.eval_context_ref();
+        let (_alloc_id, offset, ..) = this.ptr_get_alloc_id(ptr.clone().into())?;
+
+        let _range = alloc_range(offset, size);
+
+        Ok(None)
+    }
+
     fn sb_retag_place_contents(
         &mut self,
         kind: RetagKind,

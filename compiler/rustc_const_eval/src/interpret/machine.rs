@@ -460,6 +460,15 @@ pub trait Machine<'mir, 'tcx: 'mir>: Sized {
         Ok(())
     }
 
+    /// check if it is a *mut T/&mut T
+    fn is_ptr_mutable_by_borrow_tracker(
+        _ecx: &mut InterpCx<'mir, 'tcx, Self>,
+        _ptr: &Pointer<Self::Provenance>,
+        _size: Size,
+    ) -> InterpResult<'tcx, Option<bool>> {
+        Ok(None)
+    }
+
     /// Called on places used for in-place function argument and return value handling.
     ///
     /// These places need to be protected to make sure the program cannot tell whether the

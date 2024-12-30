@@ -7,7 +7,6 @@ use either::{Either, Left, Right};
 use hir::CRATE_HIR_ID;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_errors::DiagCtxt;
-use rustc_hir::def_id::LocalDefId;
 use rustc_hir::{self as hir, def_id::DefId, definitions::DefPathData};
 use rustc_index::IndexVec;
 use rustc_middle::mir::interpret::{
@@ -54,8 +53,8 @@ pub struct InterpCx<'mir, 'tcx, M: Machine<'mir, 'tcx>> {
     /// The recursion limit (cached from `tcx.recursion_limit(())`)
     pub recursion_limit: Limit,
 
-    /// map from a local def id to its unsafe locals
-    pub local_def_id_to_unsafe_local: FxHashMap<LocalDefId, FxHashSet<Local>>,
+    /// map from a def id to its unsafe locals
+    pub def_id_to_unsafe_local: FxHashMap<DefId, FxHashSet<Local>>,
 }
 
 // The Phantomdata exists to prevent this type from being `Send`. If it were sent across a thread
@@ -495,27 +494,34 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             param_env,
             memory: Memory::new(),
             recursion_limit: tcx.recursion_limit(),
-            local_def_id_to_unsafe_local: FxHashMap::default(),
+            def_id_to_unsafe_local: FxHashMap::default(),
         }
     }
 
-    pub fn mark_unsafe_local(&mut self, id: LocalDefId, local: Local) {
-        self.local_def_id_to_unsafe_local
-            .entry(id)
-            .or_insert_with(FxHashSet::default)
-            .insert(local);
+    pub fn mark_unsafe_local(&mut self, id: DefId, local: Local) {
+        self.def_id_to_unsafe_local.entry(id).or_insert_with(FxHashSet::default).insert(local);
+    }
+
+    pub fn mark_alloc_id_local_unsafe(&mut self, id: DefId, alloc_id: AllocId) {
+        let copied = self
+            .frame()
+            .get_locals_from_alloc_id(alloc_id)
+            .collect::<Vec<rustc_middle::mir::Local>>();
+        for loc in copied {
+            self.mark_unsafe_local(id, loc);
+        }
     }
 
     pub fn get_unsafe_locals(
         &self,
-        id: LocalDefId,
+        id: DefId,
     ) -> impl Iterator<Item = rustc_middle::mir::Local> + '_ {
-        self.local_def_id_to_unsafe_local.get(&id).map(|s| s.iter().cloned()).into_iter().flatten()
+        self.def_id_to_unsafe_local.get(&id).map(|s| s.iter().cloned()).into_iter().flatten()
     }
 
     #[instrument(level = "info", skip_all)]
     pub fn print_unsafe_locals(&self) {
-        for (def_id, locals) in self.local_def_id_to_unsafe_local.iter() {
+        for (def_id, locals) in self.def_id_to_unsafe_local.iter() {
             info!("Unsafe locals: LocalDefId: {:?}", def_id);
             for loc in locals.iter() {
                 info!(local=?loc);

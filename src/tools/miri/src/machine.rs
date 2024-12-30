@@ -1301,7 +1301,20 @@ impl<'mir, 'tcx> Machine<'mir, 'tcx> for MiriMachine<'mir, 'tcx> {
         if ecx.machine.borrow_tracker.is_some() {
             ecx.retag_ptr_value(kind, val)
         } else {
-            Ok(val.clone())
+            panic!("retag_ptr_value: must enable borrow tracker");
+        }
+    }
+
+    /// check if it is a *mut T/&mut T
+    fn is_ptr_mutable_by_borrow_tracker(
+        ecx: &mut InterpCx<'mir, 'tcx, Self>,
+        ptr: &Pointer<Self::Provenance>,
+        size: Size,
+    ) -> InterpResult<'tcx, Option<bool>> {
+        if ecx.machine.borrow_tracker.is_some() {
+            ecx.is_ptr_mutable_by_borrow_tracker(ptr, size)
+        } else {
+            panic!("is_ptr_mutable_by_borrow_tracker: must enable borrow tracker");
         }
     }
 

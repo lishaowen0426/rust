@@ -539,7 +539,7 @@ where
             place = self.project(&place, elem)?
         }
 
-        if self.body().source.def_id().is_local() {
+        if self.is_crate_unsafe_target() {
             let _ = self.dump_place(&place);
         }
         // Sanity-check the type we ended up with.

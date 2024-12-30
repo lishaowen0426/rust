@@ -52,9 +52,19 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         Ok(true)
     }
 
-    fn is_statement_unsafe(&self, stmt: &mir::Statement<'tcx>) -> bool {
+    pub fn is_statement_unsafe(&self, stmt: &mir::Statement<'tcx>) -> bool {
         if let ClearCrossCrate::Set(ld) =
             self.body().source_scopes[stmt.source_info.scope].local_data.clone().as_ref()
+        {
+            ld.is_unsafe()
+        } else {
+            false
+        }
+    }
+
+    pub fn is_terminator_unsafe(&self, terminator: &mir::Terminator<'tcx>) -> bool {
+        if let ClearCrossCrate::Set(ld) =
+            self.body().source_scopes[terminator.source_info.scope].local_data.clone().as_ref()
         {
             ld.is_unsafe()
         } else {
@@ -65,8 +75,8 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
     #[instrument(level = "info", skip_all)]
     fn miri_debug_stmt(&self, stmt: &mir::Statement<'tcx>) -> InterpResult<'tcx> {
         use rustc_middle::mir::StatementKind::*;
-        let is_local_crate = self.body().source.def_id().is_local();
-        if !is_local_crate {
+        let is_target_crate = self.is_crate_unsafe_target();
+        if !is_target_crate {
             return Ok(());
         }
 
@@ -81,6 +91,10 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         Ok(())
     }
 
+    pub fn is_crate_unsafe_target(&self) -> bool {
+        self.body().source.def_id().is_local()
+    }
+
     /// Runs the interpretation logic for the given `mir::Statement` at the current frame and
     /// statement counter.
     ///
@@ -88,19 +102,17 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
     #[instrument(level = "info", name = "eval_statement", skip(self))]
     pub fn statement(&mut self, stmt: &mir::Statement<'tcx>) -> InterpResult<'tcx> {
         use rustc_middle::mir::StatementKind::*;
-        let is_local_crate = self.body().source.def_id().is_local();
+        let is_target_crate = self.is_crate_unsafe_target();
         let is_stmt_unsafe = self.is_statement_unsafe(stmt);
 
-        if is_local_crate {
+        if is_target_crate {
             self.miri_debug_stmt(stmt)?;
         }
 
         match &stmt.kind {
             Assign(box (place, rvalue)) => {
-                if is_local_crate && is_stmt_unsafe {}
-
                 let ret =
-                    self.eval_rvalue_into_place(rvalue, *place, is_stmt_unsafe, is_local_crate)?;
+                    self.eval_rvalue_into_place(rvalue, *place, is_stmt_unsafe, is_target_crate)?;
                 ret
             }
 
@@ -124,14 +136,15 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
 
             // Mark locals as alive
             StorageLive(local) => {
+                if is_stmt_unsafe && is_target_crate {
+                    let def_id = self.body().source.def_id();
+                    self.mark_unsafe_local(def_id, *local);
+                }
                 self.storage_live(*local)?;
             }
 
             // Mark locals as dead
             StorageDead(local) => {
-                if is_local_crate {
-                    info!("StorageDead:{:?}", local);
-                }
                 self.storage_dead(*local)?;
             }
 
@@ -181,25 +194,18 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         Ok(())
     }
 
-    fn mark_place_unsafe(&mut self, place: &PlaceTy<'tcx, M::Provenance>) {
+    pub fn mark_place_unsafe(&mut self, place: &PlaceTy<'tcx, M::Provenance>) {
         use crate::interpret::place::Place;
 
-        if let Some(def_id) = self.body().source.def_id().as_local() {
-            match place.place() {
-                Place::Ptr(mplace) => {
-                    if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id(mplace.ptr) {
-                        let copied = self
-                            .frame()
-                            .get_locals_from_alloc_id(alloc_id)
-                            .collect::<Vec<rustc_middle::mir::Local>>();
-                        for loc in copied {
-                            self.mark_unsafe_local(def_id, loc);
-                        }
-                    }
+        let def_id = self.body().source.def_id();
+        match place.place() {
+            Place::Ptr(mplace) => {
+                if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id(mplace.ptr) {
+                    self.mark_alloc_id_local_unsafe(def_id, alloc_id);
                 }
-                Place::Local { local, .. } => {
-                    self.mark_unsafe_local(def_id, *local);
-                }
+            }
+            Place::Local { local, .. } => {
+                self.mark_unsafe_local(def_id, *local);
             }
         }
     }
@@ -212,10 +218,10 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         rvalue: &mir::Rvalue<'tcx>,
         place: mir::Place<'tcx>,
         is_stmt_unsafe: bool,
-        _is_local_crate: bool,
+        is_target_crate: bool,
     ) -> InterpResult<'tcx> {
         let dest = self.eval_place(place)?;
-        if is_stmt_unsafe {
+        if is_stmt_unsafe && is_target_crate {
             self.mark_place_unsafe(&dest);
         }
         // FIXME: ensure some kind of non-aliasing between LHS and RHS?
@@ -368,7 +374,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             }
         }
 
-        if self.body().source.def_id().is_local() {
+        if self.is_crate_unsafe_target() {
             let _ = self.dump_place(&dest);
         }
 

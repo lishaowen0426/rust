@@ -396,8 +396,10 @@ fn main() {
             miri_config.validate = false;
         } else if arg == "-Zmiri-disable-stacked-borrows" {
             miri_config.borrow_tracker = None;
+            panic!("disable stacked borrows?");
         } else if arg == "-Zmiri-tree-borrows" {
             miri_config.borrow_tracker = Some(BorrowTrackerMethod::TreeBorrows);
+            panic!("use tree borrows?");
         } else if arg == "-Zmiri-unique-is-unique" {
             miri_config.unique_is_unique = true;
         } else if arg == "-Zmiri-disable-data-race-detector" {
