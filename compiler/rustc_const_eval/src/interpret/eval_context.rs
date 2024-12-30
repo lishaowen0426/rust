@@ -507,6 +507,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             .frame()
             .get_locals_from_alloc_id(alloc_id)
             .collect::<Vec<rustc_middle::mir::Local>>();
+        info!("alloc_id :{:?}, locals: {:?}", alloc_id, copied);
         for loc in copied {
             self.mark_unsafe_local(id, loc);
         }

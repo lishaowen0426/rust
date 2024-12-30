@@ -7,6 +7,8 @@ use super::{
 };
 use crate::fluent_generated as fluent;
 use rustc_ast::ast::InlineAsmOptions;
+use rustc_hir::def_id::DefId;
+use rustc_middle::mir::interpret::Pointer;
 use rustc_middle::{
     mir::{self, LocalDecl},
     ty::{
@@ -259,6 +261,152 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         Ok(())
     }
 
+    #[allow(unused_variables, dead_code)]
+    /// adt_ty is the (possible) adt type, not pointer or reference
+    fn mark_adt_ptr_field_pointee_unsafe(
+        &mut self,
+        def_id: DefId,
+        ptr: Pointer<Option<M::Provenance>>,
+        adt_ty: Ty<'tcx>,
+    ) {
+        if adt_ty.is_adt() {
+            let adt = self.layout_of(adt_ty).expect("cannot find layout of adt ty");
+            if let &ty::Adt(adt_def, ga) = adt.ty.kind() {
+                if adt_def.is_struct() {
+                    match &adt.layout.fields {
+                        abi::FieldsShape::Arbitrary { offsets, .. } => {
+                            //just safety check
+                            if adt_def.all_fields().count() != offsets.len() {
+                                bug!(
+                                    "layout offsets len: {:?}, adt_def.all_fields.count: {:?}",
+                                    offsets.len(),
+                                    adt_def.all_fields().count()
+                                );
+                            }
+
+                            for (idx, (size, field_def)) in
+                                offsets.iter().zip(adt_def.all_fields()).enumerate()
+                            {
+                                let field_ty = field_def.ty(self.tcx(), ga);
+                                info!("{:?}, ty: {:?}", idx, field_ty);
+                                if field_ty.is_mutable_ptr() {
+                                    let field_ptr = ptr
+                                        .offset(*size, self)
+                                        .expect("compute field pointer failed");
+                                    // field_ptr points to the field, we need to further
+                                    // read the pointer it points to, not field_ptr itself.
+                                    unimplemented!()
+                                }
+                            }
+                        }
+                        abi::FieldsShape::Union(count) => {}
+                        _ => {
+                            bug!(
+                                "adt_ty: {:?}, adt_layout.fields: {:?}",
+                                adt_ty,
+                                adt.layout.fields
+                            );
+                        }
+                    }
+                } else {
+                    info!("only implemented for struct, not union/enum");
+                }
+            } else {
+                bug!("adt_ty.kind: {:?}, adt_layout.ty.kind: {:?}", adt_ty.kind(), adt.ty.kind());
+            }
+        }
+    }
+
+    fn mark_scalar_unsafe_allocation(
+        &mut self,
+        s: Scalar<M::Provenance>,
+        layout: TyAndLayout<'tcx>,
+        def_id: DefId,
+        terminator: &mir::Terminator<'tcx>,
+    ) {
+        match s {
+            Scalar::Ptr(ptr, _) => {
+                if !layout.ty.is_any_ptr() {
+                    bug!(
+                        "scalar is ptr but layout.ty is not any ptr:{:?}, {:?}",
+                        layout.ty,
+                        terminator
+                    );
+                }
+                if layout.ty.is_mutable_ptr() {
+                    if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id((ptr).into()) {
+                        self.mark_alloc_id_local_unsafe(def_id, alloc_id);
+                    }
+                }
+            }
+            Scalar::Int(s) if layout.ty.is_mutable_ptr() => {
+                // type is ptr, but the value is stored as int in runtime
+                // try to inteprete the value as a pointer..
+                let addr = s
+                    .try_to_target_usize(self.tcx())
+                    .expect("layout ty is ptr, scalar is int but canot be casted into u64");
+                let p =
+                    M::ptr_from_addr_cast(self, addr).expect("addr cannot be casted into pointer");
+                if let Ok((alloc_id, _, _)) = self.ptr_try_get_alloc_id(p) {
+                    self.mark_alloc_id_local_unsafe(def_id, alloc_id);
+                } else {
+                    info!("cannot get alloc id from pointer casted from int, {:?}", terminator);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn mark_scalar_pair_unsafe_allocation(
+        &mut self,
+        s1: Scalar<M::Provenance>,
+        s2: Scalar<M::Provenance>,
+        layout: TyAndLayout<'tcx>,
+        def_id: DefId,
+        _terminator: &mir::Terminator<'tcx>,
+    ) {
+        info!("s1:{:?}, s2:{:?}, layout:{:?}", s1, s2, layout);
+        let mut mark_scalar = |abi: abi::Scalar, s: Scalar<M::Provenance>| match abi {
+            abi::Scalar::Initialized { value, .. } => {
+                if let abi::Primitive::Pointer(_) = value {
+                    match s {
+                        Scalar::Ptr(ptr, _) => {
+                            if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id((ptr).into()) {
+                                self.mark_alloc_id_local_unsafe(def_id, alloc_id);
+                            }
+                        }
+                        _ => {
+                            bug!("abi is a pointer but scalar is not");
+                        }
+                    }
+                }
+            }
+            abi::Scalar::Union { .. } => match s {
+                Scalar::Ptr(ptr, _) => {
+                    if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id((ptr).into()) {
+                        self.mark_alloc_id_local_unsafe(def_id, alloc_id);
+                    }
+                }
+                _ => {}
+            },
+        };
+        match layout.abi {
+            abi::Abi::ScalarPair(a, b) => {
+                //check a and b, the abi tells whether they are pointers
+                mark_scalar(a, s1);
+                mark_scalar(b, s2);
+            }
+            _ => {
+                bug!("scalar is pair but abi is not: {:?}", layout.abi);
+            }
+        }
+    }
+    /// This is called on terminator operand that is moved
+    /// So the impact on the value itself does not matter to unsafety
+    /// Because it is moved anyway, it cannot be accessed later
+    /// However, if the operand is a ptr/ref, we need to mark
+    /// the allocation it is pointing to unsafe. Since the allocation
+    /// is still there, and can be accessed
     #[instrument(level = "info", skip(self))]
     fn eval_fn_call_place_unsafey(
         &mut self,
@@ -274,48 +422,30 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                 info!("mplace: {:?}", mplace);
             }
             Place::Local { local, .. } => {
-                if let Ok(op) = self.frame().locals[*local].access() {
-                    info!("local:{:?}, op: {:?}", local, op);
+                // &mut T or *mut T are passed as Operand::Immediate
+                // T (if "very big") is passed as Operand::Indirect
+                if let Ok(op) = self.frame().locals[*local].access().cloned() {
+                    info!("local:{:?}, op: {:?}, layout: {:?}", local, op, layout,);
+                    if layout.ty.is_any_ptr() {
+                        info!("deref ty: {:?}", layout.ty.builtin_deref(true));
+                    }
                     match op {
                         Operand::Immediate(Immediate::Scalar(s)) => {
-                            match s {
-                                Scalar::Ptr(ptr, _) => {
-                                    if !layout.ty.is_any_ptr() {
-                                        bug!(
-                                            "scalar is ptr but layout.ty is not any ptr:{:?}, {:?}",
-                                            layout.ty,
-                                            terminator
-                                        );
-                                    }
-                                    if layout.ty.is_mutable_ptr() {
-                                        if let Ok((alloc_id, _, _)) =
-                                            self.ptr_get_alloc_id((*ptr).into())
-                                        {
-                                            self.mark_alloc_id_local_unsafe(def_id, alloc_id);
-                                        }
-                                    }
-                                }
-                                Scalar::Int(s) if layout.ty.is_any_ptr() => {
-                                    // type is ptr, but the value is stored as int in runtime
-                                    // try to inteprete the value as a pointer..
-                                    let addr = s.try_to_target_usize(self.tcx()).expect("layout ty is ptr, scalar is int but canot be casted into u64");
-                                    let p = M::ptr_from_addr_cast(self, addr)
-                                        .expect("addr cannot be casted into pointer");
-                                    if let Ok((alloc_id, _, _)) = self.ptr_try_get_alloc_id(p) {
-                                        self.mark_alloc_id_local_unsafe(def_id, alloc_id);
-                                    } else {
-                                        info!(
-                                            "cannot get alloc id from pointer casted from int, {:?}",
-                                            terminator
-                                        );
-                                    }
-                                }
-                                _ => {}
+                            self.mark_scalar_unsafe_allocation(s, layout, def_id, terminator);
+                        }
+                        Operand::Immediate(Immediate::ScalarPair(s1, s2)) => {
+                            self.mark_scalar_pair_unsafe_allocation(
+                                s1, s2, layout, def_id, terminator,
+                            );
+                        }
+                        Operand::Immediate(Immediate::Uninit) => {}
+                        Operand::Indirect(mplace) => {
+                            if layout.ty.is_adt() {
+                                self.mark_adt_ptr_field_pointee_unsafe(
+                                    def_id, mplace.ptr, layout.ty,
+                                );
                             }
                         }
-                        Operand::Immediate(Immediate::ScalarPair(_s1, _s2)) => {}
-                        Operand::Immediate(Immediate::Uninit) => {}
-                        Operand::Indirect(_mplace) => {}
                     }
                 }
             }
