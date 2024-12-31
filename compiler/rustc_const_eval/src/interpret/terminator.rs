@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::panic;
 
 use super::{
     eval_context::LocalValue, operand::Operand, place::MemPlace, CtfeProvenance, FnVal, ImmTy,
@@ -6,6 +7,7 @@ use super::{
     StackPopCleanup,
 };
 use crate::fluent_generated as fluent;
+use crate::interpret::Immediate;
 use rustc_ast::ast::InlineAsmOptions;
 use rustc_hir::def_id::DefId;
 use rustc_middle::mir::interpret::Pointer;
@@ -268,6 +270,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         def_id: DefId,
         ptr: Pointer<Option<M::Provenance>>,
         adt_ty: Ty<'tcx>,
+        terminator: &mir::Terminator<'tcx>,
     ) {
         if adt_ty.is_adt() {
             let adt = self.layout_of(adt_ty).expect("cannot find layout of adt ty");
@@ -295,7 +298,43 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                                         .expect("compute field pointer failed");
                                     // field_ptr points to the field, we need to further
                                     // read the pointer it points to, not field_ptr itself.
-                                    unimplemented!()
+                                    let field_layout =
+                                        self.layout_of(field_ty).expect("cannot read field layout");
+
+                                    let imm = self
+                                        .read_immediate(
+                                            &self.ptr_to_mplace(field_ptr, field_layout),
+                                        )
+                                        .expect("cannot cast field pointer to immediate");
+                                    match *imm {
+                                        Immediate::Scalar(s) => {
+                                            self.mark_scalar_unsafe_allocation(
+                                                s,
+                                                field_layout,
+                                                def_id,
+                                                terminator,
+                                            );
+                                        }
+                                        Immediate::ScalarPair(s1, s2) => {
+                                            self.mark_scalar_pair_unsafe_allocation(
+                                                s1,
+                                                s2,
+                                                field_layout,
+                                                def_id,
+                                                terminator,
+                                            );
+                                        }
+                                        Immediate::Uninit => {
+                                            bug!("encounter unint scalae");
+                                        }
+                                    };
+                                } else if field_ty.is_adt() {
+                                    let field_ptr = ptr
+                                        .offset(*size, self)
+                                        .expect("compute field pointer failed");
+                                    self.mark_adt_ptr_field_pointee_unsafe(
+                                        def_id, field_ptr, field_ty, terminator,
+                                    );
                                 }
                             }
                         }
@@ -314,6 +353,8 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             } else {
                 bug!("adt_ty.kind: {:?}, adt_layout.ty.kind: {:?}", adt_ty.kind(), adt.ty.kind());
             }
+        } else {
+            bug!("type should be adt, passed: {:?}", adt_ty);
         }
     }
 
@@ -337,6 +378,18 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                     if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id((ptr).into()) {
                         self.mark_alloc_id_local_unsafe(def_id, alloc_id);
                     }
+
+                    if let Some(type_and_mut) = layout.ty.builtin_deref(true) {
+                        info!("pointee type and mut:{:?}", type_and_mut);
+                        if type_and_mut.ty.is_adt() {
+                            self.mark_adt_ptr_field_pointee_unsafe(
+                                def_id,
+                                ptr.into(),
+                                type_and_mut.ty,
+                                terminator,
+                            );
+                        }
+                    }
                 }
             }
             Scalar::Int(s) if layout.ty.is_mutable_ptr() => {
@@ -352,6 +405,18 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                 } else {
                     info!("cannot get alloc id from pointer casted from int, {:?}", terminator);
                 }
+
+                if let Some(type_and_mut) = layout.ty.builtin_deref(true) {
+                    info!("pointee type and mut:{:?}", type_and_mut);
+                    if type_and_mut.ty.is_adt() {
+                        self.mark_adt_ptr_field_pointee_unsafe(
+                            def_id,
+                            p,
+                            type_and_mut.ty,
+                            terminator,
+                        );
+                    }
+                }
             }
             _ => {}
         }
@@ -363,38 +428,75 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         s2: Scalar<M::Provenance>,
         layout: TyAndLayout<'tcx>,
         def_id: DefId,
-        _terminator: &mir::Terminator<'tcx>,
+        terminator: &mir::Terminator<'tcx>,
     ) {
-        info!("s1:{:?}, s2:{:?}, layout:{:?}", s1, s2, layout);
-        let mut mark_scalar = |abi: abi::Scalar, s: Scalar<M::Provenance>| match abi {
-            abi::Scalar::Initialized { value, .. } => {
-                if let abi::Primitive::Pointer(_) = value {
-                    match s {
-                        Scalar::Ptr(ptr, _) => {
-                            if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id((ptr).into()) {
-                                self.mark_alloc_id_local_unsafe(def_id, alloc_id);
+        let (ty1, ty2) = match &layout.fields {
+            abi::FieldsShape::Arbitrary { offsets, .. } => {
+                if offsets.len() != 2 {
+                    bug!("scalar pair layout FieldsShape::Arbitrary.offsets.len={}", offsets.len());
+                }
+                (layout.field(&*self, 0), layout.field(&*self, 1))
+            }
+            _ => {
+                bug!(
+                    "scalar pair layout fieldshape is not FieldsShape::Arbitrary, it is {:?}",
+                    &layout.fields
+                );
+            }
+        };
+
+        info!("s1:{:?}, ty1: {:?}, s2:{:?}, ty2:{:?}, layout:{:?}", s1, ty1, s2, ty2, layout);
+        let mut mark_scalar =
+            |abi: abi::Scalar, s: Scalar<M::Provenance>, ty: TyAndLayout<'tcx>| match abi {
+                abi::Scalar::Initialized { value, .. } => {
+                    if let abi::Primitive::Pointer(_) = value {
+                        match s {
+                            Scalar::Ptr(ptr, _) => {
+                                if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id((ptr).into()) {
+                                    self.mark_alloc_id_local_unsafe(def_id, alloc_id);
+                                }
+                                if let Some(type_and_mut) = ty.ty.builtin_deref(true) {
+                                    if type_and_mut.ty.is_adt() {
+                                        self.mark_adt_ptr_field_pointee_unsafe(
+                                            def_id,
+                                            ptr.into(),
+                                            type_and_mut.ty,
+                                            terminator,
+                                        );
+                                    }
+                                }
+                            }
+                            _ => {
+                                bug!("abi is a pointer but scalar is not");
                             }
                         }
-                        _ => {
-                            bug!("abi is a pointer but scalar is not");
+                    }
+                }
+                abi::Scalar::Union { .. } => match s {
+                    Scalar::Ptr(ptr, _) => {
+                        if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id((ptr).into()) {
+                            self.mark_alloc_id_local_unsafe(def_id, alloc_id);
+                        }
+                        if let Some(type_and_mut) = ty.ty.builtin_deref(true) {
+                            if type_and_mut.ty.is_adt() {
+                                self.mark_adt_ptr_field_pointee_unsafe(
+                                    def_id,
+                                    ptr.into(),
+                                    type_and_mut.ty,
+                                    terminator,
+                                );
+                            }
                         }
                     }
-                }
-            }
-            abi::Scalar::Union { .. } => match s {
-                Scalar::Ptr(ptr, _) => {
-                    if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id((ptr).into()) {
-                        self.mark_alloc_id_local_unsafe(def_id, alloc_id);
-                    }
-                }
-                _ => {}
-            },
-        };
+                    _ => {}
+                },
+            };
+
         match layout.abi {
             abi::Abi::ScalarPair(a, b) => {
                 //check a and b, the abi tells whether they are pointers
-                mark_scalar(a, s1);
-                mark_scalar(b, s2);
+                mark_scalar(a, s1, ty1);
+                mark_scalar(b, s2, ty2);
             }
             _ => {
                 bug!("scalar is pair but abi is not: {:?}", layout.abi);
@@ -442,7 +544,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                         Operand::Indirect(mplace) => {
                             if layout.ty.is_adt() {
                                 self.mark_adt_ptr_field_pointee_unsafe(
-                                    def_id, mplace.ptr, layout.ty,
+                                    def_id, mplace.ptr, layout.ty, terminator,
                                 );
                             }
                         }

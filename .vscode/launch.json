@@ -117,7 +117,6 @@
                 "-Zlinker-verbose",
                 "-Zthir-unsafeck=true",
                 "-Zmimalloc=/home/swli/rust-isolation/mimalloc/out/debug/mimalloc-debug.o",
-                "-Zunpretty=mir",
                 "-Csave-temps",
                 "-Clinker-plugin-lto=no",
                 "-Clink-arg=-fuse-ld=/home/swli/rust-isolation/mold/build/mold",
