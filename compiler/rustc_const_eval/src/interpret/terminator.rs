@@ -301,31 +301,44 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                                     let field_layout =
                                         self.layout_of(field_ty).expect("cannot read field layout");
 
-                                    let imm = self
-                                        .read_immediate(
-                                            &self.ptr_to_mplace(field_ptr, field_layout),
-                                        )
-                                        .expect("cannot cast field pointer to immediate");
-                                    match *imm {
-                                        Immediate::Scalar(s) => {
-                                            self.mark_scalar_unsafe_allocation(
-                                                s,
-                                                field_layout,
-                                                def_id,
-                                                terminator,
-                                            );
+                                    match self.read_immediate(
+                                        &self.ptr_to_mplace(field_ptr, field_layout),
+                                    ) {
+                                        Ok(imm) => {
+                                            match *imm {
+                                                Immediate::Scalar(s) => {
+                                                    self.mark_scalar_unsafe_allocation(
+                                                        s,
+                                                        field_layout,
+                                                        def_id,
+                                                        terminator,
+                                                    );
+                                                }
+                                                Immediate::ScalarPair(s1, s2) => {
+                                                    self.mark_scalar_pair_unsafe_allocation(
+                                                        s1,
+                                                        s2,
+                                                        field_layout,
+                                                        def_id,
+                                                        terminator,
+                                                    );
+                                                }
+                                                Immediate::Uninit => {
+                                                    bug!("encounter unint scalae");
+                                                }
+                                            };
                                         }
-                                        Immediate::ScalarPair(s1, s2) => {
-                                            self.mark_scalar_pair_unsafe_allocation(
-                                                s1,
-                                                s2,
+                                        Err(e) => {
+                                            trace!(
+                                                "cannot read immediate from a field. adt ptr: {:?}, field_ptr:{:?}, adt_def:{:?}, field_def:{:?}, field_layout:{:?},terminator:{:?},err:{:?}",
+                                                ptr,
+                                                field_ptr,
+                                                adt_def,
+                                                field_def,
                                                 field_layout,
-                                                def_id,
                                                 terminator,
+                                                e
                                             );
-                                        }
-                                        Immediate::Uninit => {
-                                            bug!("encounter unint scalae");
                                         }
                                     };
                                 } else if field_ty.is_adt() {
@@ -503,6 +516,42 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             }
         }
     }
+
+    fn eval_fn_call_operand_unsafey(
+        &mut self,
+        op: &OpTy<'tcx, M::Provenance>,
+        terminator: &mir::Terminator<'tcx>,
+    ) {
+        let def_id = self.body().source.def_id();
+        let layout = op.layout;
+        match op.as_mplace_or_imm() {
+            either::Either::Left(mplace) => {
+                if layout.ty.is_adt() {
+                    self.mark_adt_ptr_field_pointee_unsafe(
+                        def_id,
+                        mplace.mplace().ptr,
+                        layout.ty,
+                        terminator,
+                    );
+                }
+            }
+            either::Either::Right(imm) => {
+                match *imm {
+                    Immediate::Scalar(s) => {
+                        self.mark_scalar_unsafe_allocation(s, imm.layout, def_id, terminator);
+                    }
+                    Immediate::ScalarPair(s1, s2) => {
+                        self.mark_scalar_pair_unsafe_allocation(
+                            s1, s2, imm.layout, def_id, terminator,
+                        );
+                    }
+                    Immediate::Uninit => {
+                        //it is possible that a copied operand is uninit
+                    }
+                };
+            }
+        }
+    }
     /// This is called on terminator operand that is moved
     /// So the impact on the value itself does not matter to unsafety
     /// Because it is moved anyway, it cannot be accessed later
@@ -522,6 +571,14 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         match place.place() {
             Place::Ptr(mplace) => {
                 info!("mplace: {:?}", mplace);
+                if layout.ty.is_any_ptr() {
+                    bug!("pointer operand are passed as Place::Ptr not Place::Local");
+                }
+                if layout.ty.is_adt() {
+                    self.mark_adt_ptr_field_pointee_unsafe(
+                        def_id, mplace.ptr, layout.ty, terminator,
+                    );
+                }
             }
             Place::Local { local, .. } => {
                 // &mut T or *mut T are passed as Operand::Immediate
@@ -581,7 +638,11 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
 
                         FnArg::InPlace(p)
                     }
-                    _ => FnArg::Copy(self.eval_operand(&op.node, None)?),
+                    _ => {
+                        let o = self.eval_operand(&op.node, None)?;
+                        self.eval_fn_call_operand_unsafey(&o, terminator);
+                        FnArg::Copy(o)
+                    }
                 })
             })
             .collect()

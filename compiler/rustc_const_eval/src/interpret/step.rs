@@ -111,9 +111,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
 
         match &stmt.kind {
             Assign(box (place, rvalue)) => {
-                let ret =
-                    self.eval_rvalue_into_place(rvalue, *place, is_stmt_unsafe, is_target_crate)?;
-                ret
+                self.eval_rvalue_into_place(rvalue, *place, is_stmt_unsafe, is_target_crate)?
             }
 
             SetDiscriminant { place, variant_index } => {
