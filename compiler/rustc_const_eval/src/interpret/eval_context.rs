@@ -145,6 +145,9 @@ pub struct Frame<'mir, 'tcx, Prov: Provenance = CtfeProvenance, Extra = ()> {
     /// This is the map from the Pointer's AllocId to the local
     ///
     pub alloc_id_to_local: FxHashMap<AllocId, FxHashSet<Local>>,
+
+    /// Record all AllocIds that have been marked unsafe
+    pub unsafe_alloc_id: FxHashSet<AllocId>,
 }
 
 /// What we store about a frame in an interpreter backtrace.
@@ -256,6 +259,7 @@ impl<'mir, 'tcx, Prov: Provenance> Frame<'mir, 'tcx, Prov> {
             extra,
             tracing_span: self.tracing_span,
             alloc_id_to_local: FxHashMap::default(),
+            unsafe_alloc_id: FxHashSet::default(),
         }
     }
 }
@@ -297,6 +301,20 @@ impl<'mir, 'tcx, Prov: Provenance, Extra> Frame<'mir, 'tcx, Prov, Extra> {
         self.alloc_id_to_local.entry(id).or_insert_with(FxHashSet::default).insert(local);
     }
 
+    #[instrument(level = "info", skip(self))]
+    pub fn mark_alloc_id_unsafe(&mut self, id: AllocId) {
+        self.unsafe_alloc_id.insert(id);
+    }
+
+    pub fn unmark_alloc_id_unsafe(&mut self, id: AllocId) {
+        self.unsafe_alloc_id.remove(&id);
+    }
+
+    #[instrument(level = "info", skip(self))]
+    pub fn is_alloc_id_unsafe(&self, id: AllocId) -> bool {
+        self.unsafe_alloc_id.contains(&id)
+    }
+
     pub fn get_locals_from_alloc_id(
         &self,
         id: AllocId,
@@ -308,6 +326,11 @@ impl<'mir, 'tcx, Prov: Provenance, Extra> Frame<'mir, 'tcx, Prov, Extra> {
         self.alloc_id_to_local.entry(id).and_modify(|s| {
             s.remove(&local);
         });
+
+        if self.alloc_id_to_local.get(&id).is_some_and(|s| s.is_empty()) {
+            self.alloc_id_to_local.remove(&id);
+            self.unmark_alloc_id_unsafe(id);
+        }
     }
 }
 
@@ -851,6 +874,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             tracing_span: SpanGuard::new(),
             extra: (),
             alloc_id_to_local: FxHashMap::default(),
+            unsafe_alloc_id: FxHashSet::default(),
         };
         let frame = M::init_frame_extra(self, pre_frame)?;
         self.stack_mut().push(frame);
