@@ -82,7 +82,7 @@ impl<'tcx> MirPass<'tcx> for JumpThreading {
         let mut finder = TOFinder {
             tcx,
             param_env,
-            ecx: InterpCx::new(tcx, DUMMY_SP, param_env, DummyMachine),
+            ecx: InterpCx::new(tcx, DUMMY_SP, param_env, DummyMachine, FxHashSet::default()),
             body,
             arena: &arena,
             map: &map,

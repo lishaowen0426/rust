@@ -6,6 +6,7 @@ use rustc_const_eval::interpret::{
     ImmTy, Immediate, InterpCx, OpTy, PlaceTy, PointerArithmetic, Projectable,
 };
 use rustc_data_structures::fx::FxHashMap;
+use rustc_data_structures::fx::FxHashSet;
 use rustc_hir::def::DefKind;
 use rustc_middle::mir::interpret::{AllocId, ConstAllocation, InterpResult, Scalar};
 use rustc_middle::mir::visit::{MutVisitor, PlaceContext, Visitor};
@@ -367,7 +368,7 @@ impl<'a, 'tcx> ConstAnalysis<'a, 'tcx> {
             map,
             tcx,
             local_decls: &body.local_decls,
-            ecx: InterpCx::new(tcx, DUMMY_SP, param_env, DummyMachine),
+            ecx: InterpCx::new(tcx, DUMMY_SP, param_env, DummyMachine, FxHashSet::default()),
             param_env: param_env,
         }
     }

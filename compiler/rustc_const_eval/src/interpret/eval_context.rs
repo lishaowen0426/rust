@@ -7,6 +7,7 @@ use either::{Either, Left, Right};
 use hir::CRATE_HIR_ID;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_errors::DiagCtxt;
+use rustc_hir::def_id::CrateNum;
 use rustc_hir::{self as hir, def_id::DefId, definitions::DefPathData};
 use rustc_index::IndexVec;
 use rustc_middle::mir::interpret::{
@@ -55,6 +56,9 @@ pub struct InterpCx<'mir, 'tcx, M: Machine<'mir, 'tcx>> {
 
     /// map from a def id to its unsafe locals
     pub def_id_to_unsafe_local: FxHashMap<DefId, FxHashSet<Local>>,
+
+    /// unsafety tracking targets
+    pub unsafety_tracking_crates: FxHashSet<CrateNum>,
 }
 
 // The Phantomdata exists to prevent this type from being `Send`. If it were sent across a thread
@@ -510,6 +514,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         root_span: Span,
         param_env: ty::ParamEnv<'tcx>,
         machine: M,
+        unsafety_tracking_crates: FxHashSet<CrateNum>,
     ) -> Self {
         InterpCx {
             machine,
@@ -518,6 +523,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             memory: Memory::new(),
             recursion_limit: tcx.recursion_limit(),
             def_id_to_unsafe_local: FxHashMap::default(),
+            unsafety_tracking_crates,
         }
     }
 

@@ -150,6 +150,8 @@ pub struct MiriConfig {
     pub page_size: Option<u64>,
     /// Whether to collect a backtrace when each allocation is created, just in case it leaks.
     pub collect_leak_backtraces: bool,
+    /// unsafety tracking targets
+    pub unsafety_tracking_target_crates: FxHashSet<String>,
 }
 
 impl Default for MiriConfig {
@@ -186,6 +188,7 @@ impl Default for MiriConfig {
             num_cpus: 1,
             page_size: None,
             collect_leak_backtraces: true,
+            unsafety_tracking_target_crates: FxHashSet::default(),
         }
     }
 }
@@ -262,8 +265,23 @@ pub fn create_ecx<'mir, 'tcx: 'mir>(
 ) -> InterpResult<'tcx, InterpCx<'mir, 'tcx, MiriMachine<'mir, 'tcx>>> {
     let param_env = ty::ParamEnv::reveal_all();
     let layout_cx = LayoutCx { tcx, param_env };
-    let mut ecx =
-        InterpCx::new(tcx, rustc_span::DUMMY_SP, param_env, MiriMachine::new(config, layout_cx));
+    let mut unsafety_tracking_crates = FxHashSet::default();
+    {
+        for c in tcx.crates(()).iter() {
+            let cname = tcx.crate_name(*c).to_string();
+            if config.unsafety_tracking_target_crates.contains(&cname) {
+                unsafety_tracking_crates.insert(*c);
+                println!("unsafety tracking: {}", cname);
+            }
+        }
+    }
+    let mut ecx = InterpCx::new(
+        tcx,
+        rustc_span::DUMMY_SP,
+        param_env,
+        MiriMachine::new(config, layout_cx),
+        unsafety_tracking_crates,
+    );
 
     // Some parts of initialization require a full `InterpCx`.
     MiriMachine::late_init(&mut ecx, config, {

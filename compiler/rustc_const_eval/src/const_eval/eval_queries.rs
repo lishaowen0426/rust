@@ -1,5 +1,6 @@
 use either::{Left, Right};
 
+use rustc_data_structures::fx::FxHashSet;
 use rustc_hir::def::DefKind;
 use rustc_middle::mir::interpret::{AllocId, ErrorHandled, InterpErrorInfo};
 use rustc_middle::mir::{self, ConstAlloc, ConstValue};
@@ -109,6 +110,7 @@ pub(crate) fn mk_eval_cx_to_read_const_val<'mir, 'tcx>(
         root_span,
         param_env,
         CompileTimeInterpreter::new(can_access_mut_global, CheckAlignment::No),
+        FxHashSet::default(),
     )
 }
 
@@ -289,6 +291,7 @@ pub fn eval_static_initializer_provider<'tcx>(
         // Statics (and promoteds inside statics) may access other statics, because unlike consts
         // they do not have to behave "as if" they were evaluated at runtime.
         CompileTimeInterpreter::new(CanAccessMutGlobal::Yes, CheckAlignment::Error),
+        FxHashSet::default(),
     );
     let alloc_id = eval_in_interpreter(&mut ecx, cid, true)?.alloc_id;
     let alloc = take_static_root_alloc(&mut ecx, alloc_id);
@@ -332,6 +335,7 @@ pub fn eval_to_allocation_raw_provider<'tcx>(
         // For consts however we want to ensure they behave "as if" they were evaluated at runtime,
         // so we have to reject reading mutable global memory.
         CompileTimeInterpreter::new(CanAccessMutGlobal::from(is_static), CheckAlignment::Error),
+        FxHashSet::default(),
     );
     eval_in_interpreter(&mut ecx, cid, is_static)
 }

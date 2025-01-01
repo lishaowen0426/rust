@@ -15,7 +15,7 @@ use std::iter;
 impl<'a, 'tcx> Builder<'a, 'tcx> {
     /// Compile `expr`, storing the result into `destination`, which
     /// is assumed to be uninitialized.
-    #[instrument(level = "debug", skip(self))]
+    #[instrument(level = "info", skip(self))]
     pub(crate) fn expr_into_dest(
         &mut self,
         destination: Place<'tcx>,
@@ -27,6 +27,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         // just use the name `this` uniformly
         let this = self;
         let expr = &this.thir[expr_id];
+        info!(expr=?expr);
         let expr_span = expr.span;
         let source_info = this.source_info(expr_span);
 
@@ -35,6 +36,15 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
         if !expr_is_block_or_scope {
             this.block_context.push(BlockFrame::SubExpr);
+        }
+
+        {
+            let ss = this.source_scopes[this.source_scope]
+                .local_data
+                .as_ref()
+                .assert_crate_local()
+                .safety;
+            info!("scope safety: {:?}", ss);
         }
 
         let block_and = match expr.kind {

@@ -54,6 +54,8 @@ fn main() {
 
     // Dispatch running as part of sysroot compilation.
     if env::var_os("MIRI_CALLED_FROM_SETUP").is_some() {
+        //cargo miri setup: run here
+
         phase_rustc(args, RustcPhase::Setup);
         return;
     }

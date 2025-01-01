@@ -180,7 +180,8 @@ impl<'mir, 'tcx> ConstPropagator<'mir, 'tcx> {
         let param_env = tcx.param_env_reveal_all_normalized(def_id);
 
         let can_const_prop = CanConstProp::check(tcx, param_env, body);
-        let ecx = InterpCx::new(tcx, tcx.def_span(def_id), param_env, DummyMachine);
+        let ecx =
+            InterpCx::new(tcx, tcx.def_span(def_id), param_env, DummyMachine, FxHashSet::default());
 
         ConstPropagator {
             ecx,

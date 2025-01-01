@@ -63,12 +63,16 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         }
     }
 
+    #[instrument(level = "info", skip(self))]
     pub fn is_terminator_unsafe(&self, terminator: &mir::Terminator<'tcx>) -> bool {
         if let ClearCrossCrate::Set(ld) =
             self.body().source_scopes[terminator.source_info.scope].local_data.clone().as_ref()
         {
-            ld.is_unsafe()
+            let res = ld.is_unsafe();
+            info!("is unsafe: {}", res);
+            res
         } else {
+            info!("clear cross crate::Clear");
             false
         }
     }
@@ -93,7 +97,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
     }
 
     pub fn is_crate_unsafe_target(&self) -> bool {
-        self.body().source.def_id().is_local()
+        self.unsafety_tracking_crates.contains(&self.body().source.def_id().krate)
     }
 
     /// Runs the interpretation logic for the given `mir::Statement` at the current frame and

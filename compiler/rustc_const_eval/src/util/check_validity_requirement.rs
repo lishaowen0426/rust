@@ -1,3 +1,4 @@
+use rustc_data_structures::fx::FxHashSet;
 use rustc_middle::ty::layout::{LayoutCx, LayoutError, LayoutOf, TyAndLayout, ValidityRequirement};
 use rustc_middle::ty::{ParamEnv, ParamEnvAnd, Ty, TyCtxt};
 use rustc_target::abi::{Abi, FieldsShape, Scalar, Variants};
@@ -46,7 +47,13 @@ fn might_permit_raw_init_strict<'tcx>(
 ) -> Result<bool, &'tcx LayoutError<'tcx>> {
     let machine = CompileTimeInterpreter::new(CanAccessMutGlobal::No, CheckAlignment::Error);
 
-    let mut cx = InterpCx::new(tcx, rustc_span::DUMMY_SP, ParamEnv::reveal_all(), machine);
+    let mut cx = InterpCx::new(
+        tcx,
+        rustc_span::DUMMY_SP,
+        ParamEnv::reveal_all(),
+        machine,
+        FxHashSet::default(),
+    );
 
     let allocated = cx
         .allocate(ty, MemoryKind::Machine(crate::const_eval::MemoryKind::Heap))

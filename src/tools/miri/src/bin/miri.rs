@@ -109,6 +109,7 @@ impl rustc_driver::Callbacks for MiriCompilerCalls {
                     optimizations is usually marginal at best.");
             }
 
+
             if let Some(return_code) = miri::eval_entry(tcx, entry_def_id, entry_type, config) {
                 std::process::exit(
                     i32::try_from(return_code).expect("Return value was too large!"),
@@ -495,6 +496,19 @@ fn main() {
             );
         } else if let Some(param) = arg.strip_prefix("-Zmiri-env-forward=") {
             miri_config.forwarded_env_vars.push(param.to_owned());
+        } else if let Some(param) = arg.strip_prefix("-Zmiri-unsafety-target=") {
+            let targets: Vec<String> = match parse_comma_list(param) {
+                Ok(t) => t,
+                Err(err) =>
+                    show_error!(
+                        "-Zmiri-unsafety-target requires a comma separated list of valid crate names: {}",
+                        err
+                    ),
+            };
+            for c in targets {
+                println!("{}", c);
+                miri_config.unsafety_tracking_target_crates.insert(c);
+            }
         } else if let Some(param) = arg.strip_prefix("-Zmiri-track-pointer-tag=") {
             let ids: Vec<u64> = match parse_comma_list(param) {
                 Ok(ids) => ids,

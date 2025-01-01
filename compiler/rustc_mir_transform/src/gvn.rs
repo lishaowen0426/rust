@@ -84,7 +84,7 @@
 
 use rustc_const_eval::interpret::{intern_const_alloc_for_constprop, MemoryKind};
 use rustc_const_eval::interpret::{ImmTy, InterpCx, OpTy, Projectable, Scalar};
-use rustc_data_structures::fx::FxIndexSet;
+use rustc_data_structures::fx::{FxHashSet, FxIndexSet};
 use rustc_data_structures::graph::dominators::Dominators;
 use rustc_hir::def::DefKind;
 use rustc_index::bit_set::BitSet;
@@ -265,7 +265,7 @@ impl<'body, 'tcx> VnState<'body, 'tcx> {
     ) -> Self {
         VnState {
             tcx,
-            ecx: InterpCx::new(tcx, DUMMY_SP, param_env, DummyMachine),
+            ecx: InterpCx::new(tcx, DUMMY_SP, param_env, DummyMachine, FxHashSet::default()),
             param_env,
             local_decls,
             locals: IndexVec::from_elem(None, local_decls),

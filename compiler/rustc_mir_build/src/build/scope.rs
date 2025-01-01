@@ -845,6 +845,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     }
 
     /// Creates a new source scope, nested in the current one.
+    #[instrument(level = "info", skip(self))]
     pub(crate) fn new_source_scope(
         &mut self,
         span: Span,

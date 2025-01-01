@@ -89,13 +89,23 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         })
     }
 
+    #[instrument(level = "info", skip_all)]
+    fn print_terminator(&self, terminator: &mir::Terminator<'tcx>) {
+        info!(terminator=?terminator);
+    }
+
     pub(super) fn eval_terminator(
         &mut self,
         terminator: &mir::Terminator<'tcx>,
     ) -> InterpResult<'tcx> {
         use rustc_middle::mir::TerminatorKind::*;
-        let is_terminator_unsafe = self.is_terminator_unsafe(terminator);
         let is_target_crate = self.is_crate_unsafe_target();
+        let is_terminator_unsafe = if is_target_crate {
+            self.print_terminator(terminator);
+            self.is_terminator_unsafe(terminator)
+        } else {
+            false
+        };
         match terminator.kind {
             Return => {
                 self.pop_stack_frame(/* unwinding */ false)?
@@ -640,7 +650,9 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                     }
                     _ => {
                         let o = self.eval_operand(&op.node, None)?;
-                        self.eval_fn_call_operand_unsafey(&o, terminator);
+                        if is_unsafe_and_target_crate {
+                            self.eval_fn_call_operand_unsafey(&o, terminator);
+                        }
                         FnArg::Copy(o)
                     }
                 })
