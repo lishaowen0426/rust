@@ -464,7 +464,7 @@ fn output_unsafety_tracking_result_to_json<'tcx, 'mir>(
     println!("output: {}", j);
 
     let mut output = output_dir.to_path_buf();
-    output.push("miri_unsafety_result");
+    output.push("miri_unsafety_result.json");
     let mut file = File::create(output)?;
 
     // Write some text to the file
