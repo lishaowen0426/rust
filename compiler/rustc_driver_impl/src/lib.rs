@@ -385,6 +385,10 @@ fn run_compiler(
 
         let linker = compiler.enter(|queries| {
             let early_exit = || early_exit().map(|_| None);
+
+            if let Some(p) = sess.opts.unstable_opts.unsafety_analysis_result.as_ref() {
+                safe_println!("Using Miri unsafety analysis result at: {}", p);
+            }
             queries.parse()?;
 
             if let Some(ppm) = &sess.opts.pretty {

@@ -1992,6 +1992,7 @@ written to standard error output)"),
         "take the brakes off const evaluation. NOTE: this is unsound (default: no)"),
     unsafe_heap: bool = (false, parse_bool, [TRACKED],
         "unsafe_heap (default:no)"),
+    unsafety_analysis_result: Option<String> = (None, parse_opt_string, [TRACKED],"the path to miri safety analysis result file:miri_unsafety_result.json"),
     unpretty: Option<String> = (None, parse_unpretty, [UNTRACKED],
         "present the input source, unstable (and less-pretty) variants;
         `normal`, `identified`,
