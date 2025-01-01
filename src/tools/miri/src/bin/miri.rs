@@ -509,6 +509,9 @@ fn main() {
                 println!("{}", c);
                 miri_config.unsafety_tracking_target_crates.insert(c);
             }
+        } else if let Some(param) = arg.strip_prefix("-Zmiri-unsafety-output=") {
+            let output = PathBuf::from(param);
+            miri_config.unsafety_tracking_output = Some(output);
         } else if let Some(param) = arg.strip_prefix("-Zmiri-track-pointer-tag=") {
             let ids: Vec<u64> = match parse_comma_list(param) {
                 Ok(ids) => ids,

@@ -1437,6 +1437,8 @@ pub struct SourceScopeData<'tcx> {
     /// Crate-local information for this source scope, that can't (and
     /// needn't) be tracked across crates.
     pub local_data: ClearCrossCrate<SourceScopeLocalData>,
+
+    pub miri_is_unsafe: bool,
 }
 
 #[derive(Clone, Debug, TyEncodable, TyDecodable, HashStable)]
@@ -1726,7 +1728,7 @@ mod size_asserts {
     // tidy-alphabetical-start
     static_assert_size!(BasicBlockData<'_>, 136);
     static_assert_size!(LocalDecl<'_>, 40);
-    static_assert_size!(SourceScopeData<'_>, 72);
+    static_assert_size!(SourceScopeData<'_>, 80);
     static_assert_size!(Statement<'_>, 32);
     static_assert_size!(StatementKind<'_>, 16);
     static_assert_size!(Terminator<'_>, 104);

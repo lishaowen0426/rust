@@ -74,6 +74,7 @@ pub(super) fn build_custom_mir<'tcx>(
             lint_root: hir_id,
             safety: Safety::Safe,
         }),
+        miri_is_unsafe: false,
     });
     body.injection_phase = Some(parse_attribute(attr));
 

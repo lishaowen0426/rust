@@ -5,7 +5,7 @@
 use either::Either;
 
 use rustc_index::IndexSlice;
-use rustc_middle::mir::{self, ClearCrossCrate};
+use rustc_middle::mir;
 use rustc_middle::ty::layout::LayoutOf;
 use rustc_target::abi::{FieldIdx, FIRST_VARIANT};
 
@@ -54,27 +54,12 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
     }
 
     pub fn is_statement_unsafe(&self, stmt: &mir::Statement<'tcx>) -> bool {
-        if let ClearCrossCrate::Set(ld) =
-            self.body().source_scopes[stmt.source_info.scope].local_data.clone().as_ref()
-        {
-            ld.is_unsafe()
-        } else {
-            false
-        }
+        self.body().source_scopes[stmt.source_info.scope].miri_is_unsafe
     }
 
     #[instrument(level = "info", skip(self))]
     pub fn is_terminator_unsafe(&self, terminator: &mir::Terminator<'tcx>) -> bool {
-        if let ClearCrossCrate::Set(ld) =
-            self.body().source_scopes[terminator.source_info.scope].local_data.clone().as_ref()
-        {
-            let res = ld.is_unsafe();
-            info!("is unsafe: {}", res);
-            res
-        } else {
-            info!("clear cross crate::Clear");
-            false
-        }
+        self.body().source_scopes[terminator.source_info.scope].miri_is_unsafe
     }
 
     #[instrument(level = "info", skip_all)]

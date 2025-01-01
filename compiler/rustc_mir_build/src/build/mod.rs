@@ -743,6 +743,7 @@ fn construct_error(tcx: TyCtxt<'_>, def_id: LocalDefId, guar: ErrorGuaranteed) -
             lint_root: hir_id,
             safety: Safety::Safe,
         }),
+        miri_is_unsafe: false,
     });
 
     cfg.terminate(START_BLOCK, source_info, TerminatorKind::Unreachable);

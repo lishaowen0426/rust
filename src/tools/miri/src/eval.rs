@@ -1,15 +1,18 @@
 //! Main evaluator loop and setting up the initial stack frame.
 
+use serde_json::to_string;
 use std::ffi::{OsStr, OsString};
+use std::fs::File;
+use std::io::Write;
 use std::iter;
 use std::panic::{self, AssertUnwindSafe};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::task::Poll;
 use std::thread;
 
 use crate::concurrency::thread::TlsAllocAction;
 use crate::diagnostics::report_leaks;
-use rustc_data_structures::fx::FxHashSet;
+use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_hir::def::Namespace;
 use rustc_hir::def_id::DefId;
 use rustc_middle::ty::{
@@ -152,6 +155,8 @@ pub struct MiriConfig {
     pub collect_leak_backtraces: bool,
     /// unsafety tracking targets
     pub unsafety_tracking_target_crates: FxHashSet<String>,
+    /// unsafety tracking result output directory
+    pub unsafety_tracking_output: Option<PathBuf>,
 }
 
 impl Default for MiriConfig {
@@ -189,6 +194,7 @@ impl Default for MiriConfig {
             page_size: None,
             collect_leak_backtraces: true,
             unsafety_tracking_target_crates: FxHashSet::default(),
+            unsafety_tracking_output: None,
         }
     }
 }
@@ -427,6 +433,45 @@ pub fn create_ecx<'mir, 'tcx: 'mir>(
     Ok(ecx)
 }
 
+fn output_unsafety_tracking_result_to_json<'tcx, 'mir>(
+    ecx: &InterpCx<'mir, 'tcx, MiriMachine<'mir, 'tcx>>,
+    output_dir: &Path,
+) -> std::io::Result<()> {
+    let to_key = |def_id: DefId| ecx.tcx.crate_name(def_id.krate).to_string();
+    let mut result: FxHashMap<String, FxHashMap<u32 /*DefIndex*/, FxHashSet<u32 /*Local*/>>> =
+        FxHashMap::default();
+    for (def_id, locals) in ecx.def_id_to_unsafe_local.iter() {
+        let crate_name = to_key(*def_id);
+        let idx = def_id.index;
+
+        for loc in locals {
+            result
+                .entry(crate_name.clone())
+                .or_insert_with(FxHashMap::default)
+                .entry(idx.as_u32())
+                .or_insert_with(FxHashSet::default)
+                .insert(loc.as_u32());
+        }
+    }
+
+    let j = match to_string(&result) {
+        Ok(v) => v,
+        Err(e) => {
+            panic!("parse result failed:{}", e);
+        }
+    };
+
+    println!("output: {}", j);
+
+    let mut output = output_dir.to_path_buf();
+    output.push("miri_unsafety_result");
+    let mut file = File::create(output)?;
+
+    // Write some text to the file
+    file.write_all(j.as_bytes())?;
+    file.flush()?;
+    Ok(())
+}
 /// Evaluates the entry function specified by `entry_id`.
 /// Returns `Some(return_code)` if program executed completed.
 /// Returns `None` if an evaluation error occurred.
@@ -473,6 +518,11 @@ pub fn eval_entry<'tcx>(
     }
 
     ecx.print_unsafe_locals();
+    output_unsafety_tracking_result_to_json(
+        &ecx,
+        config.unsafety_tracking_output.unwrap_or(std::env::current_dir().unwrap()).as_path(),
+    )
+    .expect("output result failed");
 
     // Process the result.
     let (return_code, leak_check) = report_error(&ecx, res)?;
