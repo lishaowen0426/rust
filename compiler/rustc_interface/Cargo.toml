@@ -49,6 +49,8 @@ rustc_traits = { path = "../rustc_traits" }
 rustc_ty_utils = { path = "../rustc_ty_utils" }
 thin-vec = "0.2.12"
 tracing = "0.1"
+serde = "1.0.217"
+serde_json = "1.0"
 # tidy-alphabetical-end
 
 [features]

@@ -240,6 +240,11 @@ impl<V: Eq + Hash> Default for UnordSet<V> {
     }
 }
 
+impl<V: Eq + Hash + Clone> UnordSet<V> {
+    pub fn into_fxhashset(&self) -> FxHashSet<V> {
+        FxHashSet::from_iter(self.inner.iter().cloned())
+    }
+}
 impl<V: Eq + Hash> UnordSet<V> {
     #[inline]
     pub fn new() -> Self {

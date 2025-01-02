@@ -1,9 +1,11 @@
 use crate::base;
 use crate::traits::*;
+use rustc_data_structures::fx::FxHashSet;
 use rustc_index::bit_set::BitSet;
 use rustc_index::IndexVec;
 use rustc_middle::mir;
 use rustc_middle::mir::traversal;
+use rustc_middle::mir::Local;
 use rustc_middle::mir::UnwindTerminateReason;
 use rustc_middle::ty::layout::{FnAbiOf, HasTyCtxt, TyAndLayout};
 use rustc_middle::ty::{self, Instance, Ty, TyCtxt, TypeFoldable, TypeVisitableExt};
@@ -40,6 +42,7 @@ enum CachedLlbb<T> {
 }
 
 /// Master context for codegenning from MIR.
+#[allow(dead_code)]
 pub struct FunctionCx<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> {
     instance: Instance<'tcx>,
 
@@ -110,6 +113,9 @@ pub struct FunctionCx<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> {
 
     /// Caller location propagated if this function has `#[track_caller]`.
     caller_location: Option<OperandRef<'tcx, Bx::Value>>,
+
+    /// unsafe locals from miri analysis
+    unsafe_locals: Option<FxHashSet<Local>>,
 }
 
 impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
@@ -191,6 +197,14 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             })
             .collect();
 
+    let unsafe_locals: Option<FxHashSet<Local>> =
+        if cx.tcx().sess.opts.unstable_opts.unsafety_analysis_result.is_some() {
+            let res = cx.tcx().miri_safety_result(());
+            if let Some(s) = res.get(&instance.def_id()) { Some(s.into_fxhashset()) } else { None }
+        } else {
+            None
+        };
+
     let mut fx = FunctionCx {
         instance,
         mir,
@@ -208,6 +222,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         debug_context,
         per_local_var_debug_info: None,
         caller_location: None,
+        unsafe_locals,
     };
 
     // It may seem like we should iterate over `required_consts` to ensure they all successfully

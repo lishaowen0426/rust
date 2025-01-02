@@ -4072,6 +4072,8 @@ dependencies = [
  "rustc_trait_selection",
  "rustc_traits",
  "rustc_ty_utils",
+ "serde",
+ "serde_json",
  "thin-vec",
  "tracing",
 ]

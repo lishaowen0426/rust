@@ -290,6 +290,10 @@ impl<'tcx> Queries<'tcx> {
             // Hook for UI tests.
             Self::check_for_rustc_errors_attr(tcx);
 
+            if tcx.sess.opts.unstable_opts.unsafety_analysis_result.is_some() {
+                tcx.ensure_with_value().miri_safety_result(());
+            }
+
             let ongoing_codegen = passes::start_codegen(&*self.compiler.codegen_backend, tcx);
 
             Ok(Linker {

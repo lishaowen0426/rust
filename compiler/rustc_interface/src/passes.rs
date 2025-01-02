@@ -1,3 +1,4 @@
+#![allow(rustc::potential_query_instability)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
 use crate::errors;
@@ -9,6 +10,7 @@ use rustc_ast::ptr::P;
 use rustc_ast::{self as ast, visit, Item};
 use rustc_borrowck as mir_borrowck;
 use rustc_codegen_ssa::traits::CodegenBackend;
+use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_data_structures::parallel;
 use rustc_data_structures::steal::Steal;
 use rustc_data_structures::sync::{Lrc, OnceLock, WorkerLocal};
@@ -17,10 +19,11 @@ use rustc_errors::PResult;
 use rustc_expand::base::{ExtCtxt, LintStoreExpand};
 use rustc_feature::Features;
 use rustc_fs_util::try_canonicalize;
-use rustc_hir::def_id::{DefId, StableCrateId, LOCAL_CRATE};
+use rustc_hir::def_id::{CrateNum, DefId, DefIndex, StableCrateId, LOCAL_CRATE};
 use rustc_lint::{unerased_lint_store, BufferedEarlyLint, EarlyCheckNode, LintStore};
 use rustc_metadata::creader::CStore;
 use rustc_middle::arena::Arena;
+use rustc_middle::bug;
 use rustc_middle::dep_graph::DepGraph;
 use rustc_middle::mir::Local;
 use rustc_middle::ty::{self, GlobalCtxt, RegisteredTools, TyCtxt};
@@ -51,7 +54,7 @@ use std::ffi::OsString;
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
-use std::{env, fs, iter};
+use std::{env, fs, io::BufReader, iter};
 
 use thin_vec::thin_vec;
 fn inject_crate_key(sess: &Session, krate: &mut Crate) {
@@ -664,11 +667,59 @@ pub(crate) fn write_dep_info(tcx: TyCtxt<'_>) {
     }
 }
 
+#[instrument(level = "info", skip_all)]
 pub(crate) fn miri_safety_result<'tcx>(
     tcx: TyCtxt<'tcx>,
     (): (),
 ) -> &'tcx UnordMap<DefId, UnordSet<Local>> {
-    let result = UnordMap::default();
+    let mut result = UnordMap::default();
+
+    let file_path = tcx
+        .sess
+        .opts
+        .unstable_opts
+        .unsafety_analysis_result
+        .as_ref()
+        .expect("miri unsafey analysis result option is not specified");
+
+    let file = fs::File::open(file_path).expect("open analysis file failed");
+    let reader = BufReader::new(file);
+
+    let u: FxHashMap<String, FxHashMap<u32, FxHashSet<u32>>> =
+        serde_json::from_reader(reader).expect("deserialize failed");
+
+    info!("Loaded: {:?}", u);
+
+    let mut name_to_cnum: FxHashMap<String, CrateNum> = FxHashMap::default();
+
+    for cn in tcx.crates(()) {
+        let symbol = tcx.crate_name(*cn);
+        name_to_cnum.insert(symbol.as_str().to_string(), *cn);
+    }
+    let local_crate = tcx.crate_name(LOCAL_CRATE);
+    info!("insert local crate: {:?}", local_crate);
+    name_to_cnum.insert(local_crate.as_str().to_string(), LOCAL_CRATE);
+
+    info!("name_to_cnum:{:?}", name_to_cnum);
+
+    for (crate_name, res) in u.iter() {
+        if let Some(cn) = name_to_cnum.get(crate_name) {
+            info!("found cn {:?} for crate:{:?}", cn, crate_name);
+            for (def_index, locals) in res.iter() {
+                let def_id = DefId { krate: *cn, index: DefIndex::from_u32(*def_index) };
+                let c = locals.clone();
+                let v = c.iter().map(|l| Local::from_u32(*l));
+                info!("def_id: {:?}, unsafe locals:{:?}", def_id, locals);
+                if result.insert(def_id, UnordSet::from_iter(v)).is_some() {
+                    bug!("DefId: {:?}: unsafe locals result already exists", def_id);
+                }
+            }
+        } else {
+            info!("not found cn for crate: {:?}", crate_name);
+            continue;
+        }
+    }
+
     &*tcx.arena.alloc(result)
 }
 
@@ -678,6 +729,7 @@ pub static DEFAULT_QUERY_PROVIDERS: LazyLock<Providers> = LazyLock::new(|| {
     providers.hir_crate = rustc_ast_lowering::lower_to_hir;
     providers.resolver_for_lowering = resolver_for_lowering;
     providers.early_lint_checks = early_lint_checks;
+    providers.miri_safety_result = miri_safety_result;
     rustc_ast_lowering::provide(providers);
     proc_macro_decls::provide(providers);
     rustc_const_eval::provide(providers);
