@@ -38,7 +38,11 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
 
         if let Some(stmt) = basic_block.statements.get(loc.statement_index) {
             let old_frames = self.frame_idx();
-            self.statement(stmt)?;
+            if self.is_crate_unsafe_target() {
+                self.statement_debug(stmt)?;
+            } else {
+                self.statement(stmt)?;
+            }
             // Make sure we are not updating `statement_index` of the wrong frame.
             assert_eq!(old_frames, self.frame_idx());
             // Advance the program counter.
@@ -49,7 +53,11 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         M::before_terminator(self)?;
 
         let terminator = basic_block.terminator();
-        self.terminator(terminator)?;
+        if self.is_crate_unsafe_target() {
+            self.terminator_debug(terminator)?;
+        } else {
+            self.terminator(terminator)?;
+        }
         Ok(true)
     }
 
@@ -57,7 +65,6 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         self.body().source_scopes[stmt.source_info.scope].miri_is_unsafe
     }
 
-    #[instrument(level = "info", skip(self))]
     pub fn is_terminator_unsafe(&self, terminator: &mir::Terminator<'tcx>) -> bool {
         self.body().source_scopes[terminator.source_info.scope].miri_is_unsafe
     }
@@ -85,6 +92,98 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         self.unsafety_tracking_crates.contains(&self.body().source.def_id().krate)
     }
 
+    #[instrument(level = "info", name = "eval_statement_debug", skip(self))]
+    pub fn statement_debug(&mut self, stmt: &mir::Statement<'tcx>) -> InterpResult<'tcx> {
+        use rustc_middle::mir::StatementKind::*;
+        let is_target_crate = self.is_crate_unsafe_target();
+        let is_stmt_unsafe = self.is_statement_unsafe(stmt);
+
+        self.miri_debug_stmt(stmt)?;
+
+        match &stmt.kind {
+            Assign(box (place, rvalue)) => {
+                info!("Assign:");
+                self.eval_rvalue_into_place(rvalue, *place, is_stmt_unsafe, is_target_crate)?
+            }
+
+            SetDiscriminant { place, variant_index } => {
+                //this is used internally by rustc to change the active enum variant
+                //so this does not inherently unsafe.
+                //e.g.,
+                //  SetDiscriminant { place: _1, variant_index: 1 }
+                //  (_1.0 = 42)
+                //the unsafety will be handled in subsequent statements (here, the Assign)
+                let dest = self.eval_place(**place)?;
+                self.write_discriminant(*variant_index, &dest)?;
+            }
+
+            Deinit(place) => {
+                //this is used internally by the compiler
+                //so no effects
+                let dest = self.eval_place(**place)?;
+                self.write_uninit(&dest)?;
+            }
+
+            // Mark locals as alive
+            StorageLive(local) => {
+                if is_stmt_unsafe && is_target_crate {
+                    let def_id = self.body().source.def_id();
+                    self.mark_unsafe_local(def_id, *local);
+                }
+                self.storage_live(*local)?;
+            }
+
+            // Mark locals as dead
+            StorageDead(local) => {
+                self.storage_dead(*local)?;
+            }
+
+            // No dynamic semantics attached to `FakeRead`; MIR
+            // interpreter is solely intended for borrowck'ed code.
+            FakeRead(..) => {}
+
+            // Stacked Borrows.
+            Retag(kind, place) => {
+                let dest = self.eval_place(**place)?;
+                M::retag_place_contents(self, *kind, &dest)?;
+            }
+
+            Intrinsic(box intrinsic) => self.emulate_nondiverging_intrinsic(intrinsic)?,
+
+            // Evaluate the place expression, without reading from it.
+            PlaceMention(box place) => {
+                let _ = self.eval_place(*place)?;
+            }
+
+            // This exists purely to guide borrowck lifetime inference, and does not have
+            // an operational effect.
+            AscribeUserType(..) => {}
+
+            // Currently, Miri discards Coverage statements. Coverage statements are only injected
+            // via an optional compile time MIR pass and have no side effects. Since Coverage
+            // statements don't exist at the source level, it is safe for Miri to ignore them, even
+            // for undefined behavior (UB) checks.
+            //
+            // A coverage counter inside a const expression (for example, a counter injected in a
+            // const function) is discarded when the const is evaluated at compile time. Whether
+            // this should change, and/or how to implement a const eval counter, is a subject of the
+            // following issue:
+            //
+            // FIXME(#73156): Handle source code coverage in const eval
+            Coverage(..) => {}
+
+            ConstEvalCounter => {
+                M::increment_const_eval_counter(self)?;
+            }
+
+            // Defined to do nothing. These are added by optimization passes, to avoid changing the
+            // size of MIR constantly.
+            Nop => {}
+        }
+
+        Ok(())
+    }
+
     /// Runs the interpretation logic for the given `mir::Statement` at the current frame and
     /// statement counter.
     ///
@@ -94,10 +193,6 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         use rustc_middle::mir::StatementKind::*;
         let is_target_crate = self.is_crate_unsafe_target();
         let is_stmt_unsafe = self.is_statement_unsafe(stmt);
-
-        if is_target_crate {
-            self.miri_debug_stmt(stmt)?;
-        }
 
         match &stmt.kind {
             Assign(box (place, rvalue)) => {
@@ -239,7 +334,6 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
 
         // FIXME: ensure some kind of non-aliasing between LHS and RHS?
         // Also see https://github.com/rust-lang/rust/issues/68364.
-        info!(rvalue=?rvalue);
         use rustc_middle::mir::Rvalue::*;
         let is_rvalue_unsafe = match *rvalue {
             ThreadLocalRef(did) => {
@@ -301,7 +395,14 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
 
             Ref(_, borrow_kind, place) => {
                 let src = self.eval_place(place)?;
+                if self.is_crate_unsafe_target() {
+                    info!("Ref: refered place: ");
+                    let _ = self.dump_place(&src);
+                }
                 let place = self.force_allocation(&src)?;
+                if self.is_crate_unsafe_target() {
+                    info!("After force_allocation: {:?}", place);
+                }
                 let val = ImmTy::from_immediate(place.to_ref(self), dest.layout);
                 // A fresh reference was created, make sure it gets retagged.
                 let val = M::retag_ptr_value(
@@ -396,9 +497,6 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             }
         };
 
-        if self.is_crate_unsafe_target() {
-            let _ = self.dump_place(&dest);
-        }
         if (is_stmt_unsafe || is_rvalue_unsafe) && is_target_crate {
             self.mark_place_unsafe(&dest);
         }
@@ -475,7 +573,18 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
 
         Ok(is_rvalue_unsafe)
     }
+    #[instrument(level = "info", skip(self))]
+    fn terminator_debug(&mut self, terminator: &mir::Terminator<'tcx>) -> InterpResult<'tcx> {
+        info!("{:?}", terminator.kind);
 
+        self.eval_terminator(terminator)?;
+        if !self.stack().is_empty() {
+            if let Either::Left(loc) = self.frame().loc {
+                info!("// executing {:?}", loc.block);
+            }
+        }
+        Ok(())
+    }
     /// Evaluate the given terminator. Will also adjust the stack frame and statement position accordingly.
     fn terminator(&mut self, terminator: &mir::Terminator<'tcx>) -> InterpResult<'tcx> {
         info!("{:?}", terminator.kind);

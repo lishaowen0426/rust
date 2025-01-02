@@ -539,9 +539,6 @@ where
             place = self.project(&place, elem)?
         }
 
-        if self.is_crate_unsafe_target() {
-            let _ = self.dump_place(&place);
-        }
         // Sanity-check the type we ended up with.
         if cfg!(debug_assertions) {
             let normalized_place_ty = self

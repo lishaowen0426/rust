@@ -77,7 +77,7 @@ where
     Normalized { value, obligations }
 }
 
-#[instrument(level = "info", skip(selcx, param_env, cause, obligations))]
+#[instrument(level = "debug", skip(selcx, param_env, cause, obligations))]
 pub(crate) fn normalize_with_depth_to<'a, 'b, 'tcx, T>(
     selcx: &'a mut SelectionContext<'b, 'tcx>,
     param_env: ty::ParamEnv<'tcx>,

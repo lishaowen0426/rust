@@ -12,15 +12,17 @@ use rustc_codegen_ssa::traits::CodegenBackend;
 use rustc_data_structures::parallel;
 use rustc_data_structures::steal::Steal;
 use rustc_data_structures::sync::{Lrc, OnceLock, WorkerLocal};
+use rustc_data_structures::unord::{UnordMap, UnordSet};
 use rustc_errors::PResult;
 use rustc_expand::base::{ExtCtxt, LintStoreExpand};
 use rustc_feature::Features;
 use rustc_fs_util::try_canonicalize;
-use rustc_hir::def_id::{StableCrateId, LOCAL_CRATE};
+use rustc_hir::def_id::{DefId, StableCrateId, LOCAL_CRATE};
 use rustc_lint::{unerased_lint_store, BufferedEarlyLint, EarlyCheckNode, LintStore};
 use rustc_metadata::creader::CStore;
 use rustc_middle::arena::Arena;
 use rustc_middle::dep_graph::DepGraph;
+use rustc_middle::mir::Local;
 use rustc_middle::ty::{self, GlobalCtxt, RegisteredTools, TyCtxt};
 use rustc_middle::util::Providers;
 use rustc_mir_build as mir_build;
@@ -660,6 +662,14 @@ pub(crate) fn write_dep_info(tcx: TyCtxt<'_>) {
             }
         }
     }
+}
+
+pub(crate) fn miri_safety_result<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    (): (),
+) -> &'tcx UnordMap<DefId, UnordSet<Local>> {
+    let result = UnordMap::default();
+    &*tcx.arena.alloc(result)
 }
 
 pub static DEFAULT_QUERY_PROVIDERS: LazyLock<Providers> = LazyLock::new(|| {

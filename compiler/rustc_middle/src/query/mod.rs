@@ -1943,6 +1943,10 @@ rustc_queries! {
         arena_cache
     }
 
+    query miri_safety_result(_:())-> &'tcx UnordMap<DefId, UnordSet<mir::Local>>{
+        desc {"unsafe local results from miri"}
+    }
+
     /// <div class="warning">
     ///
     /// Do not call this query directly: Invoke `normalize` instead.

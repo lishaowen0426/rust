@@ -119,6 +119,7 @@ macro_rules! arena_types {
             [] features: rustc_feature::Features,
             [decode] specialization_graph: rustc_middle::traits::specialization_graph::Graph,
             [] crate_inherent_impls: rustc_middle::ty::CrateInherentImpls,
+            [] miri_safety_result: rustc_data_structures::unord::UnordMap<rustc_hir::def_id::DefId, rustc_data_structures::unord::UnordSet<rustc_middle::mir::Local>>,
         ]);
     )
 }

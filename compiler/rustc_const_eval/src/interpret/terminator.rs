@@ -100,12 +100,8 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
     ) -> InterpResult<'tcx> {
         use rustc_middle::mir::TerminatorKind::*;
         let is_target_crate = self.is_crate_unsafe_target();
-        let is_terminator_unsafe = if is_target_crate {
-            self.print_terminator(terminator);
-            self.is_terminator_unsafe(terminator)
-        } else {
-            false
-        };
+        let is_terminator_unsafe =
+            if is_target_crate { self.is_terminator_unsafe(terminator) } else { false };
         match terminator.kind {
             Return => {
                 self.pop_stack_frame(/* unwinding */ false)?
@@ -185,6 +181,10 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                 };
 
                 let destination = self.eval_place(destination)?;
+                if is_target_crate {
+                    info!("Call terminator destination:");
+                    let _ = self.dump_place(&destination);
+                }
                 if is_terminator_unsafe && is_target_crate {
                     self.mark_place_unsafe(&destination);
                 }

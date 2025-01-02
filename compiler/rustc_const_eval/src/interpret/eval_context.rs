@@ -859,7 +859,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         self.size_and_align_of(&mplace.meta(), &mplace.layout)
     }
 
-    #[instrument(skip(self, body, return_place, return_to_block), level = "info")]
+    #[instrument(skip(self, body, return_place, return_to_block), level = "debug")]
     pub fn push_stack_frame(
         &mut self,
         instance: ty::Instance<'tcx>,
@@ -1387,10 +1387,10 @@ impl<'a, 'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> std::fmt::Debug
                     LocalValue::Live(Operand::Indirect(mplace)) => {
                         write!(
                             fmt,
-                            " by {} ref {:?}:",
+                            "Indirect, meta: {} ref {:?}:",
                             match mplace.meta {
                                 MemPlaceMeta::Meta(meta) => format!(" meta({meta:?})"),
-                                MemPlaceMeta::None => String::new(),
+                                MemPlaceMeta::None => String::from("none"),
                             },
                             mplace.ptr,
                         )?;
