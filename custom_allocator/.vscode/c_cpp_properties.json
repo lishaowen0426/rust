@@ -1,0 +1,12 @@
+{
+    "configurations": [
+        {
+            "name": "allocator",
+            "includePath": [],
+            "intelliSenseMode": "linux-gcc-x64",
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17"
+        }
+    ],
+    "version": 4
+}

@@ -2172,6 +2172,24 @@ fn linker_with_args<'a>(
         }
     }
 
+    if sess.opts.unstable_opts.unsafety_analysis_result.is_some() {
+        match link_output_kind {
+            LinkOutputKind::DynamicDylib | LinkOutputKind::StaticDylib => {
+                //when load dylib using dlopen
+                //it the dylib contains any tls, it will fail
+                //
+            }
+            _ => {
+                if let Some(allocator_obj) = sess.opts.unstable_opts.unsafety_custom_alloca.as_ref()
+                {
+                    cmd.add_object(&Path::new(allocator_obj));
+                } else {
+                    sess.dcx().err(String::from("unsafe_analysis_result and unsafety_custom_alloca should be both specified"));
+                }
+            }
+        }
+    }
+
     add_linked_symbol_object(
         cmd,
         sess,

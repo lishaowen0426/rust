@@ -1,0 +1,2 @@
+compile:
+    gcc -c -o alloc.o alloc.c

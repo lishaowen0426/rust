@@ -67,5 +67,10 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_INSTALL_PREFIX": "${workspaceFolder}/llvm-build/install",
         "LLVM_ENABLE_ASSERTIONS": "ON",
+    },
+    "files.associations": {
+        "*.css": "tailwindcss",
+        "*.s": "asm-intel-x86-generic",
+        "stddef.h": "c"
     }
 }

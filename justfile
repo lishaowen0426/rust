@@ -1,5 +1,5 @@
 miri:
-    ./x build miri
+    ./x build miri compiler
 
     cargo install --path ./src/tools/miri/cargo-miri --force \
     --target-dir ./build/cargo-miri-install \
