@@ -475,6 +475,30 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
             alloca
         }
     }
+    fn unsafe_alloca(&mut self, ty: &'ll Type, align: Align) -> &'ll Value {
+        let mut bx = Builder::with_cx(self.cx);
+        bx.position_at_start(unsafe { llvm::LLVMGetFirstBasicBlock(self.llfn()) });
+        unsafe {
+            let alloca = llvm::LLVMBuildAlloca(bx.llbuilder, ty, UNNAMED);
+            llvm::LLVMSetAlignment(alloca, align.bytes() as c_uint);
+
+            let key = "unsafety";
+            let kind = llvm::LLVMGetMDKindIDInContext(
+                &self.llcx,
+                key.as_ptr() as *const c_char,
+                key.len() as c_uint,
+            );
+
+            let val_str = "unsafe_alloca";
+
+            let val =
+                llvm::LLVMMDStringInContext2(&self.llcx, val_str.as_ptr().cast(), val_str.len());
+            let node = llvm::LLVMMDNodeInContext2(&self.llcx, vec![val].as_ptr(), 1);
+            let val_md = llvm::LLVMMetadataAsValue(self.llcx, node);
+            llvm::LLVMSetMetadata(alloca, kind, val_md);
+            alloca
+        }
+    }
 
     fn byte_array_alloca(&mut self, len: &'ll Value, align: Align) -> &'ll Value {
         unsafe {

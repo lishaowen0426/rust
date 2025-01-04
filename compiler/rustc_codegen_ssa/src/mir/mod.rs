@@ -238,6 +238,8 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         let args = arg_local_refs(&mut start_bx, &mut fx, &memory_locals);
 
         let mut allocate_local = |local| {
+            let is_unsafe =
+                |local: Local| fx.unsafe_locals.as_ref().is_some_and(|c| c.contains(&local));
             let decl = &mir.local_decls[local];
             let layout = start_bx.layout_of(fx.monomorphize(decl.ty));
             assert!(!layout.ty.has_erasable_regions());
@@ -250,10 +252,24 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
 
             if memory_locals.contains(local) {
                 debug!("alloc: {:?} -> place", local);
-                if layout.is_unsized() {
-                    LocalRef::UnsizedPlace(PlaceRef::alloca_unsized_indirect(&mut start_bx, layout))
+                if is_unsafe(local) {
+                    if layout.is_unsized() {
+                        LocalRef::UnsizedPlace(PlaceRef::unsafe_alloca_unsized_indirect(
+                            &mut start_bx,
+                            layout,
+                        ))
+                    } else {
+                        LocalRef::Place(PlaceRef::unsafe_alloca(&mut start_bx, layout))
+                    }
                 } else {
-                    LocalRef::Place(PlaceRef::alloca(&mut start_bx, layout))
+                    if layout.is_unsized() {
+                        LocalRef::UnsizedPlace(PlaceRef::alloca_unsized_indirect(
+                            &mut start_bx,
+                            layout,
+                        ))
+                    } else {
+                        LocalRef::Place(PlaceRef::alloca(&mut start_bx, layout))
+                    }
                 }
             } else {
                 debug!("alloc: {:?} -> operand", local);
@@ -295,6 +311,8 @@ fn arg_local_refs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
     let mut llarg_idx = fx.fn_abi.ret.is_indirect() as usize;
 
     let mut num_untupled = None;
+
+    let unsafe_local = |local: Local| fx.unsafe_locals.as_ref().is_some_and(|c| c.contains(&local));
 
     let args = mir
         .args_iter()
@@ -399,11 +417,19 @@ fn arg_local_refs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                 llarg_idx += 1;
                 let indirect_operand = OperandValue::Pair(llarg, llextra);
 
-                let tmp = PlaceRef::alloca_unsized_indirect(bx, arg.layout);
+                let tmp = if unsafe_local(local) {
+                    PlaceRef::unsafe_alloca_unsized_indirect(bx, arg.layout)
+                } else {
+                    PlaceRef::alloca_unsized_indirect(bx, arg.layout)
+                };
                 indirect_operand.store(bx, tmp);
                 LocalRef::UnsizedPlace(tmp)
             } else {
-                let tmp = PlaceRef::alloca(bx, arg.layout);
+                let tmp = if unsafe_local(local) {
+                    PlaceRef::unsafe_alloca(bx, arg.layout)
+                } else {
+                    PlaceRef::alloca(bx, arg.layout)
+                };
                 bx.store_fn_arg(arg, &mut llarg_idx, tmp);
                 LocalRef::Place(tmp)
             }

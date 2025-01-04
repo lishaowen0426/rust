@@ -51,6 +51,13 @@ impl<'a, 'tcx, V: CodegenObject> PlaceRef<'tcx, V> {
         Self::alloca_aligned(bx, layout, layout.align.abi)
     }
 
+    pub fn unsafe_alloca<Bx: BuilderMethods<'a, 'tcx, Value = V>>(
+        bx: &mut Bx,
+        layout: TyAndLayout<'tcx>,
+    ) -> Self {
+        Self::unsafe_alloca_aligned(bx, layout, layout.align.abi)
+    }
+
     pub fn alloca_aligned<Bx: BuilderMethods<'a, 'tcx, Value = V>>(
         bx: &mut Bx,
         layout: TyAndLayout<'tcx>,
@@ -58,6 +65,16 @@ impl<'a, 'tcx, V: CodegenObject> PlaceRef<'tcx, V> {
     ) -> Self {
         assert!(layout.is_sized(), "tried to statically allocate unsized place");
         let tmp = bx.alloca(bx.cx().backend_type(layout), align);
+        Self::new_sized_aligned(tmp, layout, align)
+    }
+
+    pub fn unsafe_alloca_aligned<Bx: BuilderMethods<'a, 'tcx, Value = V>>(
+        bx: &mut Bx,
+        layout: TyAndLayout<'tcx>,
+        align: Align,
+    ) -> Self {
+        assert!(layout.is_sized(), "tried to statically allocate unsized place");
+        let tmp = bx.unsafe_alloca(bx.cx().backend_type(layout), align);
         Self::new_sized_aligned(tmp, layout, align)
     }
 
@@ -72,6 +89,16 @@ impl<'a, 'tcx, V: CodegenObject> PlaceRef<'tcx, V> {
         let ptr_ty = Ty::new_mut_ptr(bx.cx().tcx(), layout.ty);
         let ptr_layout = bx.cx().layout_of(ptr_ty);
         Self::alloca(bx, ptr_layout)
+    }
+
+    pub fn unsafe_alloca_unsized_indirect<Bx: BuilderMethods<'a, 'tcx, Value = V>>(
+        bx: &mut Bx,
+        layout: TyAndLayout<'tcx>,
+    ) -> Self {
+        assert!(layout.is_unsized(), "tried to allocate indirect place for sized values");
+        let ptr_ty = Ty::new_mut_ptr(bx.cx().tcx(), layout.ty);
+        let ptr_layout = bx.cx().layout_of(ptr_ty);
+        Self::unsafe_alloca(bx, ptr_layout)
     }
 
     pub fn len<Cx: ConstMethods<'tcx, Value = V>>(&self, cx: &Cx) -> V {

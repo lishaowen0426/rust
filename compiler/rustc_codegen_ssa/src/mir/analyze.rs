@@ -18,11 +18,14 @@ pub fn non_ssa_locals<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
     let dominators = mir.basic_blocks.dominators();
     let locals = mir
         .local_decls
-        .iter()
-        .map(|decl| {
+        .iter_enumerated()
+        .map(|(local, decl)| {
             let ty = fx.monomorphize(decl.ty);
             let layout = fx.cx.spanned_layout_of(ty, decl.source_info.span);
-            if layout.is_zst() {
+            if fx.unsafe_locals.as_ref().is_some_and(|u| u.contains(&local)) {
+                info!("Local {:?} is unsafe, so we assign LocalKind::Memory to it", local);
+                LocalKind::Memory
+            } else if layout.is_zst() {
                 LocalKind::ZST
             } else if fx.cx.is_backend_immediate(layout) || fx.cx.is_backend_scalar_pair(layout) {
                 LocalKind::Unused
