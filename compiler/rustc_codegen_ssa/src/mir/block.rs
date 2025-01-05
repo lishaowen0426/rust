@@ -1163,15 +1163,15 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             debug!("codegen_block({:?}={:?})", bb, data);
 
             for statement in &data.statements {
-                bx.set_unsafe();
+                bx.set_svf_unsafe();
                 self.codegen_statement(bx, statement);
-                bx.clear_unsafe();
+                bx.clear_svf_unsafe();
             }
 
             let merging_succ = {
-                bx.set_unsafe();
+                bx.set_svf_unsafe();
                 let t = self.codegen_terminator(bx, bb, data.terminator());
-                bx.clear_unsafe();
+                bx.clear_svf_unsafe();
                 t
             };
             if let MergingSucc::False = merging_succ {

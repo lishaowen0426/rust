@@ -1996,6 +1996,7 @@ written to standard error output)"),
     unsafety_custom_alloca: Option<String> = (None, parse_opt_string, [TRACKED],"the path to unsafe custom allocator object file. it ends with .o"),
     unsafety_replace_alloca: bool = (false, parse_bool, [TRACKED],
         "replace alloca with the custom allocator (default: no)"),
+    unsafety_svf: bool = (false, parse_bool, [TRACKED],"whether svf analysis is enabled"),
     unpretty: Option<String> = (None, parse_unpretty, [UNTRACKED],
         "present the input source, unstable (and less-pretty) variants;
         `normal`, `identified`,

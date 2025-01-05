@@ -5,7 +5,7 @@ use super::debuginfo::DebugInfoBuilderMethods;
 use super::intrinsic::IntrinsicCallMethods;
 use super::misc::MiscMethods;
 use super::type_::{ArgAbiMethods, BaseTypeMethods};
-use super::{HasCodegen, StaticBuilderMethods};
+use super::{BackendTypes, HasCodegen, StaticBuilderMethods};
 
 use crate::common::{
     AtomicOrdering, AtomicRmwBinOp, IntPredicate, RealPredicate, SynchronizationScope, TypeKind,
@@ -29,6 +29,13 @@ pub enum OverflowOp {
     Mul,
 }
 
+pub trait SvfMethods<'tcx>: BackendTypes {
+    fn set_svf_unsafe(&mut self);
+    fn clear_svf_unsafe(&mut self);
+    fn is_svf_unsafe(&self) -> bool;
+    fn tag_svf_unsafe(&self, val: Self::Value);
+}
+
 pub trait BuilderMethods<'a, 'tcx>:
     HasCodegen<'tcx>
     + CoverageInfoBuilderMethods<'tcx>
@@ -40,11 +47,9 @@ pub trait BuilderMethods<'a, 'tcx>:
     + StaticBuilderMethods
     + HasParamEnv<'tcx>
     + HasTargetSpec
+    + SvfMethods<'tcx>
 {
     fn build(cx: &'a Self::CodegenCx, llbb: Self::BasicBlock) -> Self;
-
-    fn set_unsafe(&mut self);
-    fn clear_unsafe(&mut self);
 
     fn cx(&self) -> &Self::CodegenCx;
     fn llbb(&self) -> Self::BasicBlock;
