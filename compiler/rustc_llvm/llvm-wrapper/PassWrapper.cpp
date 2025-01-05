@@ -54,6 +54,7 @@
 #include "llvm/Transforms/Utils.h"
 #include "llvm/Transforms/Utils/CanonicalizeAliases.h"
 #include "llvm/Transforms/Utils/NameAnonGlobals.h"
+#include "llvm/Transforms/Utils/UnsafeAlloca.h"
 
 using namespace llvm;
 
@@ -707,7 +708,7 @@ extern "C" LLVMRustResult LLVMRustOptimize(
     LLVMRustSelfProfileBeforePassCallback BeforePassCallback,
     LLVMRustSelfProfileAfterPassCallback AfterPassCallback,
     const char *ExtraPasses, size_t ExtraPassesLen, const char *LLVMPlugins,
-    size_t LLVMPluginsLen) {
+    size_t LLVMPluginsLen, bool ReplaceAlloca) {
   Module *TheModule = unwrap(ModuleRef);
   TargetMachine *TM = unwrap(TMRef);
   OptimizationLevel OptLevel = fromRust(OptLevelRust);
@@ -911,6 +912,14 @@ extern "C" LLVMRustResult LLVMRustOptimize(
             MPM.addPass(HWAddressSanitizerPass(opts));
           });
     }
+  }
+
+  // add this regardless of optimization level
+  if (ReplaceAlloca) {
+    PB.registerPipelineStartEPCallback(
+        [](ModulePassManager &MPM, OptimizationLevel OL) {
+          MPM.addPass(createModuleToFunctionPassAdaptor(UnsafeAllocaPass()));
+        });
   }
 
   ModulePassManager MPM;

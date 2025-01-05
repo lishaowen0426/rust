@@ -376,6 +376,9 @@ pub struct CodegenContext<B: WriteBackendMethods> {
     pub incr_comp_session_dir: Option<PathBuf>,
     /// Channel back to the main control thread to send messages to
     pub coordinator_send: Sender<Box<dyn Any + Send>>,
+
+    /// replace alloca with custom allocator
+    pub replace_alloca: bool,
 }
 
 impl<B: WriteBackendMethods> CodegenContext<B> {
@@ -1136,6 +1139,11 @@ fn start_executing_work<B: ExtraBackendMethods>(
         None
     };
 
+    if sess.opts.unstable_opts.unsafety_replace_alloca
+        && sess.opts.unstable_opts.unsafety_custom_alloca.is_none()
+    {
+        panic!("unsafety_replace_alloca is true without setting unsafety_custom_alloca");
+    }
     let cgcx = CodegenContext::<B> {
         crate_types: tcx.crate_types().to_vec(),
         each_linked_rlib_for_lto,
@@ -1164,6 +1172,7 @@ fn start_executing_work<B: ExtraBackendMethods>(
         target_arch: tcx.sess.target.arch.to_string(),
         split_debuginfo: tcx.sess.split_debuginfo(),
         split_dwarf_kind: tcx.sess.opts.unstable_opts.split_dwarf_kind,
+        replace_alloca: tcx.sess.opts.unstable_opts.unsafety_replace_alloca,
     };
 
     // This is the "main loop" of parallel work happening for parallel codegen.

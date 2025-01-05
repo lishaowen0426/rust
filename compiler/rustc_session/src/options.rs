@@ -1994,6 +1994,8 @@ written to standard error output)"),
         "unsafe_heap (default:no)"),
     unsafety_analysis_result: Option<String> = (None, parse_opt_string, [TRACKED],"the path to miri safety analysis result file:miri_unsafety_result.json"),
     unsafety_custom_alloca: Option<String> = (None, parse_opt_string, [TRACKED],"the path to unsafe custom allocator object file. it ends with .o"),
+    unsafety_replace_alloca: bool = (false, parse_bool, [TRACKED],
+        "replace alloca with the custom allocator (default: no)"),
     unpretty: Option<String> = (None, parse_unpretty, [UNTRACKED],
         "present the input source, unstable (and less-pretty) variants;
         `normal`, `identified`,

@@ -586,6 +586,7 @@ pub(crate) unsafe fn llvm_optimize(
         extra_passes.len(),
         llvm_plugins.as_ptr().cast(),
         llvm_plugins.len(),
+        cgcx.replace_alloca,
     );
     result.into_result().map_err(|()| llvm_err(dcx, LlvmError::RunLlvmPasses))
 }
