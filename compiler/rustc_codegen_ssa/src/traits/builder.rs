@@ -43,6 +43,9 @@ pub trait BuilderMethods<'a, 'tcx>:
 {
     fn build(cx: &'a Self::CodegenCx, llbb: Self::BasicBlock) -> Self;
 
+    fn set_unsafe(&mut self);
+    fn clear_unsafe(&mut self);
+
     fn cx(&self) -> &Self::CodegenCx;
     fn llbb(&self) -> Self::BasicBlock;
 

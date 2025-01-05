@@ -35,6 +35,7 @@ use std::ptr;
 pub struct Builder<'a, 'll, 'tcx> {
     pub llbuilder: &'ll mut llvm::Builder<'ll>,
     pub cx: &'a CodegenCx<'ll, 'tcx>,
+    pub is_unsafe: bool,
 }
 
 impl Drop for Builder<'_, '_, '_> {
@@ -133,6 +134,7 @@ macro_rules! builder_methods_for_value_instructions {
         })+
     }
 }
+impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {}
 
 impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
     fn build(cx: &'a CodegenCx<'ll, 'tcx>, llbb: &'ll BasicBlock) -> Self {
@@ -141,6 +143,13 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
             llvm::LLVMPositionBuilderAtEnd(bx.llbuilder, llbb);
         }
         bx
+    }
+
+    fn set_unsafe(&mut self) {
+        self.is_unsafe = true;
+    }
+    fn clear_unsafe(&mut self) {
+        self.is_unsafe = false;
     }
 
     fn cx(&self) -> &CodegenCx<'ll, 'tcx> {
@@ -1324,7 +1333,7 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
     fn with_cx(cx: &'a CodegenCx<'ll, 'tcx>) -> Self {
         // Create a fresh builder from the crate context.
         let llbuilder = unsafe { llvm::LLVMCreateBuilderInContext(cx.llcx) };
-        Builder { llbuilder, cx }
+        Builder { llbuilder, cx, is_unsafe: false }
     }
 
     pub fn llfn(&self) -> &'ll Value {
