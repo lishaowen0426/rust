@@ -1,9 +1,11 @@
 {
     "configurations": [
         {
-            "name": "Linux",
+            "name": "Wrapper",
             "includePath": [
-                "/home/swli/rust-isolation/rust/build/host/llvm/include"
+                "/home/swli/rust-isolation/rust/build/host/llvm/include",
+                "/home/swli/rust-isolation/rust/src/SVF/svf/include",
+                "/home/swli/rust-isolation/rust/src/SVF/svf-llvm/include"
             ],
             "cppStandard": "c++17",
             "intelliSenseMode": "linux-clang-x64",

@@ -379,6 +379,9 @@ pub struct CodegenContext<B: WriteBackendMethods> {
 
     /// replace alloca with custom allocator
     pub replace_alloca: bool,
+
+    /// svf
+    pub enable_svf: bool,
 }
 
 impl<B: WriteBackendMethods> CodegenContext<B> {
@@ -1173,6 +1176,7 @@ fn start_executing_work<B: ExtraBackendMethods>(
         split_debuginfo: tcx.sess.split_debuginfo(),
         split_dwarf_kind: tcx.sess.opts.unstable_opts.split_dwarf_kind,
         replace_alloca: tcx.sess.opts.unstable_opts.unsafety_replace_alloca,
+        enable_svf: tcx.sess.opts.unstable_opts.unsafety_svf,
     };
 
     // This is the "main loop" of parallel work happening for parallel codegen.

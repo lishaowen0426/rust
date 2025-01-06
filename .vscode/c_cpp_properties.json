@@ -3,7 +3,10 @@
         {
             "name": "Linux",
             "includePath": [
-                "/home/swli/rust-isolation/rust/build/host/llvm/include"
+                "/home/swli/rust-isolation/rust/build/host/llvm/include",
+                "/home/swli/rust-isolation/rust/src/SVF/svf/include",
+                "/home/swli/rust-isolation/rust/src/SVF/svf-llvm/include",
+                "/home/swli/rust-isolation/rust/src/SVF/Debug-build/include/"
             ],
             "cppStandard": "c++17",
             "intelliSenseMode": "linux-clang-x64",

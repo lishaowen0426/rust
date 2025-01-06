@@ -26,8 +26,21 @@ const OPTIONAL_COMPONENTS: &[&str] = &[
     "bpf",
 ];
 
-const REQUIRED_COMPONENTS: &[&str] =
-    &["ipo", "bitreader", "bitwriter", "linker", "asmparser", "lto", "coverage", "instrumentation"];
+const REQUIRED_COMPONENTS: &[&str] = &[
+    "ipo",
+    "bitreader",
+    "bitwriter",
+    "linker",
+    "asmparser",
+    "lto",
+    "coverage",
+    "instrumentation",
+    /*for svf */ "support",
+    "core",
+    "analysis",
+    "transformutils",
+    "irreader",
+];
 
 fn detect_llvm_link() -> (&'static str, &'static str) {
     // Force the link mode we want, preferring static by default, but
@@ -219,6 +232,21 @@ fn main() {
         cfg.debug(false);
     }
 
+    {
+        //svf
+        println!(
+            "cargo:rustc-link-search=native=/home/swli/rust-isolation/rust/src/SVF/Debug-build/lib"
+        );
+        println!("cargo:rustc-link-lib=static=SvfLLVM");
+        println!("cargo:rustc-link-lib=static=SvfCore");
+        println!("cargo:include=/home/swli/rust-isolation/rust/src/SVF/svf/include");
+        println!("cargo:include=/home/swli/rust-isolation/rust/src/SVF/svf-llvm/include");
+        println!("cargo:include=/home/swli/rust-isolation/rust/src/SVF/Debug-build/include/");
+        cfg.include("/home/swli/rust-isolation/rust/src/SVF/svf/include")
+            .include("/home/swli/rust-isolation/rust/src/SVF/svf-llvm/include")
+            .include("/home/swli/rust-isolation/rust/src/SVF/Debug-build/include");
+    }
+
     rerun_if_changed_anything_in_dir(Path::new("llvm-wrapper"));
     cfg.file("llvm-wrapper/PassWrapper.cpp")
         .file("llvm-wrapper/RustWrapper.cpp")
@@ -226,6 +254,7 @@ fn main() {
         .file("llvm-wrapper/CoverageMappingWrapper.cpp")
         .file("llvm-wrapper/SymbolWrapper.cpp")
         .file("llvm-wrapper/Linker.cpp")
+        .file("llvm-wrapper/SVF.cpp")
         .cpp(true)
         .cpp_link_stdlib(None) // we handle this below
         .compile("llvm-wrapper");
