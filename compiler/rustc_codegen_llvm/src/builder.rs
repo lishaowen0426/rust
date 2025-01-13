@@ -547,7 +547,7 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
             self.tag_svf_unsafe(alloca);
             llvm::LLVMSetAlignment(alloca, align.bytes() as c_uint);
 
-            let key = "unsafety";
+            let key = "miri-target";
             let kind = llvm::LLVMGetMDKindIDInContext(
                 &self.llcx,
                 key.as_ptr() as *const c_char,
