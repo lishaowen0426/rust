@@ -1152,6 +1152,11 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             None => return,
         };
         let bx = &mut Bx::build(self.cx, llbb);
+
+        if self.is_svf_enable {
+            bx.enable_svf();
+        }
+
         let mir = self.mir;
 
         // MIR basic blocks stop at any function call. This may not be the case

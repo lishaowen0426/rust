@@ -140,6 +140,64 @@
             "sourceLanguages": [
                 "rust"
             ]
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "svf",
+            "program": "/home/swli/rust-isolation/rust/build/x86_64-unknown-linux-gnu/stage2/bin/rustc",
+            "args": [
+                "--crate-name",
+                "lib_demo",
+                "--edition=2021",
+                "src/lib.rs",
+                "--error-format=json",
+                "--json=diagnostic-rendered-ansi,artifacts,future-incompat",
+                "--diagnostic-width=137",
+                "--crate-type",
+                "lib",
+                "--emit=dep-info,metadata,link",
+                "-C",
+                "embed-bitcode=no",
+                "-C",
+                "debuginfo=2",
+                "--emit=llvm-ir",
+                "--check-cfg",
+                "cfg(docsrs)",
+                "--check-cfg",
+                "cfg(feature, values())",
+                "-C",
+                "metadata=a15a803e19b1d59f",
+                "-C",
+                "extra-filename=-a15a803e19b1d59f",
+                "--out-dir",
+                "/home/swli/rust-isolation/lib_demo/target/debug/deps",
+                "-C",
+                "linker=clang",
+                "-C",
+                "incremental=/home/swli/rust-isolation/lib_demo/target/debug/incremental",
+                "-C",
+                "llvm-args=-print-after-all",
+                "-L",
+                "dependency=/home/swli/rust-isolation/lib_demo/target/debug/deps",
+                "-Zunstable-options",
+                "-Zmir-opt-level=2",
+                "-Zmimalloc=/home/swli/rust-isolation/mimalloc/out/debug/mimalloc-debug.o",
+                "-Clink-args=-fuse-ld=/home/swli/rust-isolation/mold/build/mold",
+                "-Zunsafety-analysis-result=/home/swli/rust-isolation/lib_demo/miri_unsafety_result.json",
+                "-Zunsafety-custom-alloca=/home/swli/rust-isolation/rust/custom_allocator/alloc.o",
+                "-Zunsafety-svf"
+            ],
+            "cwd": "/home/swli/rust-isolation/lib_demo",
+            "env": {},
+            "setupCommands": [
+                {
+                    "text": "set follow-fork-mode child"
+                }
+            ],
+            "sourceLanguages": [
+                "rust"
+            ]
         }
     ],
 }

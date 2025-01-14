@@ -188,6 +188,10 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         bx
     }
 
+    fn enable_svf(&mut self) {
+        self.is_svf_unsafe = Some(false);
+    }
+
     fn cx(&self) -> &CodegenCx<'ll, 'tcx> {
         self.cx
     }
@@ -1505,7 +1509,7 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
     fn with_cx(cx: &'a CodegenCx<'ll, 'tcx>) -> Self {
         // Create a fresh builder from the crate context.
         let llbuilder = unsafe { llvm::LLVMCreateBuilderInContext(cx.llcx) };
-        Builder { llbuilder, cx, is_svf_unsafe: if cx.is_svf_enable { Some(false) } else { None } }
+        Builder { llbuilder, cx, is_svf_unsafe: None }
     }
 
     pub fn llfn(&self) -> &'ll Value {

@@ -51,6 +51,8 @@ pub trait BuilderMethods<'a, 'tcx>:
 {
     fn build(cx: &'a Self::CodegenCx, llbb: Self::BasicBlock) -> Self;
 
+    fn enable_svf(&mut self);
+
     fn cx(&self) -> &Self::CodegenCx;
     fn llbb(&self) -> Self::BasicBlock;
 

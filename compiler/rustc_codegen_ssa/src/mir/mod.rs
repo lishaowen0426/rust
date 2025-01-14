@@ -116,6 +116,8 @@ pub struct FunctionCx<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> {
 
     /// unsafe locals from miri analysis
     unsafe_locals: Option<FxHashSet<Local>>,
+
+    is_svf_enable: bool,
 }
 
 impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
@@ -223,6 +225,8 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         per_local_var_debug_info: None,
         caller_location: None,
         unsafe_locals,
+        is_svf_enable: cx.tcx().sess.opts.unstable_opts.unsafety_svf
+            && instance.def_id().is_local(),
     };
 
     // It may seem like we should iterate over `required_consts` to ensure they all successfully
