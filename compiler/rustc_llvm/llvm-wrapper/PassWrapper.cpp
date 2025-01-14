@@ -35,6 +35,7 @@
 #include "llvm/Transforms/IPO/Internalize.h"
 #include "llvm/Transforms/IPO/LowerTypeTests.h"
 #include "llvm/Transforms/IPO/ThinLTOBitcodeWriter.h"
+#include "llvm/Transforms/Scalar/SimplifyCFG.h"
 #include "llvm/Transforms/Utils/AddDiscriminators.h"
 #include "llvm/Transforms/Utils/FunctionImportUtils.h"
 #if LLVM_VERSION_GE(18, 0)
@@ -928,13 +929,6 @@ extern "C" LLVMRustResult LLVMRustOptimize(
         });
   }
 
-  if (LaunchSVF) {
-    PB.registerPipelineStartEPCallback(
-        [](ModulePassManager &MPM, OptimizationLevel OL) {
-          MPM.addPass(SVFTransform());
-        });
-  }
-
   ModulePassManager MPM;
   bool NeedThinLTOBufferPasses = UseThinLTOBuffers;
   if (!NoPrepopulatePasses) {
@@ -1000,6 +994,10 @@ extern "C" LLVMRustResult LLVMRustOptimize(
   if (NeedThinLTOBufferPasses) {
     MPM.addPass(CanonicalizeAliasesPass());
     MPM.addPass(NameAnonGlobalPass());
+  }
+
+  if (LaunchSVF) {
+    MPM.addPass(SVFTransform());
   }
 
   // Upgrade all calls to old intrinsics first.
