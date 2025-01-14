@@ -71,6 +71,7 @@
     "files.associations": {
         "*.css": "tailwindcss",
         "*.s": "asm-intel-x86-generic",
-        "stddef.h": "c"
+        "stddef.h": "c",
+        "*.def": "cpp"
     }
 }

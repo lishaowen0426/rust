@@ -46,6 +46,7 @@
 #if LLVM_VERSION_GE(19, 0)
 #include "llvm/Support/PGOOptions.h"
 #endif
+#include "llvm/SVF/SVFTransform.h"
 #include "llvm/Transforms/Instrumentation/GCOVProfiler.h"
 #include "llvm/Transforms/Instrumentation/HWAddressSanitizer.h"
 #include "llvm/Transforms/Instrumentation/InstrProfiling.h"
@@ -708,7 +709,7 @@ extern "C" LLVMRustResult LLVMRustOptimize(
     LLVMRustSelfProfileBeforePassCallback BeforePassCallback,
     LLVMRustSelfProfileAfterPassCallback AfterPassCallback,
     const char *ExtraPasses, size_t ExtraPassesLen, const char *LLVMPlugins,
-    size_t LLVMPluginsLen, bool ReplaceAlloca) {
+    size_t LLVMPluginsLen, bool ReplaceAlloca, bool LaunchSVF) {
   Module *TheModule = unwrap(ModuleRef);
   TargetMachine *TM = unwrap(TMRef);
   OptimizationLevel OptLevel = fromRust(OptLevelRust);
@@ -914,11 +915,23 @@ extern "C" LLVMRustResult LLVMRustOptimize(
     }
   }
 
+  if (ReplaceAlloca && LaunchSVF) {
+    LLVMRustSetLastError("Dont replace alloca and launch svf altogether");
+    return LLVMRustResult::Failure;
+  }
+
   // add this regardless of optimization level
   if (ReplaceAlloca) {
     PB.registerPipelineStartEPCallback(
         [](ModulePassManager &MPM, OptimizationLevel OL) {
           MPM.addPass(createModuleToFunctionPassAdaptor(UnsafeAllocaPass()));
+        });
+  }
+
+  if (LaunchSVF) {
+    PB.registerPipelineStartEPCallback(
+        [](ModulePassManager &MPM, OptimizationLevel OL) {
+          MPM.addPass(SVFTransform());
         });
   }
 

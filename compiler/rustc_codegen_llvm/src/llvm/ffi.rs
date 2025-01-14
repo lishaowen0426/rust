@@ -2221,6 +2221,7 @@ extern "C" {
         LLVMPlugins: *const c_char,
         LLVMPluginsLen: size_t,
         ReplaceAlloca: bool,
+        LaunchSVF: bool,
     ) -> LLVMRustResult;
     pub fn LLVMSVF<'a>(M: &'a Module) -> LLVMRustResult;
     pub fn LLVMRustPrintModule(
