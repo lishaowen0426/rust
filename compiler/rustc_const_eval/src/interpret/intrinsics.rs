@@ -3,6 +3,7 @@
 //! and miri.
 
 use rustc_hir::def_id::DefId;
+use rustc_middle::mir::{SourceInfo, Terminator};
 use rustc_middle::ty;
 use rustc_middle::ty::layout::{LayoutOf as _, ValidityRequirement};
 use rustc_middle::ty::GenericArgsRef;
@@ -18,6 +19,7 @@ use rustc_middle::{
     ty::layout::TyAndLayout,
 };
 use rustc_span::symbol::{sym, Symbol};
+use rustc_span::DUMMY_SP;
 use rustc_target::abi::Size;
 
 use super::{
@@ -456,6 +458,16 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                 let src = self.eval_operand(src, None)?;
                 let dst = self.eval_operand(dst, None)?;
                 let count = self.eval_operand(count, None)?;
+                if self.is_rvalue_op_unsafe(&src) {
+                    // terminator is only used for debugging purpose, so we create an abitrary one to comply with the interface
+                    self.eval_fn_call_operand_unsafey(
+                        &dst,
+                        &Terminator {
+                            source_info: SourceInfo::outermost(DUMMY_SP),
+                            kind: mir::TerminatorKind::Unreachable,
+                        },
+                    );
+                }
                 self.copy_intrinsic(&src, &dst, &count, /* nonoverlapping */ true)
             }
         }

@@ -527,7 +527,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         }
     }
 
-    fn eval_fn_call_operand_unsafey(
+    pub fn eval_fn_call_operand_unsafey(
         &mut self,
         op: &OpTy<'tcx, M::Provenance>,
         terminator: &mir::Terminator<'tcx>,

@@ -102,7 +102,6 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
 
         match &stmt.kind {
             Assign(box (place, rvalue)) => {
-                info!("Assign:");
                 self.eval_rvalue_into_place(rvalue, *place, is_stmt_unsafe, is_target_crate)?
             }
 
@@ -293,6 +292,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                     match op {
                         Operand::Indirect(mplace) => {
                             if let Ok((alloc_id, _, _)) = self.ptr_get_alloc_id(mplace.ptr) {
+                                self.mark_alloc_id_local_unsafe(def_id, alloc_id);
                                 self.frame_mut().mark_alloc_id_unsafe(alloc_id);
                             }
                         }
