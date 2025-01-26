@@ -5,6 +5,90 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "sysroot",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/home/swli/rust-isolation/rust/build/x86_64-unknown-linux-gnu/stage2/bin/cargo-miri",
+            "args": [
+                "--crate-name",
+                "build_script_build",
+                "--edition=2021",
+                "/home/swli/rust-isolation/rust/library/core/build.rs",
+                "--error-format=json",
+                "--json=diagnostic-rendered-ansi,artifacts,future-incompat",
+                "--crate-type",
+                "bin",
+                "--emit=dep-info,link",
+                "-C",
+                "embed-bitcode=no",
+                "-C",
+                "debug-assertions=off",
+                "-C",
+                "metadata=5255870cdf912b82",
+                "-C",
+                "extra-filename=-5255870cdf912b82",
+                "--out-dir",
+                "/tmp/.tmpINx7qM/target/custom_sysroot/build/core-5255870cdf912b82",
+                "-C",
+                "strip=debuginfo",
+                "-L",
+                "dependency=/tmp/.tmpINx7qM/target/custom_sysroot/deps"
+            ],
+            "stopAtEntry": false,
+            "cwd": "/tmp/.tmpINx7qM",
+            "env": {
+                "RUSTC": "/home/swli/rust-isolation/rust/build/x86_64-unknown-linux-gnu/stage2/bin/cargo-miri",
+                "CARGO_ENCODED_RUSTFLAGS": "-Zforce-unstable-if-unmarked\\u{1f}-Aunexpected_cfgs\\u{1f}-Cdebug-assertions=off\\u{1f}-Coverflow-checks=on",
+                "CARGO_TARGET_DIR": "/tmp/.tmpINx7qM/target",
+                "MIRI_CALLED_FROM_SETUP": 1,
+                "MIRI_SYSROOT": "/home/swli/rust-isolation/rust/build/x86_64-unknown-linux-gnu/stage2",
+                "__CARGO_DEFAULT_LIB_METADATA": "rustc-build-sysroot"
+            },
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "Miri-setup",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/home/swli/rust-isolation/rust/build/host/stage2/bin/cargo-miri",
+            "args": [
+                "miri",
+                "setup"
+            ],
+            "stopAtEntry": false,
+            "cwd": "/home/swli/rust-isolation/benchmark/bytes",
+            "env": {
+                "RUST_BACKTRACE": 1
+            },
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
             "type": "lldb",
             "request": "launch",
             "name": "Debug",

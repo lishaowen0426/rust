@@ -152,7 +152,7 @@ pub fn setup(
         }
     }
     SysrootBuilder::new(&sysroot_dir, target)
-        .build_mode(BuildMode::Check)
+        .build_mode(BuildMode::Build)
         .rustc_version(rustc_version.clone())
         .sysroot_config(sysroot_config)
         .rustflags(rustflags)

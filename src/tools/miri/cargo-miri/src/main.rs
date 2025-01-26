@@ -17,6 +17,8 @@ fn main() {
     // Rustc does not support non-UTF-8 arguments so we make no attempt either.
     // (We do support non-UTF-8 environment variables though.)
     let mut args = std::env::args();
+    //println!("print arguments: {:?}", args);
+
     // Skip binary name.
     args.next().unwrap();
 

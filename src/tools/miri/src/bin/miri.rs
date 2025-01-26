@@ -5,7 +5,10 @@
     clippy::useless_format,
     clippy::field_reassign_with_default,
     rustc::diagnostic_outside_of_impl,
-    rustc::untranslatable_diagnostic
+    rustc::untranslatable_diagnostic,
+    unreachable_code,
+    unused_variables,
+    unused_mut
 )]
 
 extern crate rustc_data_structures;

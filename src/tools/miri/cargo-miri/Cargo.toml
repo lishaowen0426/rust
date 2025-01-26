@@ -18,7 +18,7 @@ directories = "5"
 rustc_version = "0.4"
 serde_json = "1.0.40"
 cargo_metadata = "0.18.0"
-rustc-build-sysroot = "0.4.1"
+rustc-build-sysroot = {path="/home/swli/rust-isolation/rustc-build-sysroot"}
 tracing = "0.1"
 tracing-subscriber = "0.3"
 

@@ -61,7 +61,6 @@ fn forward_patched_extern_arg(args: &mut impl Iterator<Item = String>, cmd: &mut
 }
 
 pub fn phase_cargo_miri(mut args: impl Iterator<Item = String>) {
-    println!("cargo miri: phase_cargo_miri");
     // Check for version and help flags even when invoked as `cargo-miri`.
     if has_arg_flag("--help") || has_arg_flag("-h") {
         show_help();
@@ -209,7 +208,7 @@ pub fn phase_cargo_miri(mut args: impl Iterator<Item = String>) {
     if verbose > 0 {
         cmd.env("MIRI_VERBOSE", verbose.to_string()); // This makes the other phases verbose.
     }
-
+    println!("cmd: {:?}", cmd);
     // Run cargo.
     debug_cmd("[cargo-miri miri]", verbose, &cmd);
     exec(cmd)
@@ -478,7 +477,7 @@ pub enum RunnerPhase {
 }
 
 pub fn phase_runner(mut binary_args: impl Iterator<Item = String>, phase: RunnerPhase) {
-    println!("cargo miri: phase_runner");
+    //println!("cargo miri: phase_runner");
     // phase_cargo_miri set `MIRI_BE_RUSTC` for when build scripts directly invoke the driver;
     // however, if we get called back by cargo here, we'll carefully compute the right flags
     // ourselves, so we first un-do what the earlier phase did.

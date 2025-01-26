@@ -3039,7 +3039,8 @@ pub mod nightly_options {
         matches: &getopts::Matches,
         flags: &[RustcOptGroup],
     ) {
-        let has_z_unstable_option = matches.opt_strs("Z").iter().any(|x| *x == "unstable-options");
+        let has_z_unstable_option =
+            matches.opt_strs("Z").iter().any(|x| *x == "unstable-options") || true;
         let really_allows_unstable_options = match_is_nightly_build(matches);
         let mut nightly_options_on_stable = 0;
 
