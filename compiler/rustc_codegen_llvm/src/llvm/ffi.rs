@@ -2223,7 +2223,7 @@ extern "C" {
         ReplaceAlloca: bool,
         LaunchSVF: bool,
     ) -> LLVMRustResult;
-    pub fn LLVMSVF<'a>(M: &'a Module) -> LLVMRustResult;
+    //pub fn LLVMSVF<'a>(M: &'a Module) -> LLVMRustResult;
     pub fn LLVMRustPrintModule(
         M: &Module,
         Output: *const c_char,

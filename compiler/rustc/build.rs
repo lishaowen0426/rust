@@ -4,8 +4,8 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const MIMALLOC_SRC: &str = "/home/swli/rust-isolation/mimalloc/src";
-const MIMALLOC_OUT: &str = "/home/swli/rust-isolation/mimalloc/out/debug";
+const MIMALLOC_SRC: &str = "/home/sw/rust-isolation/mimalloc/src";
+const MIMALLOC_OUT: &str = "/home/sw/rust-isolation/mimalloc/out/debug";
 fn main() {
     let target_os = env::var("CARGO_CFG_TARGET_OS");
     let target_env = env::var("CARGO_CFG_TARGET_ENV");
