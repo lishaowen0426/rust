@@ -1,3 +1,4 @@
+/*
 #include "LLVMWrapper.h"
 #include "SVF-LLVM/LLVMUtil.h"
 #include "SVF-LLVM/SVFIRBuilder.h"
@@ -9,3 +10,4 @@ extern "C" LLVMRustResult LLVMSVF(LLVMModuleRef ModuleRef) {
 
   return LLVMRustResult::Success;
 }
+*/

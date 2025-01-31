@@ -234,6 +234,7 @@ fn main() {
 
     {
         //svf
+        /*
         println!(
             "cargo:rustc-link-search=native=/home/swli/rust-isolation/rust/src/SVF/Debug-build/lib"
         );
@@ -245,6 +246,7 @@ fn main() {
         cfg.include("/home/swli/rust-isolation/rust/src/SVF/svf/include")
             .include("/home/swli/rust-isolation/rust/src/SVF/svf-llvm/include")
             .include("/home/swli/rust-isolation/rust/src/SVF/Debug-build/include");
+            */
     }
 
     rerun_if_changed_anything_in_dir(Path::new("llvm-wrapper"));
