@@ -35,7 +35,6 @@
 	url = git@github.com:lishaowen0426/llvm-project.git
 	branch = rustc/18.0-2024-02-13
 	shallow = true
-     fetch = +refs/heads/*:refs/remotes/origin/*
 [submodule "src/doc/embedded-book"]
 	path = src/doc/embedded-book
 	url = https://github.com/rust-embedded/book.git
