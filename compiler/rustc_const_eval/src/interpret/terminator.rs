@@ -1,5 +1,4 @@
 use std::borrow::Cow;
-use std::panic;
 
 use super::{
     eval_context::LocalValue, operand::Operand, place::MemPlace, CtfeProvenance, FnVal, ImmTy,
@@ -629,13 +628,6 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         fn_sig: &FnSig<'tcx>,
         terminator: &mir::Terminator<'tcx>,
     ) -> InterpResult<'tcx, Vec<FnArg<'tcx, M::Provenance>>> {
-        if fn_sig.inputs().len() != ops.len() {
-            panic!(
-                "length of function sig inputs {:?} not equal to operands {:?}",
-                fn_sig.inputs().len(),
-                ops.len()
-            );
-        }
         ops.iter()
             .zip(fn_sig.inputs().iter())
             .map(|(op, _input_ty)| {
@@ -930,6 +922,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
     /// `with_caller_location` indicates whether the caller passed a caller location. Miri
     /// implements caller locations without argument passing, but to match `FnAbi` we need to know
     /// when those arguments are present.
+    #[instrument(level = "info", skip_all)]
     pub(crate) fn eval_fn_call(
         &mut self,
         fn_val: FnVal<'tcx, M::ExtraFnVal>,
@@ -941,6 +934,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         mut unwind: mir::UnwindAction,
     ) -> InterpResult<'tcx> {
         trace!("eval_fn_call: {:#?}", fn_val);
+        debug!("info: {:?}", args);
 
         let instance = match fn_val {
             FnVal::Instance(instance) => instance,

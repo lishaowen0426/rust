@@ -277,7 +277,7 @@ pub fn create_ecx<'mir, 'tcx: 'mir>(
             let cname = tcx.crate_name(*c).to_string();
             if config.unsafety_tracking_target_crates.contains(&cname) {
                 unsafety_tracking_crates.insert(*c);
-                println!("unsafety tracking: {}", cname);
+                // println!("unsafety tracking: {}", cname);
             }
         }
     }

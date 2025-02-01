@@ -6,6 +6,7 @@ extended = true
 
 tools = [
     "rustfmt",
+    "rustdoc",
     "rust-analyzer",
     "rust-analyzer-proc-macro-srv",
     "miri",
