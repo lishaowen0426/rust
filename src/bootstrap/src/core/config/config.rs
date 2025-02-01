@@ -7,7 +7,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::{self, Display};
 use std::io::IsTerminal;
-use std::path::{Path, PathBuf, absolute};
+use std::path::{absolute, Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
 use std::sync::OnceLock;
@@ -15,7 +15,7 @@ use std::{cmp, env, fs};
 
 use build_helper::ci::CiEnv;
 use build_helper::exit;
-use build_helper::git::{GitConfig, get_closest_merge_commit, output_result};
+use build_helper::git::{get_closest_merge_commit, output_result, GitConfig};
 use serde::{Deserialize, Deserializer};
 use serde_derive::Deserialize;
 
@@ -24,7 +24,7 @@ use crate::core::build_steps::llvm;
 pub use crate::core::config::flags::Subcommand;
 use crate::core::config::flags::{Color, Flags, Warnings};
 use crate::core::download::is_download_ci_available;
-use crate::utils::cache::{INTERNER, Interned};
+use crate::utils::cache::{Interned, INTERNER};
 use crate::utils::channel::{self, GitInfo};
 use crate::utils::helpers::{self, exe, output, t};
 
@@ -1824,11 +1824,14 @@ impl Config {
             config.rustc_default_linker = default_linker;
             config.musl_root = musl_root.map(PathBuf::from);
             config.save_toolstates = save_toolstates.map(PathBuf::from);
-            set(&mut config.deny_warnings, match flags.warnings {
-                Warnings::Deny => Some(true),
-                Warnings::Warn => Some(false),
-                Warnings::Default => deny_warnings,
-            });
+            set(
+                &mut config.deny_warnings,
+                match flags.warnings {
+                    Warnings::Deny => Some(true),
+                    Warnings::Warn => Some(false),
+                    Warnings::Default => deny_warnings,
+                },
+            );
             set(&mut config.backtrace_on_ice, backtrace_on_ice);
             set(&mut config.rust_verify_llvm_ir, verify_llvm_ir);
             config.rust_thin_lto_import_instr_limit = thin_lto_import_instr_limit;
@@ -2655,18 +2658,14 @@ impl Config {
         let checked_out_hash = output(submodule_git().args(["rev-parse", "HEAD"]).as_command_mut());
         let checked_out_hash = checked_out_hash.trim_end();
         // Determine commit that the submodule *should* have.
-        let recorded = output(
-            helpers::git(Some(&self.src))
-                .run_always()
-                .args(["ls-tree", "HEAD"])
-                .arg(relative_path)
-                .as_command_mut(),
-        );
+        let mut recorded_cmd = helpers::git(Some(&self.src));
+        let recorded_final_cmd =
+            recorded_cmd.run_always().args(["ls-tree", "HEAD"]).arg(relative_path).as_command_mut();
+        let recorded = output(recorded_final_cmd);
 
-        let actual_hash = recorded
-            .split_whitespace()
-            .nth(2)
-            .unwrap_or_else(|| panic!("unexpected output `{}`", recorded));
+        let actual_hash = recorded.split_whitespace().nth(2).unwrap_or_else(|| {
+            panic!("unexpected output `{}`, {:?}", recorded, recorded_final_cmd)
+        });
 
         if actual_hash == checked_out_hash {
             // already checked out
@@ -2877,7 +2876,11 @@ impl Config {
                 .is_none();
 
             // Return false if there are untracked changes, otherwise check if CI LLVM is available.
-            if has_changes { false } else { llvm::is_ci_llvm_available(self, asserts) }
+            if has_changes {
+                false
+            } else {
+                llvm::is_ci_llvm_available(self, asserts)
+            }
         };
 
         match download_ci_llvm {
