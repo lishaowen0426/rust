@@ -44,34 +44,4 @@
         "compiler/rustc_codegen_cranelift": true,
         "tests/": true
     },
-    "cmake.generator": "Ninja",
-    "cmake.sourceDirectory": "${workspaceFolder}/src/llvm-project/llvm",
-    "cmake.buildDirectory": "${workspaceFolder}/llvm-build",
-    "cmake.buildArgs": [
-        "--",
-        "-j8"
-    ],
-    "cmake.configureSettings": {
-        "LLVM_ENABLE_PROJECTS": [
-            "clang",
-            "clang-tools-extra",
-            "compiler-rt"
-        ],
-        "CMAKE_EXPORT_COMPILE_COMMANDS": 1,
-        "LLVM_ENABLE_RUNTIMES": [
-            "libcxx",
-            "libcxxabi",
-            "libunwind"
-        ],
-        "LLVM_TARGETS_TO_BUILD": "host",
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_INSTALL_PREFIX": "${workspaceFolder}/llvm-build/install",
-        "LLVM_ENABLE_ASSERTIONS": "ON",
-    },
-    "files.associations": {
-        "*.css": "tailwindcss",
-        "*.s": "asm-intel-x86-generic",
-        "stddef.h": "c",
-        "*.def": "cpp"
-    }
 }

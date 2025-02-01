@@ -3,14 +3,11 @@
         {
             "name": "Linux",
             "includePath": [
-                "/home/swli/rust-isolation/rust/build/host/llvm/include",
-                "/home/swli/rust-isolation/rust/src/SVF/svf/include",
-                "/home/swli/rust-isolation/rust/src/SVF/svf-llvm/include",
-                "/home/swli/rust-isolation/rust/src/SVF/Debug-build/include/"
+                "compiler/rustc_llvm/llvm-wrapper",
+                "build/x86_64-unknown-linux-gnu/llvm/include"
             ],
             "cppStandard": "c++17",
             "intelliSenseMode": "linux-clang-x64",
-            "compilerPath": "/home/swli/inprocess/rust/src/llvm-project/build/bin/clang",
             "cStandard": "c17"
         }
     ],
