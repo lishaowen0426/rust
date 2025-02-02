@@ -1,5 +1,6 @@
 use std::iter;
 
+use rustc_hir::Safety;
 use rustc_index::bit_set::BitSet;
 use rustc_index::IndexVec;
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrFlags;
@@ -239,6 +240,16 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
     let memory_locals = analyze::non_ssa_locals(&fx, &traversal_order);
 
     // Allocate variable and temp allocas
+
+    if is_svf_enable {
+        if cx.tcx().def_kind(instance.def_id()).is_fn_like() {
+            let fn_sig = cx.tcx().fn_sig(instance.def_id()).instantiate_identity();
+            match fn_sig.safety() {
+                Safety::Unsafe => start_bx.set_svf_unsafe(),
+                _ => {}
+            };
+        }
+    }
     let local_values = {
         let args = arg_local_refs(&mut start_bx, &mut fx, &memory_locals);
 
@@ -277,11 +288,13 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         };
 
         let retptr = allocate_local(mir::RETURN_PLACE);
+
         iter::once(retptr)
             .chain(args.into_iter())
             .chain(mir.vars_and_temps_iter().map(allocate_local))
             .collect()
     };
+    start_bx.clear_svf_unsafe();
     fx.initialize_locals(local_values);
 
     // Apply debuginfo to the newly allocated locals.

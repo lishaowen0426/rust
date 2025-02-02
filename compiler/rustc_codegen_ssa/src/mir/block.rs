@@ -1235,14 +1235,20 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             debug!("codegen_block({:?}={:?})", bb, data);
 
             for statement in &data.statements {
-                if self.is_svf_enable {
+                if self.is_svf_enable && mir.source_scopes[statement.source_info.scope].is_unsafe {
                     bx.set_svf_unsafe();
                 }
                 self.codegen_statement(bx, statement);
                 bx.clear_svf_unsafe();
             }
 
+            if self.is_svf_enable
+                && mir.source_scopes[data.terminator().source_info.scope].is_unsafe
+            {
+                bx.set_svf_unsafe();
+            }
             let merging_succ = self.codegen_terminator(bx, bb, data.terminator());
+            bx.clear_svf_unsafe();
             if let MergingSucc::False = merging_succ {
                 break;
             }
