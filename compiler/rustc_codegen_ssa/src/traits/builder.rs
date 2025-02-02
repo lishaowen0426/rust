@@ -17,7 +17,7 @@ use super::debuginfo::DebugInfoBuilderMethods;
 use super::intrinsic::IntrinsicCallBuilderMethods;
 use super::misc::MiscCodegenMethods;
 use super::type_::{ArgAbiBuilderMethods, BaseTypeCodegenMethods, LayoutTypeCodegenMethods};
-use super::{CodegenMethods, StaticBuilderMethods};
+use super::{BackendTypes, CodegenMethods, StaticBuilderMethods};
 use crate::common::{
     AtomicOrdering, AtomicRmwBinOp, IntPredicate, RealPredicate, SynchronizationScope, TypeKind,
 };
@@ -32,14 +32,12 @@ pub enum OverflowOp {
     Mul,
 }
 
-/*
 pub trait SvfMethods: BackendTypes {
     fn set_svf_unsafe(&mut self);
     fn clear_svf_unsafe(&mut self);
     fn is_svf_unsafe(&self) -> bool;
     fn tag_svf_unsafe(&self, val: Self::Value);
 }
-    */
 
 pub trait BuilderMethods<'a, 'tcx>:
     Sized
@@ -53,6 +51,7 @@ pub trait BuilderMethods<'a, 'tcx>:
     + IntrinsicCallBuilderMethods<'tcx>
     + AsmBuilderMethods<'tcx>
     + StaticBuilderMethods
+    + SvfMethods
 {
     // `BackendTypes` is a supertrait of both `CodegenMethods` and
     // `BuilderMethods`. This bound ensures all impls agree on the associated

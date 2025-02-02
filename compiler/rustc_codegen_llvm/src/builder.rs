@@ -5,11 +5,11 @@ use std::{iter, ptr};
 use libc::{c_char, c_uint};
 use rustc_abi as abi;
 use rustc_abi::{Align, Size, WrappingRange};
-use rustc_codegen_ssa::MemFlags;
 use rustc_codegen_ssa::common::{IntPredicate, RealPredicate, SynchronizationScope, TypeKind};
 use rustc_codegen_ssa::mir::operand::{OperandRef, OperandValue};
 use rustc_codegen_ssa::mir::place::PlaceRef;
 use rustc_codegen_ssa::traits::*;
+use rustc_codegen_ssa::MemFlags;
 use rustc_data_structures::small_c_str::SmallCStr;
 use rustc_hir::def_id::DefId;
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrs;
@@ -40,12 +40,51 @@ use crate::value::Value;
 pub(crate) struct Builder<'a, 'll, 'tcx> {
     pub llbuilder: &'ll mut llvm::Builder<'ll>,
     pub cx: &'a CodegenCx<'ll, 'tcx>,
+    pub is_unsafe: bool,
 }
 
 impl Drop for Builder<'_, '_, '_> {
     fn drop(&mut self) {
         unsafe {
             llvm::LLVMDisposeBuilder(&mut *(self.llbuilder as *mut _));
+        }
+    }
+}
+
+impl SvfMethods for Builder<'_, '_, '_> {
+    fn set_svf_unsafe(&mut self) {
+        self.is_unsafe = true;
+    }
+
+    fn clear_svf_unsafe(&mut self) {
+        self.is_unsafe = false;
+    }
+
+    fn is_svf_unsafe(&self) -> bool {
+        self.is_unsafe
+    }
+
+    fn tag_svf_unsafe(&self, val: Self::Value) {
+        if self.is_svf_unsafe() {
+            unsafe {
+                let key = "svf";
+                let kind = llvm::LLVMGetMDKindIDInContext(
+                    &self.llcx,
+                    key.as_ptr() as *const c_char,
+                    key.len() as c_uint,
+                );
+
+                let tag_str = "unsafe_ir";
+
+                let tag = llvm::LLVMMDStringInContext2(
+                    &self.llcx,
+                    tag_str.as_ptr().cast(),
+                    tag_str.len(),
+                );
+                let node = llvm::LLVMMDNodeInContext2(&self.llcx, vec![tag].as_ptr(), 1);
+                let tag_md = llvm::LLVMMetadataAsValue(self.llcx, node);
+                llvm::LLVMSetMetadata(val, kind, tag_md);
+            }
         }
     }
 }
@@ -1231,7 +1270,7 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
     fn with_cx(cx: &'a CodegenCx<'ll, 'tcx>) -> Self {
         // Create a fresh builder from the crate context.
         let llbuilder = unsafe { llvm::LLVMCreateBuilderInContext(cx.llcx) };
-        Builder { llbuilder, cx }
+        Builder { llbuilder, cx, is_unsafe: false }
     }
 
     pub(crate) fn llfn(&self) -> &'ll Value {

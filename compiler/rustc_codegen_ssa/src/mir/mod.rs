@@ -1,9 +1,9 @@
 use std::iter;
 
-use rustc_index::IndexVec;
 use rustc_index::bit_set::BitSet;
+use rustc_index::IndexVec;
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrFlags;
-use rustc_middle::mir::{UnwindTerminateReason, traversal};
+use rustc_middle::mir::{traversal, UnwindTerminateReason};
 use rustc_middle::ty::layout::{FnAbiOf, HasTyCtxt, HasTypingEnv, TyAndLayout};
 use rustc_middle::ty::{self, Instance, Ty, TyCtxt, TypeFoldable, TypeVisitableExt};
 use rustc_middle::{bug, mir, span_bug};
@@ -118,6 +118,8 @@ pub struct FunctionCx<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> {
 
     /// Caller location propagated if this function has `#[track_caller]`.
     caller_location: Option<OperandRef<'tcx, Bx::Value>>,
+
+    is_svf_enable: bool,
 }
 
 impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
@@ -194,10 +196,15 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         mir.basic_blocks
             .indices()
             .map(|bb| {
-                if bb == mir::START_BLOCK { CachedLlbb::Some(start_llbb) } else { CachedLlbb::None }
+                if bb == mir::START_BLOCK {
+                    CachedLlbb::Some(start_llbb)
+                } else {
+                    CachedLlbb::None
+                }
             })
             .collect();
 
+    let is_svf_enable = cx.tcx().sess.opts.unstable_opts.unsafety_svf;
     let mut fx = FunctionCx {
         instance,
         mir,
@@ -216,6 +223,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         debug_context,
         per_local_var_debug_info: None,
         caller_location: None,
+        is_svf_enable,
     };
 
     // It may seem like we should iterate over `required_consts` to ensure they all successfully

@@ -27,8 +27,8 @@ mod write;
 
 use std::fmt;
 
-use rustc_middle::ty::Ty;
 use rustc_middle::ty::layout::{FnAbiOf, LayoutOf, TyAndLayout};
+use rustc_middle::ty::Ty;
 use rustc_target::callconv::FnAbi;
 
 pub use self::abi::AbiBuilderMethods;
@@ -36,7 +36,7 @@ pub use self::asm::{
     AsmBuilderMethods, AsmCodegenMethods, GlobalAsmOperandRef, InlineAsmOperandRef,
 };
 pub use self::backend::{BackendTypes, CodegenBackend, ExtraBackendMethods};
-pub use self::builder::{BuilderMethods, OverflowOp};
+pub use self::builder::{BuilderMethods, OverflowOp, SvfMethods};
 pub use self::consts::ConstCodegenMethods;
 pub use self::coverageinfo::CoverageInfoBuilderMethods;
 pub use self::debuginfo::{DebugInfoBuilderMethods, DebugInfoCodegenMethods};
