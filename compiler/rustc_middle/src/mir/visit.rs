@@ -324,6 +324,7 @@ macro_rules! make_mir_visitor {
                     inlined,
                     inlined_parent_scope,
                     local_data: _,
+                   ..
                 } = scope_data;
 
                 self.visit_span($(& $mutability)? *span);
@@ -1131,22 +1132,38 @@ macro_rules! visit_place_fns {
                         location,
                     );
 
-                    if new_local == local { None } else { Some(PlaceElem::Index(new_local)) }
+                    if new_local == local {
+                        None
+                    } else {
+                        Some(PlaceElem::Index(new_local))
+                    }
                 }
                 PlaceElem::Field(field, ty) => {
                     let mut new_ty = ty;
                     self.visit_ty(&mut new_ty, TyContext::Location(location));
-                    if ty != new_ty { Some(PlaceElem::Field(field, new_ty)) } else { None }
+                    if ty != new_ty {
+                        Some(PlaceElem::Field(field, new_ty))
+                    } else {
+                        None
+                    }
                 }
                 PlaceElem::OpaqueCast(ty) => {
                     let mut new_ty = ty;
                     self.visit_ty(&mut new_ty, TyContext::Location(location));
-                    if ty != new_ty { Some(PlaceElem::OpaqueCast(new_ty)) } else { None }
+                    if ty != new_ty {
+                        Some(PlaceElem::OpaqueCast(new_ty))
+                    } else {
+                        None
+                    }
                 }
                 PlaceElem::Subtype(ty) => {
                     let mut new_ty = ty;
                     self.visit_ty(&mut new_ty, TyContext::Location(location));
-                    if ty != new_ty { Some(PlaceElem::Subtype(new_ty)) } else { None }
+                    if ty != new_ty {
+                        Some(PlaceElem::Subtype(new_ty))
+                    } else {
+                        None
+                    }
                 }
                 PlaceElem::Deref
                 | PlaceElem::ConstantIndex { .. }

@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use rustc_abi::{ExternAbi, FieldIdx};
-use rustc_apfloat::Float;
 use rustc_apfloat::ieee::{Double, Half, Quad, Single};
+use rustc_apfloat::Float;
 use rustc_ast::attr;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::sorted_map::SortedIndexMultiMap;
@@ -714,6 +714,7 @@ fn construct_error(tcx: TyCtxt<'_>, def_id: LocalDefId, guar: ErrorGuaranteed) -
         inlined: None,
         inlined_parent_scope: None,
         local_data: ClearCrossCrate::Set(SourceScopeLocalData { lint_root: hir_id }),
+        is_unsafe: false,
     });
 
     cfg.terminate(START_BLOCK, source_info, TerminatorKind::Unreachable);
@@ -792,7 +793,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         };
 
         assert_eq!(builder.cfg.start_new_block(), START_BLOCK);
-        assert_eq!(builder.new_source_scope(span, lint_level), OUTERMOST_SOURCE_SCOPE);
+        assert_eq!(builder.new_source_scope(span, lint_level, false), OUTERMOST_SOURCE_SCOPE);
         builder.source_scopes[OUTERMOST_SOURCE_SCOPE].parent_scope = None;
 
         builder

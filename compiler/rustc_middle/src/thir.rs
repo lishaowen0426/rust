@@ -17,7 +17,7 @@ use rustc_ast::{AsmMacro, InlineAsmOptions, InlineAsmTemplatePiece};
 use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
 use rustc_hir::{BindingMode, ByRef, HirId, MatchSource, RangeEnd};
-use rustc_index::{IndexVec, newtype_index};
+use rustc_index::{newtype_index, IndexVec};
 use rustc_macros::{HashStable, TyDecodable, TyEncodable, TypeVisitable};
 use rustc_middle::middle::region;
 use rustc_middle::mir::interpret::AllocId;
@@ -187,6 +187,15 @@ pub enum BlockSafety {
     BuiltinUnsafe,
     /// An `unsafe` block. The `HirId` is the ID of the block.
     ExplicitUnsafe(HirId),
+}
+
+impl BlockSafety {
+    pub fn is_unsafe(&self) -> bool {
+        match self {
+            BlockSafety::Safe => false,
+            _ => true,
+        }
+    }
 }
 
 #[derive(Clone, Debug, HashStable)]

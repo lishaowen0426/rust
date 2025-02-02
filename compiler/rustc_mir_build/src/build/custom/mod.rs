@@ -19,8 +19,8 @@
 
 use rustc_ast::Attribute;
 use rustc_data_structures::fx::FxHashMap;
-use rustc_hir::HirId;
 use rustc_hir::def_id::DefId;
+use rustc_hir::HirId;
 use rustc_index::{IndexSlice, IndexVec};
 use rustc_middle::mir::*;
 use rustc_middle::span_bug;
@@ -72,6 +72,7 @@ pub(super) fn build_custom_mir<'tcx>(
         inlined: None,
         inlined_parent_scope: None,
         local_data: ClearCrossCrate::Set(SourceScopeLocalData { lint_root: hir_id }),
+        is_unsafe: false,
     });
     body.injection_phase = Some(parse_attribute(attr));
 

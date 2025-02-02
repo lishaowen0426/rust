@@ -88,11 +88,11 @@ use rustc_hir::HirId;
 use rustc_index::{IndexSlice, IndexVec};
 use rustc_middle::middle::region;
 use rustc_middle::mir::*;
-use rustc_middle::thir::{ExprId, LintLevel};
+use rustc_middle::thir::{BlockSafety, ExprId, LintLevel};
 use rustc_middle::{bug, span_bug, ty};
 use rustc_session::lint::Level;
 use rustc_span::source_map::Spanned;
-use rustc_span::{DUMMY_SP, Span};
+use rustc_span::{Span, DUMMY_SP};
 use tracing::{debug, instrument};
 
 use crate::build::{BlockAnd, BlockAndExtension, BlockFrame, Builder, CFG};
@@ -532,12 +532,16 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             (Some(normal_block), Some(exit_block)) => {
                 let target = self.cfg.start_new_block();
                 let source_info = self.source_info(span);
-                self.cfg.terminate(normal_block.into_block(), source_info, TerminatorKind::Goto {
-                    target,
-                });
-                self.cfg.terminate(exit_block.into_block(), source_info, TerminatorKind::Goto {
-                    target,
-                });
+                self.cfg.terminate(
+                    normal_block.into_block(),
+                    source_info,
+                    TerminatorKind::Goto { target },
+                );
+                self.cfg.terminate(
+                    exit_block.into_block(),
+                    source_info,
+                    TerminatorKind::Goto { target },
+                );
                 target.unit()
             }
         }
@@ -610,6 +614,38 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         self.source_scope = source_scope;
         debug!(?block);
         block.and(rv)
+    }
+
+    #[instrument(level = "info", skip(self, f))]
+    pub(crate) fn in_safety_scope<F, R>(
+        &mut self,
+        region_scope: (region::Scope, SourceInfo),
+        lint_level: LintLevel,
+        block_safety: BlockSafety,
+        f: F,
+    ) -> BlockAnd<R>
+    where
+        F: FnOnce(&mut Builder<'a, 'tcx>) -> BlockAnd<R>,
+    {
+        match block_safety {
+            BlockSafety::Safe => self.in_scope(region_scope, lint_level, f),
+            _ => {
+                let source_scope = self.source_scope;
+                self.source_scope = self.new_source_scope(
+                    region_scope.1.span,
+                    lint_level,
+                    block_safety.is_unsafe(),
+                );
+
+                self.push_scope(region_scope);
+                let mut block;
+                let rv = unpack!(block = f(self));
+                unpack!(block = self.pop_scope(region_scope, block));
+                self.source_scope = source_scope;
+                debug!(?block);
+                block.and(rv)
+            }
+        }
     }
 
     /// Push a scope onto the stack. You can then build code in this
@@ -824,30 +860,37 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                         unwind_drops.add_entry_point(block, unwind_entry_point);
 
                         let next = self.cfg.start_new_block();
-                        self.cfg.terminate(block, source_info, TerminatorKind::Drop {
-                            place: local.into(),
-                            target: next,
-                            unwind: UnwindAction::Continue,
-                            replace: false,
-                        });
+                        self.cfg.terminate(
+                            block,
+                            source_info,
+                            TerminatorKind::Drop {
+                                place: local.into(),
+                                target: next,
+                                unwind: UnwindAction::Continue,
+                                replace: false,
+                            },
+                        );
                         block = next;
                     }
                     DropKind::ForLint => {
-                        self.cfg.push(block, Statement {
-                            source_info,
-                            kind: StatementKind::BackwardIncompatibleDropHint {
-                                place: Box::new(local.into()),
-                                reason: BackwardIncompatibleDropReason::Edition2024,
+                        self.cfg.push(
+                            block,
+                            Statement {
+                                source_info,
+                                kind: StatementKind::BackwardIncompatibleDropHint {
+                                    place: Box::new(local.into()),
+                                    reason: BackwardIncompatibleDropReason::Edition2024,
+                                },
                             },
-                        });
+                        );
                     }
                     DropKind::Storage => {
                         // Only temps and vars need their storage dead.
                         assert!(local.index() > self.arg_count);
-                        self.cfg.push(block, Statement {
-                            source_info,
-                            kind: StatementKind::StorageDead(local),
-                        });
+                        self.cfg.push(
+                            block,
+                            Statement { source_info, kind: StatementKind::StorageDead(local) },
+                        );
                     }
                 }
             }
@@ -910,7 +953,11 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
         if current_root != parent_root {
             let lint_level = LintLevel::Explicit(current_root);
-            self.source_scope = self.new_source_scope(span, lint_level);
+            self.source_scope = self.new_source_scope(
+                span,
+                lint_level,
+                self.source_scopes[self.source_scope].is_unsafe,
+            );
         }
     }
 
@@ -959,7 +1006,12 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     }
 
     /// Creates a new source scope, nested in the current one.
-    pub(crate) fn new_source_scope(&mut self, span: Span, lint_level: LintLevel) -> SourceScope {
+    pub(crate) fn new_source_scope(
+        &mut self,
+        span: Span,
+        lint_level: LintLevel,
+        is_unsafe: bool,
+    ) -> SourceScope {
         let parent = self.source_scope;
         debug!(
             "new_source_scope({:?}, {:?}) - parent({:?})={:?}",
@@ -981,6 +1033,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             inlined: None,
             inlined_parent_scope: None,
             local_data: ClearCrossCrate::Set(scope_local_data),
+            is_unsafe: is_unsafe,
         })
     }
 
@@ -1137,10 +1190,13 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         region_scope: region::Scope,
         local: Local,
     ) {
-        if !self.local_decls[local].ty.has_significant_drop(self.tcx, ty::TypingEnv {
-            typing_mode: ty::TypingMode::non_body_analysis(),
-            param_env: self.param_env,
-        }) {
+        if !self.local_decls[local].ty.has_significant_drop(
+            self.tcx,
+            ty::TypingEnv {
+                typing_mode: ty::TypingMode::non_body_analysis(),
+                param_env: self.param_env,
+            },
+        ) {
             return;
         }
         for scope in self.scopes.scopes.iter_mut().rev() {
@@ -1344,12 +1400,16 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let assign_unwind = self.cfg.start_new_cleanup_block();
         self.cfg.push_assign(assign_unwind, source_info, place, value.clone());
 
-        self.cfg.terminate(block, source_info, TerminatorKind::Drop {
-            place,
-            target: assign,
-            unwind: UnwindAction::Cleanup(assign_unwind),
-            replace: true,
-        });
+        self.cfg.terminate(
+            block,
+            source_info,
+            TerminatorKind::Drop {
+                place,
+                target: assign,
+                unwind: UnwindAction::Cleanup(assign_unwind),
+                replace: true,
+            },
+        );
         self.diverge_from(block);
 
         assign.unit()
@@ -1369,13 +1429,17 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let source_info = self.source_info(span);
         let success_block = self.cfg.start_new_block();
 
-        self.cfg.terminate(block, source_info, TerminatorKind::Assert {
-            cond,
-            expected,
-            msg: Box::new(msg),
-            target: success_block,
-            unwind: UnwindAction::Continue,
-        });
+        self.cfg.terminate(
+            block,
+            source_info,
+            TerminatorKind::Assert {
+                cond,
+                expected,
+                msg: Box::new(msg),
+                target: success_block,
+                unwind: UnwindAction::Continue,
+            },
+        );
         self.diverge_from(block);
 
         success_block
@@ -1475,12 +1539,16 @@ fn build_scope_drops<'tcx>(
 
                 unwind_drops.add_entry_point(block, unwind_to);
                 let next = cfg.start_new_block();
-                cfg.terminate(block, source_info, TerminatorKind::Drop {
-                    place: local.into(),
-                    target: next,
-                    unwind: UnwindAction::Continue,
-                    replace: false,
-                });
+                cfg.terminate(
+                    block,
+                    source_info,
+                    TerminatorKind::Drop {
+                        place: local.into(),
+                        target: next,
+                        unwind: UnwindAction::Continue,
+                        replace: false,
+                    },
+                );
                 block = next;
             }
             DropKind::ForLint => {
@@ -1503,13 +1571,16 @@ fn build_scope_drops<'tcx>(
                     continue;
                 }
 
-                cfg.push(block, Statement {
-                    source_info,
-                    kind: StatementKind::BackwardIncompatibleDropHint {
-                        place: Box::new(local.into()),
-                        reason: BackwardIncompatibleDropReason::Edition2024,
+                cfg.push(
+                    block,
+                    Statement {
+                        source_info,
+                        kind: StatementKind::BackwardIncompatibleDropHint {
+                            place: Box::new(local.into()),
+                            reason: BackwardIncompatibleDropReason::Edition2024,
+                        },
                     },
-                });
+                );
             }
             DropKind::Storage => {
                 // Ordinarily, storage-dead nodes are not emitted on unwind, so we don't

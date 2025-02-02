@@ -17,7 +17,7 @@ use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_data_structures::graph::dominators::Dominators;
 use rustc_errors::{DiagArgName, DiagArgValue, DiagMessage, ErrorGuaranteed, IntoDiagArg};
 use rustc_hir::def::{CtorKind, Namespace};
-use rustc_hir::def_id::{CRATE_DEF_ID, DefId};
+use rustc_hir::def_id::{DefId, CRATE_DEF_ID};
 use rustc_hir::{
     self as hir, BindingMode, ByRef, CoroutineDesugaring, CoroutineKind, HirId, ImplicitSelfKind,
 };
@@ -27,7 +27,7 @@ use rustc_macros::{HashStable, TyDecodable, TyEncodable, TypeFoldable, TypeVisit
 use rustc_serialize::{Decodable, Encodable};
 use rustc_span::source_map::Spanned;
 use rustc_span::symbol::Symbol;
-use rustc_span::{DUMMY_SP, Span};
+use rustc_span::{Span, DUMMY_SP};
 use tracing::trace;
 
 pub use self::query::*;
@@ -36,7 +36,7 @@ use crate::mir::interpret::{AllocRange, Scalar};
 use crate::mir::visit::MirVisitable;
 use crate::ty::codec::{TyDecoder, TyEncoder};
 use crate::ty::fold::{FallibleTypeFolder, TypeFoldable};
-use crate::ty::print::{FmtPrinter, Printer, pretty_print_const, with_no_trimmed_paths};
+use crate::ty::print::{pretty_print_const, with_no_trimmed_paths, FmtPrinter, Printer};
 use crate::ty::visit::TypeVisitableExt;
 use crate::ty::{
     self, AdtDef, GenericArg, GenericArgsRef, Instance, InstanceKind, List, Ty, TyCtxt, TypingEnv,
@@ -72,7 +72,7 @@ pub use terminator::*;
 pub use self::generic_graph::graphviz_safe_def_name;
 pub use self::graphviz::write_mir_graphviz;
 pub use self::pretty::{
-    PassWhere, create_dump_file, display_allocation, dump_enabled, dump_mir, write_mir_pretty,
+    create_dump_file, display_allocation, dump_enabled, dump_mir, write_mir_pretty, PassWhere,
 };
 
 /// Types for locals
@@ -1412,10 +1412,10 @@ impl<'tcx> BasicBlockData<'tcx> {
         // existing elements from before the gap to the end of the gap.
         // For now, this is safe code, emulating a gap but initializing it.
         let mut gap = self.statements.len()..self.statements.len() + extra_stmts;
-        self.statements.resize(gap.end, Statement {
-            source_info: SourceInfo::outermost(DUMMY_SP),
-            kind: StatementKind::Nop,
-        });
+        self.statements.resize(
+            gap.end,
+            Statement { source_info: SourceInfo::outermost(DUMMY_SP), kind: StatementKind::Nop },
+        );
         for (splice_start, new_stmts) in splices.into_iter().rev() {
             let splice_end = splice_start + new_stmts.size_hint().0;
             while gap.end > splice_end {
@@ -1429,7 +1429,11 @@ impl<'tcx> BasicBlockData<'tcx> {
     }
 
     pub fn visitable(&self, index: usize) -> &dyn MirVisitable<'tcx> {
-        if index < self.statements.len() { &self.statements[index] } else { &self.terminator }
+        if index < self.statements.len() {
+            &self.statements[index]
+        } else {
+            &self.terminator
+        }
     }
 
     /// Does the block have no statements and an unreachable terminator?
@@ -1521,6 +1525,8 @@ pub struct SourceScopeData<'tcx> {
     /// Crate-local information for this source scope, that can't (and
     /// needn't) be tracked across crates.
     pub local_data: ClearCrossCrate<SourceScopeLocalData>,
+
+    pub is_unsafe: bool,
 }
 
 #[derive(Clone, Debug, TyEncodable, TyDecodable, HashStable)]
@@ -1803,7 +1809,7 @@ mod size_asserts {
     // tidy-alphabetical-start
     static_assert_size!(BasicBlockData<'_>, 128);
     static_assert_size!(LocalDecl<'_>, 40);
-    static_assert_size!(SourceScopeData<'_>, 64);
+    static_assert_size!(SourceScopeData<'_>, 72);
     static_assert_size!(Statement<'_>, 32);
     static_assert_size!(Terminator<'_>, 96);
     static_assert_size!(VarDebugInfo<'_>, 88);

@@ -5,8 +5,8 @@ use rustc_middle::{span_bug, ty};
 use rustc_span::Span;
 use tracing::debug;
 
-use crate::build::ForGuard::OutsideGuard;
 use crate::build::matches::{DeclareLetBindings, EmitStorageLive, ScheduleDrops};
+use crate::build::ForGuard::OutsideGuard;
 use crate::build::{BlockAnd, BlockAndExtension, BlockFrame, Builder};
 
 impl<'a, 'tcx> Builder<'a, 'tcx> {
@@ -17,17 +17,29 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         ast_block: BlockId,
         source_info: SourceInfo,
     ) -> BlockAnd<()> {
-        let Block { region_scope, span, ref stmts, expr, targeted_by_break, safety_mode: _ } =
+        let Block { region_scope, span, ref stmts, expr, targeted_by_break, safety_mode } =
             self.thir[ast_block];
-        self.in_scope((region_scope, source_info), LintLevel::Inherited, move |this| {
-            if targeted_by_break {
-                this.in_breakable_scope(None, destination, span, |this| {
-                    Some(this.ast_block_stmts(destination, block, span, stmts, expr, region_scope))
-                })
-            } else {
-                this.ast_block_stmts(destination, block, span, stmts, expr, region_scope)
-            }
-        })
+        self.in_safety_scope(
+            (region_scope, source_info),
+            LintLevel::Inherited,
+            safety_mode,
+            move |this| {
+                if targeted_by_break {
+                    this.in_breakable_scope(None, destination, span, |this| {
+                        Some(this.ast_block_stmts(
+                            destination,
+                            block,
+                            span,
+                            stmts,
+                            expr,
+                            region_scope,
+                        ))
+                    })
+                } else {
+                    this.ast_block_stmts(destination, block, span, stmts, expr, region_scope)
+                }
+            },
+        )
     }
 
     fn ast_block_stmts(
@@ -186,8 +198,11 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     this.push_scope((*remainder_scope, source_info));
                     let_scope_stack.push(remainder_scope);
 
-                    let visibility_scope =
-                        Some(this.new_source_scope(remainder_span, LintLevel::Inherited));
+                    let visibility_scope = Some(this.new_source_scope(
+                        remainder_span,
+                        LintLevel::Inherited,
+                        this.source_scopes[this.source_scope].is_unsafe,
+                    ));
 
                     let initializer_span = this.thir[*initializer].span;
                     let scope = (*init_scope, source_info);
@@ -260,8 +275,11 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     // Declare the bindings, which may create a source scope.
                     let remainder_span = remainder_scope.span(this.tcx, this.region_scope_tree);
 
-                    let visibility_scope =
-                        Some(this.new_source_scope(remainder_span, LintLevel::Inherited));
+                    let visibility_scope = Some(this.new_source_scope(
+                        remainder_span,
+                        LintLevel::Inherited,
+                        this.source_scopes[this.source_scope].is_unsafe,
+                    ));
 
                     // Evaluate the initializer, if present.
                     if let Some(init) = *initializer {

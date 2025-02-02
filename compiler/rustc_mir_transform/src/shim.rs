@@ -1,7 +1,7 @@
 use std::assert_matches::assert_matches;
 use std::{fmt, iter};
 
-use rustc_abi::{ExternAbi, FIRST_VARIANT, FieldIdx, VariantIdx};
+use rustc_abi::{ExternAbi, FieldIdx, VariantIdx, FIRST_VARIANT};
 use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
 use rustc_hir::lang_items::LangItem;
@@ -15,7 +15,7 @@ use rustc_middle::ty::{
 use rustc_middle::{bug, span_bug};
 use rustc_mir_dataflow::elaborate_drops::{self, DropElaborator, DropFlagMode, DropStyle};
 use rustc_span::source_map::Spanned;
-use rustc_span::{DUMMY_SP, Span};
+use rustc_span::{Span, DUMMY_SP};
 use tracing::{debug, instrument};
 
 use crate::{
@@ -313,6 +313,7 @@ fn new_body<'tcx>(
                 inlined: None,
                 inlined_parent_scope: None,
                 local_data: ClearCrossCrate::Clear,
+                is_unsafe: false,
             },
             1,
         ),

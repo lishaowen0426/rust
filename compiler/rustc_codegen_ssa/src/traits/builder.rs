@@ -1,5 +1,5 @@
 use std::assert_matches::assert_matches;
-use std::ops::{Deref, FnMut};
+use std::ops::Deref;
 
 use rustc_abi::{Align, BackendRepr, Scalar, Size, WrappingRange};
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrs;
