@@ -21,19 +21,19 @@ use rustc_data_structures::small_c_str::SmallCStr;
 use rustc_errors::{DiagCtxtHandle, FatalError, Level};
 use rustc_fs_util::{link_or_copy, path_to_c_string};
 use rustc_middle::ty::TyCtxt;
-use rustc_session::Session;
 use rustc_session::config::{
     self, Lto, OutputType, Passes, RemapPathScopeComponents, SplitDwarfKind, SwitchWithOptPath,
 };
-use rustc_span::InnerSpan;
+use rustc_session::Session;
 use rustc_span::symbol::sym;
+use rustc_span::InnerSpan;
 use rustc_target::spec::{CodeModel, RelocModel, SanitizerSet, SplitDebuginfo, TlsModel};
 use tracing::debug;
 
 use crate::back::lto::ThinBuffer;
 use crate::back::owned_target_machine::OwnedTargetMachine;
 use crate::back::profiling::{
-    LlvmSelfProfiler, selfprofile_after_pass_callback, selfprofile_before_pass_callback,
+    selfprofile_after_pass_callback, selfprofile_before_pass_callback, LlvmSelfProfiler,
 };
 use crate::common::AsCCharPtr;
 use crate::errors::{
@@ -43,7 +43,7 @@ use crate::errors::{
 use crate::llvm::diagnostic::OptimizationDiagnosticKind::*;
 use crate::llvm::{self, DiagnosticInfo, PassManager};
 use crate::type_::Type;
-use crate::{LlvmCodegenBackend, ModuleLlvm, base, common, llvm_util};
+use crate::{base, common, llvm_util, LlvmCodegenBackend, ModuleLlvm};
 
 pub(crate) fn llvm_err<'a>(dcx: DiagCtxtHandle<'_>, err: LlvmError<'a>) -> FatalError {
     match llvm::last_error() {
@@ -601,6 +601,7 @@ pub(crate) unsafe fn llvm_optimize(
             extra_passes.len(),
             llvm_plugins.as_c_char_ptr(),
             llvm_plugins.len(),
+            config.enable_svf_unsafety_analysis,
         )
     };
     result.into_result().map_err(|()| llvm_err(dcx, LlvmError::RunLlvmPasses))
@@ -1090,7 +1091,11 @@ fn create_msvc_imps(
             .filter_map(|val| {
                 // Exclude some symbols that we know are not Rust symbols.
                 let name = llvm::get_value_name(val);
-                if ignored(name) { None } else { Some((val, name)) }
+                if ignored(name) {
+                    None
+                } else {
+                    Some((val, name))
+                }
             })
             .map(move |(val, name)| {
                 let mut imp_name = prefix.as_bytes().to_vec();

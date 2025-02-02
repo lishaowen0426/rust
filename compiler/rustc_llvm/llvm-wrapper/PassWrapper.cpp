@@ -20,6 +20,7 @@
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
 #include "llvm/Passes/StandardInstrumentations.h"
+#include "llvm/SVF/SVFTransform.h"
 #include "llvm/Support/CBindingWrapping.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/TimeProfiler.h"
@@ -685,7 +686,7 @@ extern "C" LLVMRustResult LLVMRustOptimize(
     LLVMRustSelfProfileBeforePassCallback BeforePassCallback,
     LLVMRustSelfProfileAfterPassCallback AfterPassCallback,
     const char *ExtraPasses, size_t ExtraPassesLen, const char *LLVMPlugins,
-    size_t LLVMPluginsLen) {
+    size_t LLVMPluginsLen, bool LaunchSVF) {
   Module *TheModule = unwrap(ModuleRef);
   TargetMachine *TM = unwrap(TMRef);
   OptimizationLevel OptLevel = fromRust(OptLevelRust);
@@ -992,6 +993,10 @@ extern "C" LLVMRustResult LLVMRustOptimize(
   if (NeedThinLTOBufferPasses) {
     MPM.addPass(CanonicalizeAliasesPass());
     MPM.addPass(NameAnonGlobalPass());
+  }
+
+  if (LaunchSVF) {
+    MPM.addPass(SVFTransform());
   }
 
   // Upgrade all calls to old intrinsics first.
