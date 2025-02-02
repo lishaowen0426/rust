@@ -3,7 +3,7 @@
 //! The main entry point is the `step` method.
 
 use either::Either;
-use rustc_abi::{FIRST_VARIANT, FieldIdx};
+use rustc_abi::{FieldIdx, FIRST_VARIANT};
 use rustc_index::IndexSlice;
 use rustc_middle::ty::layout::FnAbiOf;
 use rustc_middle::ty::{self, Instance, Ty};
@@ -13,8 +13,8 @@ use rustc_target::callconv::FnAbi;
 use tracing::{info, instrument, trace};
 
 use super::{
-    FnArg, FnVal, ImmTy, Immediate, InterpCx, InterpResult, Machine, MemPlaceMeta, PlaceTy,
-    Projectable, Scalar, interp_ok, throw_ub,
+    interp_ok, throw_ub, FnArg, FnVal, ImmTy, Immediate, InterpCx, InterpResult, Machine,
+    MemPlaceMeta, PlaceTy, Projectable, Scalar,
 };
 use crate::util;
 
@@ -69,6 +69,8 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         }
         interp_ok(true)
     }
+
+    pub fn if_tracking_unsafety(&self) {}
 
     /// Runs the interpretation logic for the given `mir::Statement` at the current frame and
     /// statement counter.

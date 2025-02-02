@@ -4,8 +4,8 @@ use either::{Left, Right};
 use rustc_abi::{Align, HasDataLayout, Size, TargetDataLayout};
 use rustc_errors::DiagCtxtHandle;
 use rustc_hir::def_id::DefId;
-use rustc_infer::infer::TyCtxtInferExt;
 use rustc_infer::infer::at::ToTrace;
+use rustc_infer::infer::TyCtxtInferExt;
 use rustc_infer::traits::ObligationCause;
 use rustc_middle::mir::interpret::{ErrorHandled, InvalidMetaKind, ReportedErrorInfo};
 use rustc_middle::query::TyCtxtAt;
@@ -21,11 +21,11 @@ use rustc_trait_selection::traits::ObligationCtxt;
 use tracing::{debug, instrument, trace};
 
 use super::{
-    Frame, FrameInfo, GlobalId, InterpErrorInfo, InterpErrorKind, InterpResult, MPlaceTy, Machine,
-    MemPlaceMeta, Memory, OpTy, Place, PlaceTy, PointerArithmetic, Projectable, Provenance,
-    err_inval, interp_ok, throw_inval, throw_ub, throw_ub_custom,
+    err_inval, interp_ok, throw_inval, throw_ub, throw_ub_custom, Frame, FrameInfo, GlobalId,
+    InterpErrorInfo, InterpErrorKind, InterpResult, MPlaceTy, Machine, MemPlaceMeta, Memory, OpTy,
+    Place, PlaceTy, PointerArithmetic, Projectable, Provenance,
 };
-use crate::{ReportErrorExt, fluent_generated as fluent, util};
+use crate::{fluent_generated as fluent, util, ReportErrorExt};
 
 pub struct InterpCx<'tcx, M: Machine<'tcx>> {
     /// Stores the `Machine` instance.
@@ -47,6 +47,8 @@ pub struct InterpCx<'tcx, M: Machine<'tcx>> {
 
     /// The recursion limit (cached from `tcx.recursion_limit(())`)
     pub recursion_limit: Limit,
+
+    pub is_tracking_unsafety_enabled: bool,
 }
 
 impl<'tcx, M: Machine<'tcx>> HasDataLayout for InterpCx<'tcx, M> {
@@ -206,7 +208,12 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             typing_env,
             memory: Memory::new(),
             recursion_limit: tcx.recursion_limit(),
+            is_tracking_unsafety_enabled: false,
         }
+    }
+
+    pub fn enable_safety_tracking(&mut self) {
+        self.is_tracking_unsafety_enabled = true;
     }
 
     /// Returns the span of the currently executed statement/terminator.
@@ -621,7 +628,11 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         F1: rustc_apfloat::Float + rustc_apfloat::FloatConvert<F2>,
         F2: rustc_apfloat::Float,
     {
-        if f.is_nan() { M::generate_nan(self, inputs) } else { f }
+        if f.is_nan() {
+            M::generate_nan(self, inputs)
+        } else {
+            f
+        }
     }
 }
 

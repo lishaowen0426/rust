@@ -1,9 +1,11 @@
 //! Manages the low-level pushing and popping of stack frames and the (de)allocation of local variables.
 //! For handling of argument passing and return values, see the `call` module.
+#![allow(rustc::potential_query_instability)]
 use std::cell::Cell;
 use std::{fmt, mem};
 
 use either::{Either, Left, Right};
+use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_hir as hir;
 use rustc_hir::definitions::DefPathData;
 use rustc_index::IndexVec;
@@ -15,9 +17,9 @@ use rustc_span::Span;
 use tracing::{info_span, instrument, trace};
 
 use super::{
-    AllocId, CtfeProvenance, Immediate, InterpCx, InterpResult, MPlaceTy, Machine, MemPlace,
-    MemPlaceMeta, MemoryKind, Operand, Pointer, Provenance, ReturnAction, Scalar,
-    from_known_layout, interp_ok, throw_ub, throw_unsup,
+    from_known_layout, interp_ok, throw_ub, throw_unsup, AllocId, CtfeProvenance, Immediate,
+    InterpCx, InterpResult, MPlaceTy, Machine, MemPlace, MemPlaceMeta, MemoryKind, Operand,
+    Pointer, Provenance, ReturnAction, Scalar,
 };
 use crate::errors;
 
@@ -102,6 +104,16 @@ pub struct Frame<'tcx, Prov: Provenance = CtfeProvenance, Extra = ()> {
     ///
     /// Needs to be public because ConstProp does unspeakable things to it.
     pub(super) loc: Either<mir::Location, Span>,
+
+    /// map from AllocId to Local
+    /// A live LocalValue can be either immediate or indirect
+    /// An indirect local is associated with a Pointer
+    /// This is the map from the Pointer's AllocId to the local
+    ///
+    pub alloc_id_to_local: FxHashMap<AllocId, FxHashSet<mir::Local>>,
+
+    /// Record all AllocIds that have been marked unsafe
+    pub unsafe_alloc_id: FxHashSet<AllocId>,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)] // Miri debug-prints these
@@ -253,6 +265,8 @@ impl<'tcx, Prov: Provenance> Frame<'tcx, Prov> {
             loc: self.loc,
             extra,
             tracing_span: self.tracing_span,
+            alloc_id_to_local: FxHashMap::default(),
+            unsafe_alloc_id: FxHashSet::default(),
         }
     }
 }
@@ -335,6 +349,39 @@ impl<'tcx, Prov: Provenance, Extra> Frame<'tcx, Prov, Extra> {
         trace!("generate stacktrace: {:#?}", frames);
         frames
     }
+
+    pub fn map_alloc_id_to_local(&mut self, id: AllocId, local: mir::Local) {
+        self.alloc_id_to_local.entry(id).or_insert_with(FxHashSet::default).insert(local);
+    }
+
+    #[instrument(level = "info", skip(self))]
+    pub fn mark_alloc_id_unsafe(&mut self, id: AllocId) {
+        self.unsafe_alloc_id.insert(id);
+    }
+
+    pub fn unmark_alloc_id_unsafe(&mut self, id: AllocId) {
+        self.unsafe_alloc_id.remove(&id);
+    }
+
+    #[instrument(level = "info", skip(self))]
+    pub fn is_alloc_id_unsafe(&self, id: AllocId) -> bool {
+        self.unsafe_alloc_id.contains(&id)
+    }
+
+    pub fn get_locals_from_alloc_id(&self, id: AllocId) -> impl Iterator<Item = mir::Local> + '_ {
+        self.alloc_id_to_local.get(&id).map(|s| s.iter().cloned()).into_iter().flatten()
+    }
+
+    pub fn remove_local_from_alloc_id(&mut self, id: AllocId, local: mir::Local) {
+        self.alloc_id_to_local.entry(id).and_modify(|s| {
+            s.remove(&local);
+        });
+
+        if self.alloc_id_to_local.get(&id).is_some_and(|s| s.is_empty()) {
+            self.alloc_id_to_local.remove(&id);
+            self.unmark_alloc_id_unsafe(id);
+        }
+    }
 }
 
 impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
@@ -371,6 +418,8 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             instance,
             tracing_span: SpanGuard::new(),
             extra: (),
+            alloc_id_to_local: FxHashMap::default(),
+            unsafe_alloc_id: FxHashSet::default(),
         };
         let frame = M::init_frame(self, pre_frame)?;
         self.stack_mut().push(frame);
@@ -523,7 +572,11 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         } else {
             // We need the layout.
             let layout = self.layout_of_local(self.frame(), local, None)?;
-            if layout.is_sized() { None } else { Some(layout) }
+            if layout.is_sized() {
+                None
+            } else {
+                Some(layout)
+            }
         };
 
         let local_val = LocalValue::Live(if let Some(layout) = unsized_ {
@@ -536,8 +589,8 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         } else {
             // Just make this an efficient immediate.
             assert!(!meta.has_meta()); // we're dropping the metadata
-            // Make sure the machine knows this "write" is happening. (This is important so that
-            // races involving local variable allocation can be detected by Miri.)
+                                       // Make sure the machine knows this "write" is happening. (This is important so that
+                                       // races involving local variable allocation can be detected by Miri.)
             M::after_local_write(self, local, /*storage_live*/ true)?;
             // Note that not calling `layout_of` here does have one real consequence:
             // if the type is too big, we'll only notice this when the local is actually initialized,

@@ -157,6 +157,8 @@ pub struct MiriConfig {
     pub address_reuse_rate: f64,
     /// Probability for address reuse across threads.
     pub address_reuse_cross_thread_rate: f64,
+
+    pub track_unsafety: bool,
 }
 
 impl Default for MiriConfig {
@@ -194,6 +196,7 @@ impl Default for MiriConfig {
             collect_leak_backtraces: true,
             address_reuse_rate: 0.5,
             address_reuse_cross_thread_rate: 0.1,
+            track_unsafety: false,
         }
     }
 }
@@ -270,12 +273,12 @@ pub fn create_ecx<'tcx>(
 ) -> InterpResult<'tcx, InterpCx<'tcx, MiriMachine<'tcx>>> {
     let typing_env = ty::TypingEnv::fully_monomorphized();
     let layout_cx = LayoutCx::new(tcx, typing_env);
-    let mut ecx = InterpCx::new(
-        tcx,
-        rustc_span::DUMMY_SP,
-        typing_env,
-        MiriMachine::new(config, layout_cx)
-    );
+    let mut ecx =
+        InterpCx::new(tcx, rustc_span::DUMMY_SP, typing_env, MiriMachine::new(config, layout_cx));
+    if config.track_unsafety {
+        println!("miri tracks unsafety....");
+        ecx.enable_safety_tracking();
+    }
 
     // Some parts of initialization require a full `InterpCx`.
     MiriMachine::late_init(&mut ecx, config, {
