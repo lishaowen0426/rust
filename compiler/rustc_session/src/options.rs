@@ -20,7 +20,7 @@ use rustc_target::spec::{
 use crate::config::*;
 use crate::search_paths::SearchPath;
 use crate::utils::NativeLib;
-use crate::{EarlyDiagCtxt, lint};
+use crate::{lint, EarlyDiagCtxt};
 
 macro_rules! insert {
     ($opt_name:ident, $opt_expr:expr, $sub_hashes:expr) => {
@@ -35,7 +35,9 @@ macro_rules! insert {
 
 macro_rules! hash_opt {
     ($opt_name:ident, $opt_expr:expr, $sub_hashes:expr, $_for_crate_hash: ident, [UNTRACKED]) => {{}};
-    ($opt_name:ident, $opt_expr:expr, $sub_hashes:expr, $_for_crate_hash: ident, [TRACKED]) => {{ insert!($opt_name, $opt_expr, $sub_hashes) }};
+    ($opt_name:ident, $opt_expr:expr, $sub_hashes:expr, $_for_crate_hash: ident, [TRACKED]) => {{
+        insert!($opt_name, $opt_expr, $sub_hashes)
+    }};
     ($opt_name:ident, $opt_expr:expr, $sub_hashes:expr, $for_crate_hash: ident, [TRACKED_NO_CRATE_HASH]) => {{
         if !$for_crate_hash {
             insert!($opt_name, $opt_expr, $sub_hashes)
@@ -2161,6 +2163,10 @@ written to standard error output)"),
         `hir-tree` (dump the raw HIR),
         `thir-tree`, `thir-flat`,
         `mir` (the MIR), or `mir-cfg` (graphviz formatted MIR)"),
+    unsafety_miri: bool = (false, parse_bool, [TRACKED],
+        "enable dynamic unsafety analysis using miri (default: no)"),
+    unsafety_svf: bool = (false, parse_bool, [TRACKED],
+        "enable static unsafety analysis using svf (default: no)"),
     unsound_mir_opts: bool = (false, parse_bool, [TRACKED],
         "enable unsound and buggy MIR optimizations (default: no)"),
     /// This name is kind of confusing: Most unstable options enable something themselves, while

@@ -1,5 +1,5 @@
 use std::assert_matches::assert_matches;
-use std::ops::Deref;
+use std::ops::{Deref, FnMut};
 
 use rustc_abi::{Align, BackendRepr, Scalar, Size, WrappingRange};
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrs;
@@ -18,12 +18,12 @@ use super::intrinsic::IntrinsicCallBuilderMethods;
 use super::misc::MiscCodegenMethods;
 use super::type_::{ArgAbiBuilderMethods, BaseTypeCodegenMethods, LayoutTypeCodegenMethods};
 use super::{CodegenMethods, StaticBuilderMethods};
-use crate::MemFlags;
 use crate::common::{
     AtomicOrdering, AtomicRmwBinOp, IntPredicate, RealPredicate, SynchronizationScope, TypeKind,
 };
 use crate::mir::operand::{OperandRef, OperandValue};
 use crate::mir::place::{PlaceRef, PlaceValue};
+use crate::MemFlags;
 
 #[derive(Copy, Clone, Debug)]
 pub enum OverflowOp {
@@ -31,6 +31,15 @@ pub enum OverflowOp {
     Sub,
     Mul,
 }
+
+/*
+pub trait SvfMethods: BackendTypes {
+    fn set_svf_unsafe(&mut self);
+    fn clear_svf_unsafe(&mut self);
+    fn is_svf_unsafe(&self) -> bool;
+    fn tag_svf_unsafe(&self, val: Self::Value);
+}
+    */
 
 pub trait BuilderMethods<'a, 'tcx>:
     Sized
@@ -49,17 +58,17 @@ pub trait BuilderMethods<'a, 'tcx>:
     // `BuilderMethods`. This bound ensures all impls agree on the associated
     // types within.
     type CodegenCx: CodegenMethods<
-            'tcx,
-            Value = Self::Value,
-            Metadata = Self::Metadata,
-            Function = Self::Function,
-            BasicBlock = Self::BasicBlock,
-            Type = Self::Type,
-            Funclet = Self::Funclet,
-            DIScope = Self::DIScope,
-            DILocation = Self::DILocation,
-            DIVariable = Self::DIVariable,
-        >;
+        'tcx,
+        Value = Self::Value,
+        Metadata = Self::Metadata,
+        Function = Self::Function,
+        BasicBlock = Self::BasicBlock,
+        Type = Self::Type,
+        Funclet = Self::Funclet,
+        DIScope = Self::DIScope,
+        DILocation = Self::DILocation,
+        DIVariable = Self::DIVariable,
+    >;
 
     fn build(cx: &'a Self::CodegenCx, llbb: Self::BasicBlock) -> Self;
 
@@ -207,7 +216,7 @@ pub trait BuilderMethods<'a, 'tcx>:
         self.load(ty, place.llval, place.align)
     }
     fn load_operand(&mut self, place: PlaceRef<'tcx, Self::Value>)
-    -> OperandRef<'tcx, Self::Value>;
+        -> OperandRef<'tcx, Self::Value>;
 
     /// Called for Rvalue::Repeat when the elem is neither a ZST nor optimizable using memset.
     fn write_operand_repeatedly(
@@ -303,7 +312,11 @@ pub trait BuilderMethods<'a, 'tcx>:
             return if signed { self.fptosi(x, dest_ty) } else { self.fptoui(x, dest_ty) };
         }
 
-        if signed { self.fptosi_sat(x, dest_ty) } else { self.fptoui_sat(x, dest_ty) }
+        if signed {
+            self.fptosi_sat(x, dest_ty)
+        } else {
+            self.fptoui_sat(x, dest_ty)
+        }
     }
 
     fn icmp(&mut self, op: IntPredicate, lhs: Self::Value, rhs: Self::Value) -> Self::Value;

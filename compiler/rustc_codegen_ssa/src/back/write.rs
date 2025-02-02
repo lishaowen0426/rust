@@ -2,8 +2,8 @@ use std::any::Any;
 use std::assert_matches::assert_matches;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
-use std::sync::mpsc::{Receiver, Sender, channel};
 use std::{fs, io, mem, str, thread};
 
 use jobserver::{Acquired, Client};
@@ -22,16 +22,16 @@ use rustc_hir::def_id::{CrateNum, LOCAL_CRATE};
 use rustc_incremental::{
     copy_cgu_workproduct_to_incr_comp_cache_dir, in_incr_comp_dir, in_incr_comp_dir_sess,
 };
-use rustc_metadata::EncodedMetadata;
 use rustc_metadata::fs::copy_to_stdout;
+use rustc_metadata::EncodedMetadata;
 use rustc_middle::bug;
 use rustc_middle::dep_graph::{WorkProduct, WorkProductId};
 use rustc_middle::middle::exported_symbols::SymbolExportInfo;
 use rustc_middle::ty::TyCtxt;
-use rustc_session::Session;
 use rustc_session::config::{
     self, CrateType, Lto, OutFileName, OutputFilenames, OutputType, Passes, SwitchWithOptPath,
 };
+use rustc_session::Session;
 use rustc_span::source_map::SourceMap;
 use rustc_span::symbol::sym;
 use rustc_span::{BytePos, FileName, InnerSpan, Pos, Span};
@@ -44,8 +44,8 @@ use super::symbol_export::symbol_name_for_instance_in_crate;
 use crate::errors::ErrorCreatingRemarkDir;
 use crate::traits::*;
 use crate::{
-    CachedModuleCodegen, CodegenResults, CompiledModule, CrateInfo, ModuleCodegen, ModuleKind,
-    errors,
+    errors, CachedModuleCodegen, CodegenResults, CompiledModule, CrateInfo, ModuleCodegen,
+    ModuleKind,
 };
 
 const PRE_LTO_BC_EXT: &str = "pre-lto.bc";
@@ -119,6 +119,8 @@ pub struct ModuleConfig {
     pub merge_functions: bool,
     pub emit_lifetime_markers: bool,
     pub llvm_plugins: Vec<String>,
+
+    pub enable_svf_unsafety_analysis: bool,
 }
 
 impl ModuleConfig {
@@ -127,7 +129,11 @@ impl ModuleConfig {
         // `$regular` and `$other` are evaluated lazily.
         macro_rules! if_regular {
             ($regular: expr, $other: expr) => {
-                if let ModuleKind::Regular = kind { $regular } else { $other }
+                if let ModuleKind::Regular = kind {
+                    $regular
+                } else {
+                    $other
+                }
             };
         }
 
@@ -267,6 +273,7 @@ impl ModuleConfig {
 
             emit_lifetime_markers: sess.emit_lifetime_markers(),
             llvm_plugins: if_regular!(sess.opts.unstable_opts.llvm_plugins.clone(), vec![]),
+            enable_svf_unsafety_analysis: sess.opts.unstable_opts.unsafety_svf,
         }
     }
 
