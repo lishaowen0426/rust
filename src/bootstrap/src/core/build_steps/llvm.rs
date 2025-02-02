@@ -22,9 +22,9 @@ use crate::core::builder::{Builder, RunConfig, ShouldRun, Step};
 use crate::core::config::{Config, TargetSelection};
 use crate::utils::exec::command;
 use crate::utils::helpers::{
-    self, HashStamp, exe, get_clang_cl_resource_dir, t, unhashed_basename, up_to_date,
+    self, exe, get_clang_cl_resource_dir, t, unhashed_basename, up_to_date, HashStamp,
 };
-use crate::{CLang, GitRepo, Kind, generate_smart_stamp_hash};
+use crate::{generate_smart_stamp_hash, CLang, GitRepo, Kind};
 
 #[derive(Clone)]
 pub struct LlvmResult {
@@ -158,12 +158,16 @@ pub fn prebuilt_llvm_config(
 /// This retrieves the LLVM sha we *want* to use, according to git history.
 pub(crate) fn detect_llvm_sha(config: &Config, is_git: bool) -> String {
     let llvm_sha = if is_git {
-        get_closest_merge_commit(Some(&config.src), &config.git_config(), &[
-            config.src.join("src/llvm-project"),
-            config.src.join("src/bootstrap/download-ci-llvm-stamp"),
-            // the LLVM shared object file is named `LLVM-12-rust-{version}-nightly`
-            config.src.join("src/version"),
-        ])
+        get_closest_merge_commit(
+            Some(&config.src),
+            &config.git_config(),
+            &[
+                config.src.join("src/llvm-project"),
+                config.src.join("src/bootstrap/download-ci-llvm-stamp"),
+                // the LLVM shared object file is named `LLVM-12-rust-{version}-nightly`
+                config.src.join("src/version"),
+            ],
+        )
         .unwrap()
     } else if let Some(info) = crate::utils::channel::read_commit_info_file(&config.src) {
         info.sha.trim().to_owned()
@@ -521,7 +525,11 @@ impl Step for Llvm {
 
         let llvm_version_suffix = if let Some(ref suffix) = builder.config.llvm_version_suffix {
             // Allow version-suffix="" to not define a version suffix at all.
-            if !suffix.is_empty() { Some(suffix.to_string()) } else { None }
+            if !suffix.is_empty() {
+                Some(suffix.to_string())
+            } else {
+                None
+            }
         } else if builder.config.channel == "dev" {
             // Changes to a version suffix require a complete rebuild of the LLVM.
             // To avoid rebuilds during a time of version bump, don't include rustc
@@ -1496,9 +1504,14 @@ impl Step for Libunwind {
         for entry in fs::read_dir(&out_dir).unwrap() {
             let file = entry.unwrap().path().canonicalize().unwrap();
             if file.is_file() && file.extension() == Some(OsStr::new("o")) {
-                // Object file name without the hash prefix is "Unwind-EHABI", "Unwind-seh" or "libunwind".
-                let base_name = unhashed_basename(&file);
-                if cpp_sources.iter().any(|f| *base_name == f[..f.len() - 4]) {
+                //  Object file name without the hash prefix is "Unwind-EHABI", "Unwind-seh" or "libunwind".
+                //println!("libunwind file name: {:?}", file);
+                let base_name = file.file_stem().unwrap().to_str().unwrap();
+                //let base_name = unhashed_basename(&file);
+                if cpp_sources.iter().any(|f| {
+                    //    println!("source: {}, base_name:{}", f, base_name);
+                    *base_name == f[..f.len() - 4]
+                }) {
                     cc_cfg.object(&file);
                     count += 1;
                 }

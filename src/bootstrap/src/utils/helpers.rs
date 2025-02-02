@@ -13,10 +13,10 @@ use std::{env, fs, io, str};
 use build_helper::util::fail;
 use object::read::archive::ArchiveFile;
 
-use crate::LldMode;
 use crate::core::builder::Builder;
 use crate::core::config::{Config, TargetSelection};
 pub use crate::utils::shared_helpers::{dylib_path, dylib_path_var};
+use crate::LldMode;
 
 #[cfg(test)]
 mod tests;
@@ -47,7 +47,7 @@ macro_rules! t {
 }
 pub use t;
 
-use crate::utils::exec::{BootstrapCommand, command};
+use crate::utils::exec::{command, BootstrapCommand};
 
 pub fn exe(name: &str, target: TargetSelection) -> String {
     crate::utils::shared_helpers::exe(name, &target.triple)
@@ -86,7 +86,11 @@ pub fn is_debug_info(name: &str) -> bool {
 /// Returns the corresponding relative library directory that the compiler's
 /// dylibs will be found in.
 pub fn libdir(target: TargetSelection) -> &'static str {
-    if target.is_windows() { "bin" } else { "lib" }
+    if target.is_windows() {
+        "bin"
+    } else {
+        "lib"
+    }
 }
 
 /// Adds a list of lookup paths to `cmd`'s dynamic library lookup path.
@@ -111,7 +115,11 @@ pub fn add_link_lib_path(path: Vec<PathBuf>, cmd: &mut BootstrapCommand) {
 /// Returns the environment variable which the link library lookup path
 /// resides in for this platform.
 fn link_lib_path_var() -> &'static str {
-    if cfg!(target_env = "msvc") { "LIB" } else { "LIBRARY_PATH" }
+    if cfg!(target_env = "msvc") {
+        "LIB"
+    } else {
+        "LIBRARY_PATH"
+    }
 }
 
 /// Parses the `link_lib_path_var()` environment variable, returning a list of
@@ -365,8 +373,18 @@ pub fn up_to_date(src: &Path, dst: &Path) -> bool {
 /// Since v1.0.78 of the cc crate, object files are prefixed with a 16-character hash
 /// to avoid filename collisions.
 pub fn unhashed_basename(obj: &Path) -> &str {
-    let basename = obj.file_stem().unwrap().to_str().expect("UTF-8 file name");
-    basename.split_once('-').unwrap().1
+    let basename = obj
+        .file_stem()
+        .expect(format!("UTF8 filename: {:?}", obj).as_str())
+        .to_str()
+        .expect(format!("UTF8 filename: {:?}", obj).as_str());
+
+    match basename.split_once('-') {
+        Some(p) => p.1,
+        None => basename,
+    }
+
+    // basename.split_once('-').expect(format!("basename:{}", basename).as_str()).1
 }
 
 fn dir_up_to_date(src: &Path, threshold: SystemTime) -> bool {
@@ -426,9 +444,17 @@ fn lld_flag_no_threads(builder: &Builder<'_>, lld_mode: LldMode, is_windows: boo
             }
             _ => true,
         };
-        if newer_version { new_flags } else { old_flags }
+        if newer_version {
+            new_flags
+        } else {
+            old_flags
+        }
     });
-    if is_windows { windows_flag } else { other_flag }
+    if is_windows {
+        windows_flag
+    } else {
+        other_flag
+    }
 }
 
 pub fn dir_is_empty(dir: &Path) -> bool {
