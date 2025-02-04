@@ -2,6 +2,7 @@ use std::assert_matches::debug_assert_matches;
 
 use either::{Left, Right};
 use rustc_abi::{Align, HasDataLayout, Size, TargetDataLayout};
+use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_errors::DiagCtxtHandle;
 use rustc_hir::def_id::DefId;
 use rustc_infer::infer::at::ToTrace;
@@ -14,6 +15,7 @@ use rustc_middle::ty::layout::{
 };
 use rustc_middle::ty::{self, GenericArgsRef, Ty, TyCtxt, TypeFoldable, TypingEnv, Variance};
 use rustc_middle::{mir, span_bug};
+use rustc_middle::mir::Local;
 use rustc_session::Limit;
 use rustc_span::Span;
 use rustc_target::callconv::FnAbi;
@@ -49,6 +51,9 @@ pub struct InterpCx<'tcx, M: Machine<'tcx>> {
     pub recursion_limit: Limit,
 
     pub is_tracking_unsafety_enabled: bool,
+
+    /// map from a def id to its unsafe locals
+    pub def_id_to_unsafe_local: FxHashMap<DefId, FxHashSet<Local>>,
 }
 
 impl<'tcx, M: Machine<'tcx>> HasDataLayout for InterpCx<'tcx, M> {

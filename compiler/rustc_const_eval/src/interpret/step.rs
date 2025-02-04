@@ -5,12 +5,18 @@
 use either::Either;
 use rustc_abi::{FieldIdx, FIRST_VARIANT};
 use rustc_index::IndexSlice;
+use crate::interpret::OpTy;
 use rustc_middle::ty::layout::FnAbiOf;
 use rustc_middle::ty::{self, Instance, Ty};
 use rustc_middle::{bug, mir, span_bug};
+use rustc_middle::mir::Local;
 use rustc_span::source_map::Spanned;
 use rustc_target::callconv::FnAbi;
 use tracing::{info, instrument, trace};
+use rustc_middle::mir::interpret::AllocId;
+use rustc_span::def_id::DefId;
+use super::operand::Operand;
+use rustc_data_structures::fx::FxHashSet;
 
 use super::{
     interp_ok, throw_ub, FnArg, FnVal, ImmTy, Immediate, InterpCx, InterpResult, Machine,
@@ -70,7 +76,13 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         interp_ok(true)
     }
 
-    pub fn if_tracking_unsafety(&self) {}
+    pub fn if_tracking_unsafety(&self) ->bool {
+        self.is_tracking_unsafety_enabled && self.body().source.def_id().is_local()
+    }
+
+    pub fn is_statement_unsafe(&self, stmt: &mir::Statement<'tcx>) -> bool {
+        self.body().source_scopes[stmt.source_info.scope].is_unsafe
+    }
 
     /// Runs the interpretation logic for the given `mir::Statement` at the current frame and
     /// statement counter.
@@ -153,6 +165,59 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         interp_ok(())
     }
 
+    pub fn is_rvalue_op_unsafe(&self, op: &OpTy<'tcx, M::Provenance>) -> bool {
+            match op.op() {
+                Operand::Immediate(_imm) => false,
+                Operand::Indirect(mplace) => {
+                    self.ptr_get_alloc_id(mplace.ptr,0).discard_err().is_some_and(|(alloc_id, _,_)|{
+                        self.frame().is_alloc_id_unsafe(alloc_id)
+                    })
+                }
+            }
+            
+    }
+
+    pub fn mark_unsafe_local(&mut self, id: DefId, local: Local) {
+        self.def_id_to_unsafe_local.entry(id).or_insert_with(FxHashSet::default).insert(local);
+    }
+    pub fn mark_alloc_id_local_unsafe(&mut self, id: DefId, alloc_id: AllocId) {
+        let copied = self
+            .frame()
+            .get_locals_from_alloc_id(alloc_id)
+            .collect::<Vec<rustc_middle::mir::Local>>();
+        info!("alloc_id :{:?}, locals: {:?}", alloc_id, copied);
+        for loc in copied {
+            self.mark_unsafe_local(id, loc);
+        }
+    }
+    pub fn mark_place_unsafe(&mut self, place: &PlaceTy<'tcx, M::Provenance>) {
+        use crate::interpret::place::Place;
+
+        let def_id = self.body().source.def_id();
+        match place.place() {
+            Place::Ptr(mplace) => {
+                if let Some((alloc_id, _, _)) = self.ptr_get_alloc_id(mplace.ptr,0).discard_err() {
+                    self.mark_alloc_id_local_unsafe(def_id, alloc_id);
+                    self.frame_mut().mark_alloc_id_unsafe(alloc_id);
+                }
+            }
+            Place::Local { local, .. } => {
+                if let Some(op) = self.frame().locals[*local].access().discard_err() {
+                    match op {
+                        Operand::Indirect(mplace) => {
+                            if let Some((alloc_id, _, _)) = self.ptr_get_alloc_id(mplace.ptr,0).discard_err() {
+                                self.mark_alloc_id_local_unsafe(def_id, alloc_id);
+                                self.frame_mut().mark_alloc_id_unsafe(alloc_id);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                self.mark_unsafe_local(def_id, *local);
+            }
+        }
+    }
+
     /// Evaluate an assignment statement.
     ///
     /// There is no separate `eval_rvalue` function. Instead, the code for handling each rvalue
@@ -167,21 +232,24 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         // Also see https://github.com/rust-lang/rust/issues/68364.
 
         use rustc_middle::mir::Rvalue::*;
-        match *rvalue {
+        let is_rvalue_unsafe = match *rvalue {
             ThreadLocalRef(did) => {
                 let ptr = M::thread_local_static_pointer(self, did)?;
                 self.write_pointer(ptr, &dest)?;
+                false
             }
 
             Use(ref operand) => {
                 // Avoid recomputing the layout
                 let op = self.eval_operand(operand, Some(dest.layout))?;
                 self.copy_op(&op, &dest)?;
+                self.is_rvalue_op_unsafe(&op)
             }
 
             CopyForDeref(place) => {
                 let op = self.eval_place_to_op(place, Some(dest.layout))?;
                 self.copy_op(&op, &dest)?;
+                self.is_rvalue_op_unsafe(&op)
             }
 
             BinaryOp(bin_op, box (ref left, ref right)) => {
@@ -192,6 +260,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let result = self.binary_op(bin_op, &left, &right)?;
                 assert_eq!(result.layout, dest.layout, "layout mismatch for result of {bin_op:?}");
                 self.write_immediate(*result, &dest)?;
+                false
             }
 
             UnaryOp(un_op, ref operand) => {
@@ -200,26 +269,29 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let result = self.unary_op(un_op, &val)?;
                 assert_eq!(result.layout, dest.layout, "layout mismatch for result of {un_op:?}");
                 self.write_immediate(*result, &dest)?;
+                false
             }
 
             NullaryOp(null_op, ty) => {
                 let ty = self.instantiate_from_current_frame_and_normalize_erasing_regions(ty)?;
                 let val = self.nullary_op(null_op, ty)?;
                 self.write_immediate(*val, &dest)?;
+                false
             }
 
             Aggregate(box ref kind, ref operands) => {
-                self.write_aggregate(kind, operands, &dest)?;
+                self.write_aggregate(kind, operands, &dest)?
             }
 
             Repeat(ref operand, _) => {
-                self.write_repeat(operand, &dest)?;
+                self.write_repeat(operand, &dest)?
             }
 
             Len(place) => {
                 let src = self.eval_place(place)?;
                 let len = src.len(self)?;
                 self.write_scalar(Scalar::from_target_usize(len, self), &dest)?;
+                false
             }
 
             Ref(_, borrow_kind, place) => {
@@ -237,6 +309,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                     &val,
                 )?;
                 self.write_immediate(*val, &dest)?;
+                false
             }
 
             RawPtr(_, place) => {
@@ -257,12 +330,14 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                     val = M::retag_ptr_value(self, mir::RetagKind::Raw, &val)?;
                 }
                 self.write_immediate(*val, &dest)?;
+                false
             }
 
             ShallowInitBox(ref operand, _) => {
                 let src = self.eval_operand(operand, None)?;
                 let v = self.read_immediate(&src)?;
                 self.write_immediate(*v, &dest)?;
+                false
             }
 
             Cast(cast_kind, ref operand, cast_ty) => {
@@ -270,6 +345,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let cast_ty =
                     self.instantiate_from_current_frame_and_normalize_erasing_regions(cast_ty)?;
                 self.cast(&src, cast_kind, cast_ty, &dest)?;
+                false
             }
 
             Discriminant(place) => {
@@ -277,8 +353,11 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let variant = self.read_discriminant(&op)?;
                 let discr = self.discriminant_for_variant(op.layout.ty, variant)?;
                 self.write_immediate(*discr, &dest)?;
+                false
             }
-        }
+        };
+
+
 
         trace!("{:?}", self.dump_place(&dest));
 
@@ -292,7 +371,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         kind: &mir::AggregateKind<'tcx>,
         operands: &IndexSlice<FieldIdx, mir::Operand<'tcx>>,
         dest: &PlaceTy<'tcx, M::Provenance>,
-    ) -> InterpResult<'tcx> {
+    ) -> InterpResult<'tcx, bool> {
         self.write_uninit(dest)?; // make sure all the padding ends up as uninit
         let (variant_index, variant_dest, active_field_index) = match *kind {
             mir::AggregateKind::Adt(_, variant_index, _, _, active_field_index) => {
@@ -308,8 +387,10 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                     bug!("{kind:?} should have 2 operands, had {operands:?}");
                 };
                 let data = self.eval_operand(data, None)?;
+                let is_data_unsafe = self.is_rvalue_op_unsafe(&data);
                 let data = self.read_pointer(&data)?;
                 let meta = self.eval_operand(meta, None)?;
+                let is_meta_unsafe = self.is_rvalue_op_unsafe(&meta);
                 let meta = if meta.layout.is_zst() {
                     MemPlaceMeta::None
                 } else {
@@ -318,20 +399,23 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let ptr_imm = Immediate::new_pointer_with_meta(data, meta, self);
                 let ptr = ImmTy::from_immediate(ptr_imm, dest.layout);
                 self.copy_op(&ptr, dest)?;
-                return interp_ok(());
+                return interp_ok(is_data_unsafe || is_meta_unsafe);
             }
             _ => (FIRST_VARIANT, dest.clone(), None),
         };
         if active_field_index.is_some() {
             assert_eq!(operands.len(), 1);
         }
+        let mut is_rvalue_unsafe = false;
         for (field_index, operand) in operands.iter_enumerated() {
             let field_index = active_field_index.unwrap_or(field_index);
             let field_dest = self.project_field(&variant_dest, field_index.as_usize())?;
             let op = self.eval_operand(operand, Some(field_dest.layout))?;
+            is_rvalue_unsafe |= self.is_rvalue_op_unsafe(&op);
             self.copy_op(&op, &field_dest)?;
         }
-        self.write_discriminant(variant_index, dest)
+        let _ =self.write_discriminant(variant_index, dest)?;
+        interp_ok(is_rvalue_unsafe)
     }
 
     /// Repeats `operand` into the destination. `dest` must have array type, and that type
@@ -340,8 +424,9 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         &mut self,
         operand: &mir::Operand<'tcx>,
         dest: &PlaceTy<'tcx, M::Provenance>,
-    ) -> InterpResult<'tcx> {
+    ) -> InterpResult<'tcx, bool> {
         let src = self.eval_operand(operand, None)?;
+        let is_rvalue_unsafe = self.is_rvalue_op_unsafe(&src);
         assert!(src.layout.is_sized());
         let dest = self.force_allocation(&dest)?;
         let length = dest.len(self)?;
@@ -370,7 +455,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             )?;
         }
 
-        interp_ok(())
+        interp_ok(is_rvalue_unsafe)
     }
 
     /// Evaluate the arguments of a function call

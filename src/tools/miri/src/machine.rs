@@ -1605,6 +1605,11 @@ impl<'tcx> Machine<'tcx> for MiriMachine<'tcx> {
         {
             data_race.local_moved_to_memory(local, alloc_info.data_race.as_mut().unwrap(), machine);
         }
+        {
+
+            ecx.frame_mut().map_alloc_id_to_local(alloc_id, local);
+                    
+        }
         interp_ok(())
     }
 

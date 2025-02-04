@@ -1505,9 +1505,8 @@ impl Step for Libunwind {
             let file = entry.unwrap().path().canonicalize().unwrap();
             if file.is_file() && file.extension() == Some(OsStr::new("o")) {
                 //  Object file name without the hash prefix is "Unwind-EHABI", "Unwind-seh" or "libunwind".
-                //println!("libunwind file name: {:?}", file);
-                let base_name = file.file_stem().unwrap().to_str().unwrap();
-                //let base_name = unhashed_basename(&file);
+                //let base_name = file.file_stem().unwrap().to_str().unwrap();
+                let base_name = unhashed_basename(&file);
                 if cpp_sources.iter().any(|f| {
                     //    println!("source: {}, base_name:{}", f, base_name);
                     *base_name == f[..f.len() - 4]

@@ -585,6 +585,13 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             }
             // Need to allocate some memory, since `Immediate::Uninit` cannot be unsized.
             let dest_place = self.allocate_dyn(layout, MemoryKind::Stack, meta)?;
+            {
+                //store this alloc id
+                 let _ = self.ptr_get_alloc_id(dest_place.ptr(), 0).and_then(|(alloc_id, _,_)|{
+                    self.frame_mut().map_alloc_id_to_local(alloc_id, local);
+                    interp_ok(())
+                 }) ;
+            }
             Operand::Indirect(*dest_place.mplace())
         } else {
             // Just make this an efficient immediate.
