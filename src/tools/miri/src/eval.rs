@@ -1,8 +1,8 @@
 //! Main evaluator loop and setting up the initial stack frame.
 
 use std::ffi::{OsStr, OsString};
-use std::fs::File;
-use std::io::Write;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
 use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::task::Poll;
@@ -284,6 +284,7 @@ pub fn create_ecx<'tcx>(
         for c in tcx.crates(()).iter() {
             let cname = tcx.crate_name(*c).to_string();
             if config.track_unsafety_target_crates.contains(&cname) {
+                println!("target: {cname}, cnum: {c}");
                 unsafety_tracking_crates.insert(*c);
             }
         }
@@ -443,16 +444,52 @@ pub fn create_ecx<'tcx>(
     interp_ok(ecx)
 }
 
+type MiriUnsafes = FxHashMap<u32, FxHashSet<u32>>;
+type MiriResult = FxHashMap<String, MiriUnsafes>;
+
 fn output_unsafety_tracking_result_to_json<'tcx>(
     ecx: &InterpCx<'tcx, MiriMachine<'tcx>>,
     output_dir: &Path,
 ) -> std::io::Result<()> {
+    //println!("output result...");
     let to_key = |def_id: DefId| ecx.tcx.crate_name(def_id.krate).to_string();
 
-    let mut result: FxHashMap<String, FxHashMap<u32 /*DefIndex*/, FxHashSet<u32 /*Local*/>>> =
-        FxHashMap::default();
+    let mut output = output_dir.to_path_buf();
+    output.push("miri_unsafety_result.json");
+    let mut result: MiriResult = FxHashMap::default();
+
+    let merge_results = |to: &mut MiriUnsafes, from: &MiriUnsafes| {
+        for (did, uls) in from.iter() {
+            let to_set = to.entry(*did).or_insert_with(FxHashSet::default);
+            uls.iter().for_each(|l| {
+                to_set.insert(*l);
+            });
+        }
+    };
+
+    // first read existing result
+    if output.exists() {
+        let mut file = File::open(output.as_path());
+        if let Ok(f) = file.as_mut() {
+            let mut json_content = String::new();
+            if f.read_to_string(&mut json_content)
+                .expect(format!("cannot read existing miri result file {:?}", output).as_str())
+                > 0
+            {
+                let existing: MiriResult = serde_json::from_str(&json_content)
+                    .expect(format!("cant deserialize result : {}", json_content).as_str());
+                for (cname, ulocals) in &existing {
+                    let u1 = result.entry(cname.clone()).or_insert_with(FxHashMap::default);
+                    merge_results(u1, ulocals);
+                }
+            }
+        }
+    }
+
     for (def_id, locals) in ecx.def_id_to_unsafe_local.iter() {
+        //println!("def id {:?}, unsafe locals: {:?}", def_id, locals);
         let crate_name = to_key(*def_id);
+
         let idx = def_id.index;
 
         for loc in locals {
@@ -474,9 +511,8 @@ fn output_unsafety_tracking_result_to_json<'tcx>(
 
     //println!("output: {}", j);
 
-    let mut output = output_dir.to_path_buf();
-    output.push("miri_unsafety_result.json");
-    let mut file = File::create(output)?;
+    let mut file =
+        OpenOptions::new().append(false).write(true).create(true).open(output.as_path())?;
 
     // Write some text to the file
     file.write_all(j.as_bytes())?;
@@ -504,6 +540,9 @@ pub fn eval_entry<'tcx>(
             panic!("Miri initialization error: {kind:?}")
         }
     };
+
+    println!("unsafety tracking enabled: {}", !config.track_unsafety_target_crates.is_empty());
+    config.track_unsafety_target_crates.iter().for_each(|c| println!("target: {c}"));
 
     // Perform the main execution.
     let res: thread::Result<InterpResult<'_, !>> =

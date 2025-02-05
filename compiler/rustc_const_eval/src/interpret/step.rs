@@ -96,6 +96,10 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         let is_stmt_unsafe = self.is_statement_unsafe(stmt);
         let is_unsafety_tracking_enabled = self.if_tracking_unsafety();
 
+        if is_unsafety_tracking_enabled && is_stmt_unsafe {
+            //   println!("unsafe stmt in target: {:?}", stmt);
+        }
+
         match &stmt.kind {
             Assign(box (place, rvalue)) => self.eval_rvalue_into_place(
                 rvalue,
@@ -188,6 +192,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
     }
 
     pub fn mark_unsafe_local(&mut self, id: DefId, local: Local) {
+        //println!("local {:?} in defid {:?} is unsafe", local, id);
         self.def_id_to_unsafe_local.entry(id).or_insert_with(FxHashSet::default).insert(local);
     }
     pub fn mark_alloc_id_local_unsafe(&mut self, id: DefId, alloc_id: AllocId) {
