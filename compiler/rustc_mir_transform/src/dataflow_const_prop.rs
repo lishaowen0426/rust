@@ -5,12 +5,12 @@
 use std::assert_matches::assert_matches;
 use std::fmt::Formatter;
 
-use rustc_abi::{BackendRepr, FIRST_VARIANT, FieldIdx, Size, VariantIdx};
-use rustc_const_eval::const_eval::{DummyMachine, throw_machine_stop_str};
+use rustc_abi::{BackendRepr, FieldIdx, Size, VariantIdx, FIRST_VARIANT};
+use rustc_const_eval::const_eval::{throw_machine_stop_str, DummyMachine};
 use rustc_const_eval::interpret::{
-    ImmTy, Immediate, InterpCx, OpTy, PlaceTy, Projectable, interp_ok,
+    interp_ok, ImmTy, Immediate, InterpCx, OpTy, PlaceTy, Projectable,
 };
-use rustc_data_structures::fx::FxHashMap;
+use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_hir::def::DefKind;
 use rustc_middle::bug;
 use rustc_middle::mir::interpret::{InterpResult, Scalar};
@@ -21,7 +21,7 @@ use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_mir_dataflow::fmt::DebugWithContext;
 use rustc_mir_dataflow::lattice::{FlatSet, HasBottom};
 use rustc_mir_dataflow::value_analysis::{
-    Map, PlaceIndex, State, TrackElem, ValueOrPlace, debug_with_context,
+    debug_with_context, Map, PlaceIndex, State, TrackElem, ValueOrPlace,
 };
 use rustc_mir_dataflow::{Analysis, Results, ResultsVisitor};
 use rustc_span::DUMMY_SP;
@@ -149,7 +149,7 @@ impl<'a, 'tcx> ConstAnalysis<'a, 'tcx> {
             map,
             tcx,
             local_decls: &body.local_decls,
-            ecx: InterpCx::new(tcx, DUMMY_SP, typing_env, DummyMachine),
+            ecx: InterpCx::new(tcx, DUMMY_SP, typing_env, DummyMachine, FxHashSet::default()),
             typing_env,
         }
     }

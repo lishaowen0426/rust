@@ -4,18 +4,18 @@ use either::{Left, Right};
 use rustc_abi::{Align, HasDataLayout, Size, TargetDataLayout};
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_errors::DiagCtxtHandle;
-use rustc_hir::def_id::DefId;
+use rustc_hir::def_id::{CrateNum, DefId};
 use rustc_infer::infer::at::ToTrace;
 use rustc_infer::infer::TyCtxtInferExt;
 use rustc_infer::traits::ObligationCause;
 use rustc_middle::mir::interpret::{ErrorHandled, InvalidMetaKind, ReportedErrorInfo};
+use rustc_middle::mir::Local;
 use rustc_middle::query::TyCtxtAt;
 use rustc_middle::ty::layout::{
     self, FnAbiError, FnAbiOfHelpers, FnAbiRequest, LayoutError, LayoutOfHelpers, TyAndLayout,
 };
 use rustc_middle::ty::{self, GenericArgsRef, Ty, TyCtxt, TypeFoldable, TypingEnv, Variance};
 use rustc_middle::{mir, span_bug};
-use rustc_middle::mir::Local;
 use rustc_session::Limit;
 use rustc_span::Span;
 use rustc_target::callconv::FnAbi;
@@ -50,7 +50,8 @@ pub struct InterpCx<'tcx, M: Machine<'tcx>> {
     /// The recursion limit (cached from `tcx.recursion_limit(())`)
     pub recursion_limit: Limit,
 
-    pub is_tracking_unsafety_enabled: bool,
+    /// unsafety tracking targets
+    pub unsafety_tracking_crates: FxHashSet<CrateNum>,
 
     /// map from a def id to its unsafe locals
     pub def_id_to_unsafe_local: FxHashMap<DefId, FxHashSet<Local>>,
@@ -201,6 +202,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         root_span: Span,
         typing_env: ty::TypingEnv<'tcx>,
         machine: M,
+        unsafety_tracking_crates: FxHashSet<CrateNum>,
     ) -> Self {
         // Const eval always happens in post analysis mode in order to be able to use the hidden types of
         // opaque types. This is needed for trivial things like `size_of`, but also for using associated
@@ -213,12 +215,9 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             typing_env,
             memory: Memory::new(),
             recursion_limit: tcx.recursion_limit(),
-            is_tracking_unsafety_enabled: false,
+            def_id_to_unsafe_local: FxHashMap::default(),
+            unsafety_tracking_crates,
         }
-    }
-
-    pub fn enable_safety_tracking(&mut self) {
-        self.is_tracking_unsafety_enabled = true;
     }
 
     /// Returns the span of the currently executed statement/terminator.

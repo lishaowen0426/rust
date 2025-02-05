@@ -526,15 +526,30 @@ fn main() {
                 "warn" => miri::IsolatedOp::Reject(miri::RejectOpWith::Warning),
                 "warn-nobacktrace" =>
                     miri::IsolatedOp::Reject(miri::RejectOpWith::WarningWithoutBacktrace),
-                _ => show_error!(
+                _ =>
+                    show_error!(
                     "-Zmiri-isolation-error must be `abort`, `hide`, `warn`, or `warn-nobacktrace`"
                 ),
             };
         } else if arg == "-Zmiri-ignore-leaks" {
             miri_config.ignore_leaks = true;
             miri_config.collect_leak_backtraces = false;
-        } else if arg == "-Zmiri-track-unsafety" {
-            miri_config.track_unsafety = true;
+        } else if let Some(param) = arg.strip_prefix("-Zmiri-unsafety-target=") {
+            let targets: Vec<String> = match parse_comma_list(param) {
+                Ok(t) => t,
+                Err(err) =>
+                    show_error!(
+                        "-Zmiri-unsafety-target requires a comma separated list of valid crate names: {}",
+                        err
+                    ),
+            };
+            for c in targets {
+                //println!("{}", c);
+                miri_config.track_unsafety_target_crates.insert(c);
+            }
+        } else if let Some(param) = arg.strip_prefix("-Zmiri-unsafety-output=") {
+            let output = PathBuf::from(param);
+            miri_config.track_unsafety_output = Some(output);
         } else if arg == "-Zmiri-strict-provenance" {
             miri_config.provenance_mode = ProvenanceMode::Strict;
         } else if arg == "-Zmiri-permissive-provenance" {

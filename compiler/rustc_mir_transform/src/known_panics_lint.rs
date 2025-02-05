@@ -7,13 +7,13 @@ use std::fmt::Debug;
 use rustc_abi::{BackendRepr, FieldIdx, HasDataLayout, Size, TargetDataLayout, VariantIdx};
 use rustc_const_eval::const_eval::DummyMachine;
 use rustc_const_eval::interpret::{
-    ImmTy, InterpCx, InterpResult, Projectable, Scalar, format_interp_error, interp_ok,
+    format_interp_error, interp_ok, ImmTy, InterpCx, InterpResult, Projectable, Scalar,
 };
 use rustc_data_structures::fx::FxHashSet;
-use rustc_hir::HirId;
 use rustc_hir::def::DefKind;
-use rustc_index::IndexVec;
+use rustc_hir::HirId;
 use rustc_index::bit_set::BitSet;
+use rustc_index::IndexVec;
 use rustc_middle::bug;
 use rustc_middle::mir::visit::{MutatingUseContext, NonMutatingUseContext, PlaceContext, Visitor};
 use rustc_middle::mir::*;
@@ -183,7 +183,13 @@ impl<'mir, 'tcx> ConstPropagator<'mir, 'tcx> {
         // to runtime, so we have to manually specify the correct typing mode.
         let typing_env = ty::TypingEnv::post_analysis(tcx, body.source.def_id());
         let can_const_prop = CanConstProp::check(tcx, typing_env, body);
-        let ecx = InterpCx::new(tcx, tcx.def_span(def_id), typing_env, DummyMachine);
+        let ecx = InterpCx::new(
+            tcx,
+            tcx.def_span(def_id),
+            typing_env,
+            DummyMachine,
+            FxHashSet::default(),
+        );
 
         ConstPropagator {
             ecx,
@@ -296,11 +302,12 @@ impl<'mir, 'tcx> ConstPropagator<'mir, 'tcx> {
         let source_info = self.body.source_info(location);
         if let Some(lint_root) = self.lint_root(*source_info) {
             let span = source_info.span;
-            self.tcx.emit_node_span_lint(lint_kind.lint(), lint_root, span, AssertLint {
+            self.tcx.emit_node_span_lint(
+                lint_kind.lint(),
+                lint_root,
                 span,
-                assert_kind,
-                lint_kind,
-            });
+                AssertLint { span, assert_kind, lint_kind },
+            );
         }
     }
 

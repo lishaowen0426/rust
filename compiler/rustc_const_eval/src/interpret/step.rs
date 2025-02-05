@@ -3,25 +3,26 @@
 //! The main entry point is the `step` method.
 
 use either::Either;
-use rustc_abi::{FieldIdx, FIRST_VARIANT};
+use rustc_abi::{BackendRepr, FieldIdx, FIRST_VARIANT};
+use rustc_data_structures::fx::FxHashSet;
 use rustc_index::IndexSlice;
-use crate::interpret::OpTy;
-use rustc_middle::ty::layout::FnAbiOf;
+use rustc_middle::mir::interpret::{AllocId, Pointer};
+use rustc_middle::mir::Local;
+use rustc_middle::ty::layout::{FnAbiOf, HasTyCtxt, LayoutOf, TyAndLayout};
 use rustc_middle::ty::{self, Instance, Ty};
 use rustc_middle::{bug, mir, span_bug};
-use rustc_middle::mir::Local;
+use rustc_span::def_id::DefId;
 use rustc_span::source_map::Spanned;
+use rustc_target::abi;
 use rustc_target::callconv::FnAbi;
 use tracing::{info, instrument, trace};
-use rustc_middle::mir::interpret::AllocId;
-use rustc_span::def_id::DefId;
-use super::operand::Operand;
-use rustc_data_structures::fx::FxHashSet;
 
+use super::operand::Operand;
 use super::{
-    interp_ok, throw_ub, FnArg, FnVal, ImmTy, Immediate, InterpCx, InterpResult, Machine,
+    interp_ok, throw_ub, FnArg, FnVal, ImmTy, Immediate, InterpCx, InterpResult, MPlaceTy, Machine,
     MemPlaceMeta, PlaceTy, Projectable, Scalar,
 };
+use crate::interpret::OpTy;
 use crate::util;
 
 struct EvaluatedCalleeAndArgs<'tcx, M: Machine<'tcx>> {
@@ -76,8 +77,8 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         interp_ok(true)
     }
 
-    pub fn if_tracking_unsafety(&self) ->bool {
-        self.is_tracking_unsafety_enabled && self.body().source.def_id().is_local()
+    pub fn if_tracking_unsafety(&self) -> bool {
+        self.unsafety_tracking_crates.contains(&self.body().source.def_id().krate)
     }
 
     pub fn is_statement_unsafe(&self, stmt: &mir::Statement<'tcx>) -> bool {
@@ -92,9 +93,16 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         info!("{:?}", stmt);
 
         use rustc_middle::mir::StatementKind::*;
+        let is_stmt_unsafe = self.is_statement_unsafe(stmt);
+        let is_unsafety_tracking_enabled = self.if_tracking_unsafety();
 
         match &stmt.kind {
-            Assign(box (place, rvalue)) => self.eval_rvalue_into_place(rvalue, *place)?,
+            Assign(box (place, rvalue)) => self.eval_rvalue_into_place(
+                rvalue,
+                *place,
+                is_stmt_unsafe,
+                is_unsafety_tracking_enabled,
+            )?,
 
             SetDiscriminant { place, variant_index } => {
                 let dest = self.eval_place(**place)?;
@@ -108,6 +116,10 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
 
             // Mark locals as alive
             StorageLive(local) => {
+                if is_stmt_unsafe && is_unsafety_tracking_enabled {
+                    let def_id = self.body().source.def_id();
+                    self.mark_unsafe_local(def_id, *local);
+                }
                 self.storage_live(*local)?;
             }
 
@@ -166,15 +178,13 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
     }
 
     pub fn is_rvalue_op_unsafe(&self, op: &OpTy<'tcx, M::Provenance>) -> bool {
-            match op.op() {
-                Operand::Immediate(_imm) => false,
-                Operand::Indirect(mplace) => {
-                    self.ptr_get_alloc_id(mplace.ptr,0).discard_err().is_some_and(|(alloc_id, _,_)|{
-                        self.frame().is_alloc_id_unsafe(alloc_id)
-                    })
-                }
-            }
-            
+        match op.op() {
+            Operand::Immediate(_imm) => false,
+            Operand::Indirect(mplace) => self
+                .ptr_get_alloc_id(mplace.ptr, 0)
+                .discard_err()
+                .is_some_and(|(alloc_id, _, _)| self.frame().is_alloc_id_unsafe(alloc_id)),
+        }
     }
 
     pub fn mark_unsafe_local(&mut self, id: DefId, local: Local) {
@@ -190,13 +200,22 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             self.mark_unsafe_local(id, loc);
         }
     }
+
+    pub fn mark_mplace_unsafe(&mut self, mplace: &MPlaceTy<'tcx, M::Provenance>) {
+        let def_id = self.body().source.def_id();
+        if let Some((alloc_id, _, _)) = self.ptr_get_alloc_id(mplace.mplace().ptr, 0).discard_err()
+        {
+            self.mark_alloc_id_local_unsafe(def_id, alloc_id);
+            self.frame_mut().mark_alloc_id_unsafe(alloc_id);
+        }
+    }
     pub fn mark_place_unsafe(&mut self, place: &PlaceTy<'tcx, M::Provenance>) {
         use crate::interpret::place::Place;
 
         let def_id = self.body().source.def_id();
         match place.place() {
             Place::Ptr(mplace) => {
-                if let Some((alloc_id, _, _)) = self.ptr_get_alloc_id(mplace.ptr,0).discard_err() {
+                if let Some((alloc_id, _, _)) = self.ptr_get_alloc_id(mplace.ptr, 0).discard_err() {
                     self.mark_alloc_id_local_unsafe(def_id, alloc_id);
                     self.frame_mut().mark_alloc_id_unsafe(alloc_id);
                 }
@@ -205,7 +224,9 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 if let Some(op) = self.frame().locals[*local].access().discard_err() {
                     match op {
                         Operand::Indirect(mplace) => {
-                            if let Some((alloc_id, _, _)) = self.ptr_get_alloc_id(mplace.ptr,0).discard_err() {
+                            if let Some((alloc_id, _, _)) =
+                                self.ptr_get_alloc_id(mplace.ptr, 0).discard_err()
+                            {
                                 self.mark_alloc_id_local_unsafe(def_id, alloc_id);
                                 self.frame_mut().mark_alloc_id_unsafe(alloc_id);
                             }
@@ -226,6 +247,8 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         &mut self,
         rvalue: &mir::Rvalue<'tcx>,
         place: mir::Place<'tcx>,
+        is_stmt_unsafe: bool,
+        is_unsafety_tracking_enabled: bool,
     ) -> InterpResult<'tcx> {
         let dest = self.eval_place(place)?;
         // FIXME: ensure some kind of non-aliasing between LHS and RHS?
@@ -279,13 +302,9 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 false
             }
 
-            Aggregate(box ref kind, ref operands) => {
-                self.write_aggregate(kind, operands, &dest)?
-            }
+            Aggregate(box ref kind, ref operands) => self.write_aggregate(kind, operands, &dest)?,
 
-            Repeat(ref operand, _) => {
-                self.write_repeat(operand, &dest)?
-            }
+            Repeat(ref operand, _) => self.write_repeat(operand, &dest)?,
 
             Len(place) => {
                 let src = self.eval_place(place)?;
@@ -357,9 +376,10 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             }
         };
 
-
-
         trace!("{:?}", self.dump_place(&dest));
+        if is_unsafety_tracking_enabled && (is_stmt_unsafe || is_rvalue_unsafe) {
+            self.mark_place_unsafe(&dest);
+        }
 
         interp_ok(())
     }
@@ -414,7 +434,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             is_rvalue_unsafe |= self.is_rvalue_op_unsafe(&op);
             self.copy_op(&op, &field_dest)?;
         }
-        let _ =self.write_discriminant(variant_index, dest)?;
+        let _ = self.write_discriminant(variant_index, dest)?;
         interp_ok(is_rvalue_unsafe)
     }
 
@@ -458,15 +478,326 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         interp_ok(is_rvalue_unsafe)
     }
 
+    fn mark_adt_ptr_field_pointee_unsafe(
+        &mut self,
+        def_id: DefId,
+        ptr: Pointer<Option<M::Provenance>>,
+        adt_ty: Ty<'tcx>,
+    ) {
+        if adt_ty.is_adt() {
+            let adt = self.layout_of(adt_ty).expect("cannot find layout of adt ty");
+            if let &ty::Adt(adt_def, ga) = adt.ty.kind() {
+                if adt_def.is_struct() {
+                    match &adt.layout.fields {
+                        abi::FieldsShape::Arbitrary { offsets, .. } => {
+                            //just safety check
+                            if adt_def.all_fields().count() != offsets.len() {
+                                bug!(
+                                    "layout offsets len: {:?}, adt_def.all_fields.count: {:?}",
+                                    offsets.len(),
+                                    adt_def.all_fields().count()
+                                );
+                            }
+
+                            for (idx, (size, field_def)) in
+                                offsets.iter().zip(adt_def.all_fields()).enumerate()
+                            {
+                                let field_ty = field_def.ty(self.tcx(), ga);
+                                info!("{:?}, ty: {:?}", idx, field_ty);
+                                if field_ty.is_mutable_ptr() {
+                                    let field_ptr = ptr.wrapping_offset(*size, self);
+                                    // field_ptr points to the field, we need to further
+                                    // read the pointer it points to, not field_ptr itself.
+                                    let field_layout =
+                                        self.layout_of(field_ty).expect("cannot read field layout");
+
+                                    match self
+                                        .read_immediate(
+                                            &self.ptr_to_mplace(field_ptr, field_layout),
+                                        )
+                                        .discard_err()
+                                    {
+                                        Some(imm) => {
+                                            match *imm {
+                                                Immediate::Scalar(s) => {
+                                                    self.mark_scalar_unsafe_allocation(
+                                                        s,
+                                                        field_layout,
+                                                        def_id,
+                                                    );
+                                                }
+                                                Immediate::ScalarPair(s1, s2) => {
+                                                    self.mark_scalar_pair_unsafe_allocation(
+                                                        s1,
+                                                        s2,
+                                                        field_layout,
+                                                        def_id,
+                                                    );
+                                                }
+                                                Immediate::Uninit => {
+                                                    bug!("encounter unint scalae");
+                                                }
+                                            };
+                                        }
+                                        None => {
+                                            trace!(
+                                                "cannot read immediate from a field. adt ptr: {:?}, field_ptr:{:?}, adt_def:{:?}, field_def:{:?}, field_layout:{:?}",
+                                                ptr,
+                                                field_ptr,
+                                                adt_def,
+                                                field_def,
+                                                field_layout,
+                                            );
+                                        }
+                                    };
+                                } else if field_ty.is_adt() {
+                                    let field_ptr = ptr.wrapping_offset(*size, self);
+                                    self.mark_adt_ptr_field_pointee_unsafe(
+                                        def_id, field_ptr, field_ty,
+                                    );
+                                }
+                            }
+                        }
+                        abi::FieldsShape::Union(_) => {}
+                        _ => {
+                            bug!(
+                                "adt_ty: {:?}, adt_layout.fields: {:?}",
+                                adt_ty,
+                                adt.layout.fields
+                            );
+                        }
+                    }
+                } else {
+                    info!("only implemented for struct, not union/enum");
+                }
+            } else {
+                bug!("adt_ty.kind: {:?}, adt_layout.ty.kind: {:?}", adt_ty.kind(), adt.ty.kind());
+            }
+        } else {
+            bug!("type should be adt, passed: {:?}", adt_ty);
+        }
+    }
+
+    fn mark_scalar_unsafe_allocation(
+        &mut self,
+        s: Scalar<M::Provenance>,
+        layout: TyAndLayout<'tcx>,
+        def_id: DefId,
+    ) {
+        match s {
+            Scalar::Ptr(ptr, _) => {
+                if !layout.ty.is_any_ptr() {
+                    trace!("scalar is ptr but layout.ty is not any ptr:{:?}", layout.ty,);
+                }
+                if layout.ty.is_mutable_ptr() {
+                    if let Some((alloc_id, _, _)) =
+                        self.ptr_get_alloc_id((ptr).into(), 0).discard_err()
+                    {
+                        self.mark_alloc_id_local_unsafe(def_id, alloc_id);
+                    }
+
+                    if let Some(type_and_mut) = layout.ty.builtin_deref(true) {
+                        info!("pointee type and mut:{:?}", type_and_mut);
+                        if type_and_mut.is_adt() {
+                            self.mark_adt_ptr_field_pointee_unsafe(
+                                def_id,
+                                ptr.into(),
+                                type_and_mut,
+                            );
+                        }
+                    }
+                }
+            }
+            Scalar::Int(s) if layout.ty.is_mutable_ptr() => {
+                // type is ptr, but the value is stored as int in runtime
+                // try to inteprete the value as a pointer..
+                let addr = s.to_target_usize(self.tcx());
+                let p =
+                    M::ptr_from_addr_cast(self, addr).expect("addr cannot be casted into pointer");
+                if let Ok((alloc_id, _, _)) = self.ptr_try_get_alloc_id(p, 0) {
+                    self.mark_alloc_id_local_unsafe(def_id, alloc_id);
+                }
+
+                if let Some(type_and_mut) = layout.ty.builtin_deref(true) {
+                    info!("pointee type and mut:{:?}", type_and_mut);
+                    if type_and_mut.is_adt() {
+                        self.mark_adt_ptr_field_pointee_unsafe(def_id, p, type_and_mut);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn mark_scalar_pair_unsafe_allocation(
+        &mut self,
+        s1: Scalar<M::Provenance>,
+        s2: Scalar<M::Provenance>,
+        layout: TyAndLayout<'tcx>,
+        def_id: DefId,
+    ) {
+        let (ty1, ty2) = match &layout.fields {
+            abi::FieldsShape::Arbitrary { offsets, .. } => {
+                if offsets.len() != 2 {
+                    bug!("scalar pair layout FieldsShape::Arbitrary.offsets.len={}", offsets.len());
+                }
+                (layout.field(&*self, 0), layout.field(&*self, 1))
+            }
+            _ => {
+                bug!(
+                    "scalar pair layout fieldshape is not FieldsShape::Arbitrary, it is {:?}",
+                    &layout.fields
+                );
+            }
+        };
+
+        info!("s1:{:?}, ty1: {:?}, s2:{:?}, ty2:{:?}, layout:{:?}", s1, ty1, s2, ty2, layout);
+        let mut mark_scalar =
+            |abi: abi::Scalar, s: Scalar<M::Provenance>, ty: TyAndLayout<'tcx>| match abi {
+                abi::Scalar::Initialized { value, .. } => {
+                    if let abi::Primitive::Pointer(_) = value {
+                        match s {
+                            Scalar::Ptr(ptr, _) => {
+                                if let Some((alloc_id, _, _)) =
+                                    self.ptr_get_alloc_id((ptr).into(), 0).discard_err()
+                                {
+                                    self.mark_alloc_id_local_unsafe(def_id, alloc_id);
+                                }
+                                if let Some(type_and_mut) = ty.ty.builtin_deref(true) {
+                                    if type_and_mut.is_adt() {
+                                        self.mark_adt_ptr_field_pointee_unsafe(
+                                            def_id,
+                                            ptr.into(),
+                                            type_and_mut,
+                                        );
+                                    }
+                                }
+                            }
+                            _ => {
+                                bug!("abi is a pointer but scalar is not");
+                            }
+                        }
+                    }
+                }
+                abi::Scalar::Union { .. } => match s {
+                    Scalar::Ptr(ptr, _) => {
+                        if let Some((alloc_id, _, _)) =
+                            self.ptr_get_alloc_id((ptr).into(), 0).discard_err()
+                        {
+                            self.mark_alloc_id_local_unsafe(def_id, alloc_id);
+                        }
+                        if let Some(type_and_mut) = ty.ty.builtin_deref(true) {
+                            if type_and_mut.is_adt() {
+                                self.mark_adt_ptr_field_pointee_unsafe(
+                                    def_id,
+                                    ptr.into(),
+                                    type_and_mut,
+                                );
+                            }
+                        }
+                    }
+                    _ => {}
+                },
+            };
+
+        match layout.layout.backend_repr {
+            BackendRepr::ScalarPair(a, b) => {
+                //check a and b, the abi tells whether they are pointers
+                mark_scalar(a, s1, ty1);
+                mark_scalar(b, s2, ty2);
+            }
+            _ => {
+                bug!(
+                    "scalar is pair but layout backend repr is not: {:?}",
+                    layout.layout.backend_repr
+                );
+            }
+        }
+    }
+
+    fn eval_fn_call_place_unsafey(&mut self, place: &PlaceTy<'tcx, M::Provenance>) {
+        use super::{Immediate, Place};
+        let def_id = self.body().source.def_id();
+        let layout = place.layout;
+
+        match place.place() {
+            Place::Ptr(mplace) => {
+                info!("mplace: {:?}", mplace);
+                if layout.ty.is_any_ptr() {
+                    bug!("pointer operand are passed as Place::Ptr not Place::Local");
+                }
+                if layout.ty.is_adt() {
+                    self.mark_adt_ptr_field_pointee_unsafe(def_id, mplace.ptr, layout.ty);
+                }
+            }
+            Place::Local { local, .. } => {
+                // &mut T or *mut T are passed as Operand::Immediate
+                // T (if "very big") is passed as Operand::Indirect
+                if let Some(op) = self.frame().locals[*local].access().discard_err().cloned() {
+                    info!("local:{:?}, op: {:?}, layout: {:?}", local, op, layout,);
+                    if layout.ty.is_any_ptr() {
+                        info!("deref ty: {:?}", layout.ty.builtin_deref(true));
+                    }
+                    match op {
+                        Operand::Immediate(Immediate::Scalar(s)) => {
+                            self.mark_scalar_unsafe_allocation(s, layout, def_id);
+                        }
+                        Operand::Immediate(Immediate::ScalarPair(s1, s2)) => {
+                            self.mark_scalar_pair_unsafe_allocation(s1, s2, layout, def_id);
+                        }
+                        Operand::Immediate(Immediate::Uninit) => {}
+                        Operand::Indirect(mplace) => {
+                            if layout.ty.is_adt() {
+                                self.mark_adt_ptr_field_pointee_unsafe(
+                                    def_id, mplace.ptr, layout.ty,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn eval_fn_call_operand_unsafey(&mut self, op: &OpTy<'tcx, M::Provenance>) {
+        let def_id = self.body().source.def_id();
+        let layout = op.layout;
+        match op.as_mplace_or_imm() {
+            either::Either::Left(mplace) => {
+                if layout.ty.is_adt() {
+                    self.mark_adt_ptr_field_pointee_unsafe(def_id, mplace.mplace().ptr, layout.ty);
+                }
+            }
+            either::Either::Right(imm) => {
+                match *imm {
+                    Immediate::Scalar(s) => {
+                        self.mark_scalar_unsafe_allocation(s, imm.layout, def_id);
+                    }
+                    Immediate::ScalarPair(s1, s2) => {
+                        self.mark_scalar_pair_unsafe_allocation(s1, s2, imm.layout, def_id);
+                    }
+                    Immediate::Uninit => {
+                        //it is possible that a copied operand is uninit
+                    }
+                };
+            }
+        }
+    }
+
     /// Evaluate the arguments of a function call
     fn eval_fn_call_argument(
-        &self,
+        &mut self,
         op: &mir::Operand<'tcx>,
+        is_safety_tracking_enabled: bool,
+        is_fn_call_unsafe: bool,
     ) -> InterpResult<'tcx, FnArg<'tcx, M::Provenance>> {
         interp_ok(match op {
             mir::Operand::Copy(_) | mir::Operand::Constant(_) => {
                 // Make a regular copy.
                 let op = self.eval_operand(op, None)?;
+                if is_safety_tracking_enabled && is_fn_call_unsafe {
+                    self.eval_fn_call_operand_unsafey(&op);
+                }
                 FnArg::Copy(op)
             }
             mir::Operand::Move(place) => {
@@ -478,7 +809,12 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let op = self.place_to_op(&place)?;
 
                 match op.as_mplace_or_imm() {
-                    Either::Left(mplace) => FnArg::InPlace(mplace),
+                    Either::Left(mplace) => {
+                        if is_safety_tracking_enabled && is_fn_call_unsafe {
+                            self.eval_fn_call_place_unsafey(&place);
+                        }
+                        FnArg::InPlace(mplace)
+                    }
                     Either::Right(_imm) => {
                         // This argument doesn't live in memory, so there's no place
                         // to make inaccessible during the call.
@@ -486,6 +822,9 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                         // caller directly access this local!
                         // This is also crucial for tail calls, where we want the `FnArg` to
                         // stay valid when the old stack frame gets popped.
+                        if is_safety_tracking_enabled && is_fn_call_unsafe {
+                            self.eval_fn_call_operand_unsafey(&op);
+                        }
                         FnArg::Copy(op)
                     }
                 }
@@ -496,19 +835,27 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
     /// Shared part of `Call` and `TailCall` implementation — finding and evaluating all the
     /// necessary information about callee and arguments to make a call.
     fn eval_callee_and_args(
-        &self,
+        &mut self,
         terminator: &mir::Terminator<'tcx>,
         func: &mir::Operand<'tcx>,
         args: &[Spanned<mir::Operand<'tcx>>],
+        is_safety_tracking_enabled: bool,
+        is_terminator_unsafe: bool,
     ) -> InterpResult<'tcx, EvaluatedCalleeAndArgs<'tcx, M>> {
         let func = self.eval_operand(func, None)?;
-        let args = args
-            .iter()
-            .map(|arg| self.eval_fn_call_argument(&arg.node))
-            .collect::<InterpResult<'tcx, Vec<_>>>()?;
-
         let fn_sig_binder = func.layout.ty.fn_sig(*self.tcx);
         let fn_sig = self.tcx.normalize_erasing_late_bound_regions(self.typing_env, fn_sig_binder);
+        let args = args
+            .iter()
+            .map(|arg| {
+                self.eval_fn_call_argument(
+                    &arg.node,
+                    is_safety_tracking_enabled,
+                    is_terminator_unsafe,
+                )
+            })
+            .collect::<InterpResult<'tcx, Vec<_>>>()?;
+
         let extra_args = &args[fn_sig.inputs().len()..];
         let extra_args =
             self.tcx.mk_type_list_from_iter(extra_args.iter().map(|arg| arg.layout().ty));
@@ -535,9 +882,15 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
         interp_ok(EvaluatedCalleeAndArgs { callee, args, fn_sig, fn_abi, with_caller_location })
     }
 
+    pub fn is_terminator_unsafe(&self, terminator: &mir::Terminator<'tcx>) -> bool {
+        self.body().source_scopes[terminator.source_info.scope].is_unsafe
+    }
+
     fn eval_terminator(&mut self, terminator: &mir::Terminator<'tcx>) -> InterpResult<'tcx> {
         info!("{:?}", terminator.kind);
 
+        let is_safety_tracking_enabled = self.if_tracking_unsafety();
+        let is_terminator_unsafe = self.is_terminator_unsafe(terminator);
         use rustc_middle::mir::TerminatorKind::*;
         match terminator.kind {
             Return => {
@@ -583,9 +936,20 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let old_loc = self.frame().loc;
 
                 let EvaluatedCalleeAndArgs { callee, args, fn_sig, fn_abi, with_caller_location } =
-                    self.eval_callee_and_args(terminator, func, args)?;
+                    self.eval_callee_and_args(
+                        terminator,
+                        func,
+                        args,
+                        is_safety_tracking_enabled,
+                        is_terminator_unsafe,
+                    )?;
 
                 let destination = self.force_allocation(&self.eval_place(destination)?)?;
+
+                if is_safety_tracking_enabled && is_terminator_unsafe {
+                    self.mark_mplace_unsafe(&destination);
+                }
+
                 self.init_fn_call(
                     callee,
                     (fn_sig.abi, fn_abi),
@@ -606,7 +970,13 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let old_frame_idx = self.frame_idx();
 
                 let EvaluatedCalleeAndArgs { callee, args, fn_sig, fn_abi, with_caller_location } =
-                    self.eval_callee_and_args(terminator, func, args)?;
+                    self.eval_callee_and_args(
+                        terminator,
+                        func,
+                        args,
+                        is_safety_tracking_enabled,
+                        is_terminator_unsafe,
+                    )?;
 
                 self.init_fn_tail_call(callee, (fn_sig.abi, fn_abi), &args, with_caller_location)?;
 

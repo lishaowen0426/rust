@@ -40,8 +40,8 @@ use rustc_arena::DroplessArena;
 use rustc_const_eval::const_eval::DummyMachine;
 use rustc_const_eval::interpret::{ImmTy, Immediate, InterpCx, OpTy, Projectable};
 use rustc_data_structures::fx::FxHashSet;
-use rustc_index::IndexVec;
 use rustc_index::bit_set::BitSet;
+use rustc_index::IndexVec;
 use rustc_middle::bug;
 use rustc_middle::mir::interpret::Scalar;
 use rustc_middle::mir::visit::Visitor;
@@ -82,7 +82,7 @@ impl<'tcx> crate::MirPass<'tcx> for JumpThreading {
         let mut finder = TOFinder {
             tcx,
             typing_env,
-            ecx: InterpCx::new(tcx, DUMMY_SP, typing_env, DummyMachine),
+            ecx: InterpCx::new(tcx, DUMMY_SP, typing_env, DummyMachine, FxHashSet::default()),
             body,
             arena,
             map: Map::new(tcx, body, Some(MAX_PLACES)),

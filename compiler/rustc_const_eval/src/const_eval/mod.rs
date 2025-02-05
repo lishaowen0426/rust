@@ -1,6 +1,7 @@
 // Not in interpret to make sure we do not use private implementation details
 
 use rustc_abi::VariantIdx;
+use rustc_data_structures::fx::FxHashSet;
 use rustc_middle::query::{Key, TyCtxtAt};
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_middle::{bug, mir};
@@ -83,6 +84,7 @@ pub fn tag_for_variant_provider<'tcx>(
         ty.default_span(tcx),
         ty::TypingEnv::fully_monomorphized(),
         crate::const_eval::DummyMachine,
+        FxHashSet::default(),
     );
 
     ecx.tag_for_variant(ty, variant_index).unwrap().map(|(tag, _tag_field)| tag)

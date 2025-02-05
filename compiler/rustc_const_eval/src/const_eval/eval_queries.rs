@@ -2,6 +2,7 @@ use std::sync::atomic::Ordering::Relaxed;
 
 use either::{Left, Right};
 use rustc_abi::{self as abi, BackendRepr};
+use rustc_data_structures::fx::FxHashSet;
 use rustc_hir::def::DefKind;
 use rustc_middle::bug;
 use rustc_middle::mir::interpret::{AllocId, ErrorHandled, InterpErrorInfo};
@@ -11,17 +12,17 @@ use rustc_middle::ty::layout::{HasTypingEnv, LayoutOf};
 use rustc_middle::ty::print::with_no_trimmed_paths;
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::def_id::LocalDefId;
-use rustc_span::{DUMMY_SP, Span};
+use rustc_span::{Span, DUMMY_SP};
 use tracing::{debug, instrument, trace};
 
 use super::{CanAccessMutGlobal, CompileTimeInterpCx, CompileTimeMachine};
 use crate::const_eval::CheckAlignment;
 use crate::interpret::{
-    CtfeValidationMode, GlobalId, Immediate, InternKind, InternResult, InterpCx, InterpErrorKind,
-    InterpResult, MPlaceTy, MemoryKind, OpTy, RefTracking, StackPopCleanup, create_static_alloc,
-    eval_nullary_intrinsic, intern_const_alloc_recursive, interp_ok, throw_exhaust,
+    create_static_alloc, eval_nullary_intrinsic, intern_const_alloc_recursive, interp_ok,
+    throw_exhaust, CtfeValidationMode, GlobalId, Immediate, InternKind, InternResult, InterpCx,
+    InterpErrorKind, InterpResult, MPlaceTy, MemoryKind, OpTy, RefTracking, StackPopCleanup,
 };
-use crate::{CTRL_C_RECEIVED, errors};
+use crate::{errors, CTRL_C_RECEIVED};
 
 // Returns a pointer to where the result lives
 #[instrument(level = "trace", skip(ecx, body))]
@@ -133,6 +134,7 @@ pub(crate) fn mk_eval_cx_to_read_const_val<'tcx>(
         root_span,
         typing_env,
         CompileTimeMachine::new(can_access_mut_global, CheckAlignment::No),
+        FxHashSet::default(),
     )
 }
 
@@ -371,6 +373,7 @@ fn eval_in_interpreter<'tcx, R: InterpretationResult<'tcx>>(
         // For consts however we want to ensure they behave "as if" they were evaluated at runtime,
         // so we have to reject reading mutable global memory.
         CompileTimeMachine::new(CanAccessMutGlobal::from(is_static), CheckAlignment::Error),
+        FxHashSet::default(),
     );
     let res = ecx.load_mir(cid.instance.def, cid.promoted);
     res.and_then(|body| eval_body_using_ecx(&mut ecx, cid, body))

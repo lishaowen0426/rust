@@ -1,4 +1,5 @@
 use rustc_abi::{BackendRepr, FieldsShape, Scalar, Variants};
+use rustc_data_structures::fx::FxHashSet;
 use rustc_middle::bug;
 use rustc_middle::ty::layout::{
     HasTyCtxt, LayoutCx, LayoutError, LayoutOf, TyAndLayout, ValidityRequirement,
@@ -49,7 +50,8 @@ fn check_validity_requirement_strict<'tcx>(
 ) -> Result<bool, &'tcx LayoutError<'tcx>> {
     let machine = CompileTimeMachine::new(CanAccessMutGlobal::No, CheckAlignment::Error);
 
-    let mut cx = InterpCx::new(cx.tcx(), rustc_span::DUMMY_SP, cx.typing_env, machine);
+    let mut cx =
+        InterpCx::new(cx.tcx(), rustc_span::DUMMY_SP, cx.typing_env, machine, FxHashSet::default());
 
     let allocated = cx
         .allocate(ty, MemoryKind::Machine(crate::const_eval::MemoryKind::Heap))

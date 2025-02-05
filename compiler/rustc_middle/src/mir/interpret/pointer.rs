@@ -171,7 +171,7 @@ impl Provenance for CtfeProvenance {
     fn fmt(ptr: &Pointer<Self>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Print AllocId.
         fmt::Debug::fmt(&ptr.provenance.alloc_id(), f)?; // propagates `alternate` flag
-        // Print offset only if it is non-zero.
+                                                         // Print offset only if it is non-zero.
         if ptr.offset.bytes() > 0 {
             write!(f, "+{:#x}", ptr.offset.bytes())?;
         }
