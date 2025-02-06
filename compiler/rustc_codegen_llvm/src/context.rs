@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::borrow::Borrow;
 use std::cell::{Cell, RefCell};
 use std::ffi::{CStr, c_uint};
@@ -9,11 +10,12 @@ use rustc_codegen_ssa::base::{wants_msvc_seh, wants_wasm_eh};
 use rustc_codegen_ssa::errors as ssa_errors;
 use rustc_codegen_ssa::traits::*;
 use rustc_data_structures::base_n::{ALPHANUMERIC_ONLY, ToBaseN};
-use rustc_data_structures::fx::FxHashMap;
+use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_data_structures::small_c_str::SmallCStr;
 use rustc_hir::def_id::DefId;
 use rustc_middle::middle::codegen_fn_attrs::PatchableFunctionEntry;
 use rustc_middle::mir::mono::CodegenUnit;
+use rustc_middle::mir::Local;
 use rustc_middle::ty::layout::{
     FnAbiError, FnAbiOfHelpers, FnAbiRequest, HasTypingEnv, LayoutError, LayoutOfHelpers,
 };
@@ -36,6 +38,8 @@ use crate::llvm::{Metadata, MetadataType};
 use crate::type_::Type;
 use crate::value::Value;
 use crate::{attributes, coverageinfo, debuginfo, llvm, llvm_util};
+
+type MiriResult = FxHashMap<DefId, FxHashSet<Local>>;
 
 /// There is one `CodegenCx` per codegen unit. Each one has its own LLVM
 /// `llvm::Context` so that several codegen units may be processed in parallel.
@@ -100,6 +104,9 @@ pub(crate) struct CodegenCx<'ll, 'tcx> {
     /// `global_asm!` needs to be able to find this new global so that it can
     /// compute the correct mangled symbol name to insert into the asm.
     pub renamed_statics: RefCell<FxHashMap<DefId, &'ll Value>>,
+
+    /// results from miri unsafety analysis
+    pub miri_unsafe_locals: MiriResult
 }
 
 fn to_llvm_tls_model(tls_model: TlsModel) -> llvm::ThreadLocalMode {
@@ -461,6 +468,17 @@ pub(crate) unsafe fn create_module<'ll>(
 }
 
 impl<'ll, 'tcx> CodegenCx<'ll, 'tcx> {
+
+    fn parse_miri_result(tcx: TyCtxt<'tcx>) -> MiriResult{
+
+        if let Some(_p) =  tcx.sess.opts.unstable_opts.unsafety_miri_result.as_ref(){
+
+        return Default::default();
+        }else{
+
+        return Default::default();
+        }
+    }
     pub(crate) fn new(
         tcx: TyCtxt<'tcx>,
         codegen_unit: &'tcx CodegenUnit<'tcx>,
@@ -541,6 +559,8 @@ impl<'ll, 'tcx> CodegenCx<'ll, 'tcx> {
 
         let isize_ty = Type::ix_llcx(llcx, tcx.data_layout.pointer_size.bits());
 
+        let miri_unsafe_locals = Self::parse_miri_result(tcx);
+
         CodegenCx {
             tcx,
             use_dll_storage_attrs,
@@ -566,6 +586,7 @@ impl<'ll, 'tcx> CodegenCx<'ll, 'tcx> {
             intrinsics: Default::default(),
             local_gen_sym_counter: Cell::new(0),
             renamed_statics: Default::default(),
+            miri_unsafe_locals,
         }
     }
 
