@@ -262,7 +262,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             assert!(!layout.ty.has_erasable_regions());
             let miri_unsafe_tag = miri_unsafe_locals.is_some_and(|s| s.contains(&local));
             if miri_unsafe_tag {
-                println!("def id: {:?}, local {:?} is unsafe", instance.def_id(), local);
+                //println!("def id: {:?}, local {:?} is unsafe", instance.def_id(), local);
             }
 
             if local == mir::RETURN_PLACE {

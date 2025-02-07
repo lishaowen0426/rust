@@ -593,7 +593,7 @@ impl<'ll, 'tcx> CodegenCx<'ll, 'tcx> {
 
         let miri_unsafe_locals = Self::parse_miri_result(tcx);
         if tcx.sess.opts.unstable_opts.unsafety_miri_result.is_some() {
-            println!("parsed miri locals: {:?}", miri_unsafe_locals);
+            //println!("parsed miri locals: {:?}", miri_unsafe_locals);
         }
 
         CodegenCx {

@@ -34,6 +34,7 @@ use rustc_data_structures::fx::{FxHashMap, FxHashSet, FxIndexMap};
 use rustc_data_structures::sync::Lrc;
 use rustc_data_structures::unord::{UnordMap, UnordSet};
 use rustc_hir::def_id::CrateNum;
+use rustc_index::Idx;
 use rustc_macros::{Decodable, Encodable, HashStable};
 use rustc_middle::dep_graph::WorkProduct;
 use rustc_middle::middle::debugger_visualizer::DebuggerVisualizerFile;
@@ -48,7 +49,7 @@ use rustc_session::config::{CrateType, OutputFilenames, OutputType, RUST_CGU_EXT
 use rustc_session::cstore::{self, CrateSource};
 use rustc_session::utils::NativeLibKind;
 use rustc_session::Session;
-use rustc_span::def_id::{DefId, DefIndex, LOCAL_CRATE};
+use rustc_span::def_id::{DefId, DefIndex, LocalDefId, LOCAL_CRATE};
 use rustc_span::symbol::Symbol;
 
 pub mod assert_module_sources;
@@ -228,8 +229,9 @@ pub enum CodegenErrors {
 
 type MiriResult = UnordMap<DefId, UnordSet<Local>>;
 type MiriRawResult = FxHashMap<String, FxHashMap<u32, FxHashSet<u32>>>;
+type MiriRawReturnResult = UnordMap<String, UnordMap<LocalDefId, UnordSet<Local>>>;
 
-fn parse_miri_result(tcx: TyCtxt<'_>, _: ()) -> &MiriResult {
+fn parse_miri_result(tcx: TyCtxt<'_>, _: ()) -> (&MiriResult, &MiriRawReturnResult) {
     let crate_name_to_krate = |cname: &str| {
         tcx.crates(())
             .iter()
@@ -237,6 +239,7 @@ fn parse_miri_result(tcx: TyCtxt<'_>, _: ()) -> &MiriResult {
             .find(|&cnum| return tcx.crate_name(*cnum).as_str() == cname)
     };
     let mut result: MiriResult = Default::default();
+    let mut raw_return: MiriRawReturnResult = Default::default();
     if let Some(p) = tcx.sess.opts.unstable_opts.unsafety_miri_result.as_ref() {
         let f = File::open(p.as_path()).expect(format!("open miri {:?} failed", p).as_str());
         let reader = BufReader::new(f);
@@ -245,12 +248,16 @@ fn parse_miri_result(tcx: TyCtxt<'_>, _: ()) -> &MiriResult {
 
         for (cname, uls) in raw.iter() {
             //println!("cname: {}, uls: {:?}", cname, uls);
+            let vv = raw_return.entry(cname.clone()).or_insert_with(UnordMap::default);
             if let Some(krate) = crate_name_to_krate(cname) {
                 for (did, locals) in uls.iter() {
                     let key = DefId { krate: *krate, index: DefIndex::from_u32(*did) };
                     let v = result.entry(key).or_insert_with(UnordSet::default);
                     for l in locals.iter() {
                         v.insert(Local::from_u32(*l));
+                        vv.entry(LocalDefId::new(*did as usize))
+                            .or_insert_with(UnordSet::default)
+                            .insert(Local::from_u32(*l));
                     }
                 }
             } else {
@@ -258,7 +265,7 @@ fn parse_miri_result(tcx: TyCtxt<'_>, _: ()) -> &MiriResult {
             }
         }
     }
-    tcx.arena.alloc(result)
+    (tcx.arena.alloc(result), tcx.arena.alloc(raw_return))
 }
 
 pub fn provide(providers: &mut Providers) {

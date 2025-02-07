@@ -627,7 +627,7 @@ pub fn codegen_crate<B: ExtraBackendMethods>(
     // Run the monomorphization collector and partition the collected items into
     // codegen units.
     let (crate_def_ids, codegen_units) = tcx.collect_and_partition_mono_items(());
-    let miri_unsafe_results = tcx.parse_miri_result(());
+    let miri_unsafe_results = tcx.parse_miri_result(()).0;
     if !miri_unsafe_results.is_empty() {
         for did in crate_def_ids.inner.iter() {
             info!("Def id:{:?}, miri unsafe?: {}", did, miri_unsafe_results.contains_key(did));

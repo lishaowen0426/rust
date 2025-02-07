@@ -2374,7 +2374,7 @@ rustc_queries! {
         cache_on_disk_if { true }
     }
 
-    query parse_miri_result(_:()) -> &'tcx UnordMap<DefId, UnordSet<Local>>{
+    query parse_miri_result(_:()) -> (&'tcx UnordMap<DefId, UnordSet<Local>>, &'tcx UnordMap<String, UnordMap<LocalDefId, UnordSet<Local>>>){
         desc {"parse miri result"}
     }
 }
