@@ -7,7 +7,7 @@ use rustc_middle::ty::layout::{FnAbiOf, HasTypingEnv, LayoutOf};
 use rustc_middle::ty::{self, Instance, TypeVisitableExt};
 use rustc_session::config::CrateType;
 use rustc_target::spec::RelocModel;
-use tracing::debug;
+use tracing::{debug, instrument};
 
 use crate::context::CodegenCx;
 use crate::errors::SymbolAlreadyDefined;
@@ -47,6 +47,7 @@ impl<'tcx> PreDefineCodegenMethods<'tcx> for CodegenCx<'_, 'tcx> {
         self.instances.borrow_mut().insert(instance, g);
     }
 
+    #[instrument(level = "info", skip(self, linkage, visibility))]
     fn predefine_fn(
         &self,
         instance: Instance<'tcx>,
