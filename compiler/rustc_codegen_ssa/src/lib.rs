@@ -1,5 +1,6 @@
 // tidy-alphabetical-start
 #![allow(internal_features)]
+#![allow(rustc::potential_query_instability)]
 #![allow(rustc::diagnostic_outside_of_impl)]
 #![allow(rustc::untranslatable_diagnostic)]
 #![doc(html_root_url = "https://doc.rust-lang.org/nightly/nightly-rustc/")]
@@ -22,26 +23,32 @@
 //! have to be implemented by each backend.
 
 use std::collections::BTreeSet;
+use std::fs::File;
 use std::io;
+use std::io::BufReader;
+use std::iter::once;
 use std::path::{Path, PathBuf};
 
 use rustc_ast as ast;
-use rustc_data_structures::fx::{FxHashSet, FxIndexMap};
+use rustc_data_structures::fx::{FxHashMap, FxHashSet, FxIndexMap};
 use rustc_data_structures::sync::Lrc;
-use rustc_data_structures::unord::UnordMap;
+use rustc_data_structures::unord::{UnordMap, UnordSet};
 use rustc_hir::def_id::CrateNum;
 use rustc_macros::{Decodable, Encodable, HashStable};
 use rustc_middle::dep_graph::WorkProduct;
 use rustc_middle::middle::debugger_visualizer::DebuggerVisualizerFile;
 use rustc_middle::middle::dependency_format::Dependencies;
 use rustc_middle::middle::exported_symbols::SymbolExportKind;
+use rustc_middle::mir::Local;
+use rustc_middle::ty::TyCtxt;
 use rustc_middle::util::Providers;
 use rustc_serialize::opaque::{FileEncoder, MemDecoder};
 use rustc_serialize::{Decodable, Decoder, Encodable, Encoder};
-use rustc_session::Session;
 use rustc_session::config::{CrateType, OutputFilenames, OutputType, RUST_CGU_EXT};
 use rustc_session::cstore::{self, CrateSource};
 use rustc_session::utils::NativeLibKind;
+use rustc_session::Session;
+use rustc_span::def_id::{DefId, DefIndex, LOCAL_CRATE};
 use rustc_span::symbol::Symbol;
 
 pub mod assert_module_sources;
@@ -219,11 +226,47 @@ pub enum CodegenErrors {
     CorruptFile,
 }
 
+type MiriResult = UnordMap<DefId, UnordSet<Local>>;
+type MiriRawResult = FxHashMap<String, FxHashMap<u32, FxHashSet<u32>>>;
+
+fn parse_miri_result(tcx: TyCtxt<'_>, _: ()) -> &MiriResult {
+    let crate_name_to_krate = |cname: &str| {
+        tcx.crates(())
+            .iter()
+            .chain(once(&LOCAL_CRATE))
+            .find(|&cnum| return tcx.crate_name(*cnum).as_str() == cname)
+    };
+    let mut result: MiriResult = Default::default();
+    if let Some(p) = tcx.sess.opts.unstable_opts.unsafety_miri_result.as_ref() {
+        let f = File::open(p.as_path()).expect(format!("open miri {:?} failed", p).as_str());
+        let reader = BufReader::new(f);
+        let raw: MiriRawResult =
+            serde_json::from_reader(reader).expect("cannot deserialize miri result into raw");
+
+        for (cname, uls) in raw.iter() {
+            //println!("cname: {}, uls: {:?}", cname, uls);
+            if let Some(krate) = crate_name_to_krate(cname) {
+                for (did, locals) in uls.iter() {
+                    let key = DefId { krate: *krate, index: DefIndex::from_u32(*did) };
+                    let v = result.entry(key).or_insert_with(UnordSet::default);
+                    for l in locals.iter() {
+                        v.insert(Local::from_u32(*l));
+                    }
+                }
+            } else {
+                //println!("cannot find crate number for {}", cname);
+            }
+        }
+    }
+    tcx.arena.alloc(result)
+}
+
 pub fn provide(providers: &mut Providers) {
     crate::back::symbol_export::provide(providers);
     crate::base::provide(providers);
     crate::target_features::provide(providers);
     crate::codegen_attrs::provide(providers);
+    providers.parse_miri_result = parse_miri_result;
 }
 
 /// Checks if the given filename ends with the `.rcgu.o` extension that `rustc`

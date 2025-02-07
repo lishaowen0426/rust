@@ -1,18 +1,22 @@
 #![allow(dead_code)]
+#![allow(rustc::potential_query_instability)]
 use std::borrow::Borrow;
 use std::cell::{Cell, RefCell};
-use std::ffi::{CStr, c_uint};
+use std::ffi::{c_uint, CStr};
+use std::fs::File;
+use std::io::BufReader;
+use std::iter::once;
 use std::str;
 
 use rustc_abi::{HasDataLayout, TargetDataLayout, VariantIdx};
 use rustc_codegen_ssa::back::versioned_llvm_target;
 use rustc_codegen_ssa::base::{wants_msvc_seh, wants_wasm_eh};
 use rustc_codegen_ssa::errors as ssa_errors;
-use rustc_codegen_ssa::traits::*;
-use rustc_data_structures::base_n::{ALPHANUMERIC_ONLY, ToBaseN};
+use rustc_codegen_ssa::traits::{CodegenMiriUnsafeLocals, *};
+use rustc_data_structures::base_n::{ToBaseN, ALPHANUMERIC_ONLY};
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_data_structures::small_c_str::SmallCStr;
-use rustc_hir::def_id::DefId;
+use rustc_hir::def_id::{DefId, DefIndex, LOCAL_CRATE};
 use rustc_middle::middle::codegen_fn_attrs::PatchableFunctionEntry;
 use rustc_middle::mir::mono::CodegenUnit;
 use rustc_middle::mir::Local;
@@ -21,13 +25,14 @@ use rustc_middle::ty::layout::{
 };
 use rustc_middle::ty::{self, Instance, Ty, TyCtxt};
 use rustc_middle::{bug, span_bug};
-use rustc_session::Session;
 use rustc_session::config::{
     BranchProtection, CFGuard, CFProtection, CrateType, DebugInfo, FunctionReturn, PAuthKey, PacRet,
 };
+use rustc_session::Session;
 use rustc_span::source_map::Spanned;
-use rustc_span::{DUMMY_SP, Span};
+use rustc_span::{Span, DUMMY_SP};
 use rustc_target::spec::{HasTargetSpec, RelocModel, SmallDataThresholdSupport, Target, TlsModel};
+use serde_json;
 use smallvec::SmallVec;
 
 use crate::back::write::to_llvm_code_model;
@@ -40,6 +45,7 @@ use crate::value::Value;
 use crate::{attributes, coverageinfo, debuginfo, llvm, llvm_util};
 
 type MiriResult = FxHashMap<DefId, FxHashSet<Local>>;
+type MiriRawResult = FxHashMap<String, FxHashMap<u32, FxHashSet<u32>>>;
 
 /// There is one `CodegenCx` per codegen unit. Each one has its own LLVM
 /// `llvm::Context` so that several codegen units may be processed in parallel.
@@ -106,9 +112,14 @@ pub(crate) struct CodegenCx<'ll, 'tcx> {
     pub renamed_statics: RefCell<FxHashMap<DefId, &'ll Value>>,
 
     /// results from miri unsafety analysis
-    pub miri_unsafe_locals: MiriResult
+    pub miri_unsafe_locals: MiriResult,
 }
 
+impl<'ll, 'tcx> CodegenMiriUnsafeLocals for CodegenCx<'ll, 'tcx> {
+    fn unsafe_locals(&self, did: DefId) -> Option<&FxHashSet<Local>> {
+        self.miri_unsafe_locals.get(&did)
+    }
+}
 fn to_llvm_tls_model(tls_model: TlsModel) -> llvm::ThreadLocalMode {
     match tls_model {
         TlsModel::GeneralDynamic => llvm::ThreadLocalMode::GeneralDynamic,
@@ -468,16 +479,37 @@ pub(crate) unsafe fn create_module<'ll>(
 }
 
 impl<'ll, 'tcx> CodegenCx<'ll, 'tcx> {
+    fn parse_miri_result(tcx: TyCtxt<'tcx>) -> MiriResult {
+        let crate_name_to_krate = |cname: &str| {
+            tcx.crates(())
+                .iter()
+                .chain(once(&LOCAL_CRATE))
+                .find(|&cnum| return tcx.crate_name(*cnum).as_str() == cname)
+        };
+        let mut result: MiriResult = Default::default();
+        if let Some(p) = tcx.sess.opts.unstable_opts.unsafety_miri_result.as_ref() {
+            let f = File::open(p.as_path()).expect(format!("open miri {:?} failed", p).as_str());
+            let reader = BufReader::new(f);
+            let raw: MiriRawResult =
+                serde_json::from_reader(reader).expect("cannot deserialize miri result into raw");
 
-    fn parse_miri_result(tcx: TyCtxt<'tcx>) -> MiriResult{
-
-        if let Some(_p) =  tcx.sess.opts.unstable_opts.unsafety_miri_result.as_ref(){
-
-        return Default::default();
-        }else{
-
-        return Default::default();
+            for (cname, uls) in raw.iter() {
+                //println!("cname: {}, uls: {:?}", cname, uls);
+                if let Some(krate) = crate_name_to_krate(cname) {
+                    for (did, locals) in uls.iter() {
+                        let key = DefId { krate: *krate, index: DefIndex::from_u32(*did) };
+                        let v = result.entry(key).or_insert_with(FxHashSet::default);
+                        for l in locals.iter() {
+                            v.insert(Local::from_u32(*l));
+                        }
+                    }
+                } else {
+                    //println!("cannot find crate number for {}", cname);
+                }
+            }
         }
+
+        return result;
     }
     pub(crate) fn new(
         tcx: TyCtxt<'tcx>,
@@ -560,6 +592,9 @@ impl<'ll, 'tcx> CodegenCx<'ll, 'tcx> {
         let isize_ty = Type::ix_llcx(llcx, tcx.data_layout.pointer_size.bits());
 
         let miri_unsafe_locals = Self::parse_miri_result(tcx);
+        if tcx.sess.opts.unstable_opts.unsafety_miri_result.is_some() {
+            println!("parsed miri locals: {:?}", miri_unsafe_locals);
+        }
 
         CodegenCx {
             tcx,

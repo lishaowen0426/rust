@@ -2441,6 +2441,7 @@ unsafe extern "C" {
     );
 
     pub fn LLVMRustGetMangledName(V: &Value, out: &RustString);
+    pub fn LLVMRustIsAlloca<'a>(V: &'a Value) -> bool;
 
     pub fn LLVMRustGetElementTypeArgIndex(CallSite: &Value) -> i32;
 

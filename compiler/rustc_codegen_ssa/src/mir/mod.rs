@@ -1,10 +1,12 @@
+#![allow(unused_variables)]
 use std::iter;
 
+use rustc_data_structures::fx::FxHashSet;
 use rustc_hir::Safety;
 use rustc_index::bit_set::BitSet;
 use rustc_index::IndexVec;
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrFlags;
-use rustc_middle::mir::{traversal, UnwindTerminateReason};
+use rustc_middle::mir::{traversal, Local, UnwindTerminateReason};
 use rustc_middle::ty::layout::{FnAbiOf, HasTyCtxt, HasTypingEnv, TyAndLayout};
 use rustc_middle::ty::{self, Instance, Ty, TyCtxt, TypeFoldable, TypeVisitableExt};
 use rustc_middle::{bug, mir, span_bug};
@@ -251,24 +253,39 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         }
     }
     let local_values = {
+        let miri_unsafe_locals: Option<&FxHashSet<Local>> = cx.unsafe_locals(instance.def_id());
         let args = arg_local_refs(&mut start_bx, &mut fx, &memory_locals);
 
         let mut allocate_local = |local| {
             let decl = &mir.local_decls[local];
             let layout = start_bx.layout_of(fx.monomorphize(decl.ty));
             assert!(!layout.ty.has_erasable_regions());
+            let miri_unsafe_tag = miri_unsafe_locals.is_some_and(|s| s.contains(&local));
+            if miri_unsafe_tag {
+                println!("def id: {:?}, local {:?} is unsafe", instance.def_id(), local);
+            }
 
             if local == mir::RETURN_PLACE {
                 match fx.fn_abi.ret.mode {
                     PassMode::Indirect { .. } => {
                         debug!("alloc: {:?} (return place) -> place", local);
+                        assert!(
+                            !miri_unsafe_tag,
+                            "return is indirect, but the local is marked unsafe"
+                        );
                         let llretptr = start_bx.get_param(0);
-                        return LocalRef::Place(PlaceRef::new_sized(llretptr, layout));
+                        return LocalRef::Place(
+                            PlaceRef::new_sized(llretptr, layout)
+                                .with_miri_unsafe_tag(&mut start_bx, miri_unsafe_tag),
+                        );
                     }
                     PassMode::Cast { ref cast, .. } => {
                         debug!("alloc: {:?} (return place) -> place", local);
                         let size = cast.size(&start_bx);
-                        return LocalRef::Place(PlaceRef::alloca_size(&mut start_bx, size, layout));
+                        return LocalRef::Place(
+                            PlaceRef::alloca_size(&mut start_bx, size, layout)
+                                .with_miri_unsafe_tag(&mut start_bx, miri_unsafe_tag),
+                        );
                     }
                     _ => {}
                 };
@@ -277,9 +294,15 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             if memory_locals.contains(local) {
                 debug!("alloc: {:?} -> place", local);
                 if layout.is_unsized() {
-                    LocalRef::UnsizedPlace(PlaceRef::alloca_unsized_indirect(&mut start_bx, layout))
+                    LocalRef::UnsizedPlace(
+                        PlaceRef::alloca_unsized_indirect(&mut start_bx, layout)
+                            .with_miri_unsafe_tag(&mut start_bx, miri_unsafe_tag),
+                    )
                 } else {
-                    LocalRef::Place(PlaceRef::alloca(&mut start_bx, layout))
+                    LocalRef::Place(
+                        PlaceRef::alloca(&mut start_bx, layout)
+                            .with_miri_unsafe_tag(&mut start_bx, miri_unsafe_tag),
+                    )
                 }
             } else {
                 debug!("alloc: {:?} -> operand", local);

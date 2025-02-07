@@ -87,6 +87,7 @@ macro_rules! arena_types {
             [] codegen_unit: rustc_middle::mir::mono::CodegenUnit<'tcx>,
             [decode] attribute: rustc_ast::Attribute,
             [] name_set: rustc_data_structures::unord::UnordSet<rustc_span::symbol::Symbol>,
+            [] miri_results: rustc_data_structures::unord::UnordMap< rustc_hir::def_id::DefId, rustc_data_structures::unord::UnordSet<rustc_middle::mir::Local>>,
             [] ordered_name_set: rustc_data_structures::fx::FxIndexSet<rustc_span::symbol::Symbol>,
             [] pats: rustc_middle::ty::PatternKind<'tcx>,
 

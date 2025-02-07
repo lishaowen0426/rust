@@ -4,7 +4,7 @@ use rustc_middle::mir::tcx::PlaceTy;
 use rustc_middle::ty::layout::{HasTyCtxt, LayoutOf, TyAndLayout};
 use rustc_middle::ty::{self, Ty};
 use rustc_middle::{bug, mir};
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument};
 
 use super::operand::OperandValue;
 use super::{FunctionCx, LocalRef};
@@ -90,6 +90,18 @@ pub struct PlaceRef<'tcx, V> {
 impl<'a, 'tcx, V: CodegenObject> PlaceRef<'tcx, V> {
     pub fn new_sized(llval: V, layout: TyAndLayout<'tcx>) -> PlaceRef<'tcx, V> {
         PlaceRef::new_sized_aligned(llval, layout, layout.align.abi)
+    }
+
+    pub fn with_miri_unsafe_tag<Bx: BuilderMethods<'a, 'tcx, Value = V>>(
+        self,
+        bx: &mut Bx,
+        tag: bool,
+    ) -> Self {
+        if tag {
+            info!("tag: {:?}", self.val.llval);
+            bx.miri_unsafe_alloca(self.val.llval);
+        }
+        return self;
     }
 
     pub fn new_sized_aligned(
@@ -414,10 +426,11 @@ impl<'a, 'tcx, V: CodegenObject> PlaceRef<'tcx, V> {
             layout.size
         };
 
-        let llval = bx.inbounds_gep(bx.cx().backend_type(self.layout), self.val.llval, &[
-            bx.cx().const_usize(0),
-            llindex,
-        ]);
+        let llval = bx.inbounds_gep(
+            bx.cx().backend_type(self.layout),
+            self.val.llval,
+            &[bx.cx().const_usize(0), llindex],
+        );
         let align = self.val.align.restrict_for_offset(offset);
         PlaceValue::new_sized(llval, align).with_type(layout)
     }
@@ -468,10 +481,10 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             LocalRef::Operand(..) => {
                 if place_ref.is_indirect_first_projection() {
                     base = 1;
-                    let cg_base = self.codegen_consume(bx, mir::PlaceRef {
-                        projection: &place_ref.projection[..0],
-                        ..place_ref
-                    });
+                    let cg_base = self.codegen_consume(
+                        bx,
+                        mir::PlaceRef { projection: &place_ref.projection[..0], ..place_ref },
+                    );
                     cg_base.deref(bx.cx())
                 } else {
                     bug!("using operand local {:?} as place", place_ref);

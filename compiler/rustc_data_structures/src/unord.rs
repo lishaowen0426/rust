@@ -226,7 +226,7 @@ trait UnordCollection {}
 /// for more information.
 #[derive(Debug, Eq, PartialEq, Clone, Encodable_Generic, Decodable_Generic)]
 pub struct UnordSet<V: Eq + Hash> {
-    inner: FxHashSet<V>,
+    pub inner: FxHashSet<V>,
 }
 
 impl<V: Eq + Hash> UnordCollection for UnordSet<V> {}

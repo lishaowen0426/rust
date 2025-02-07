@@ -39,6 +39,11 @@ pub trait SvfMethods: BackendTypes {
     fn tag_svf_unsafe(&self, val: Self::Value);
 }
 
+pub trait MiriMethods: BackendTypes {
+    fn is_alloca(&mut self, v: Self::Value) -> bool;
+    fn miri_unsafe_alloca(&mut self, alloc: Self::Value);
+}
+
 pub trait BuilderMethods<'a, 'tcx>:
     Sized
     + LayoutOf<'tcx, LayoutOfResult = TyAndLayout<'tcx>>
@@ -52,6 +57,7 @@ pub trait BuilderMethods<'a, 'tcx>:
     + AsmBuilderMethods<'tcx>
     + StaticBuilderMethods
     + SvfMethods
+    + MiriMethods
 {
     // `BackendTypes` is a supertrait of both `CodegenMethods` and
     // `BuilderMethods`. This bound ensures all impls agree on the associated

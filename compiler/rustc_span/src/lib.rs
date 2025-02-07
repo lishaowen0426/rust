@@ -39,7 +39,7 @@
 extern crate self as rustc_span;
 
 use derive_where::derive_where;
-use rustc_data_structures::{AtomicRef, outline};
+use rustc_data_structures::{outline, AtomicRef};
 use rustc_macros::{Decodable, Encodable, HashStable_Generic};
 use rustc_serialize::opaque::{FileEncoder, MemDecoder};
 use rustc_serialize::{Decodable, Decoder, Encodable, Encoder};
@@ -60,13 +60,13 @@ pub use hygiene::{
 };
 use rustc_data_structures::stable_hasher::HashingControls;
 pub mod def_id;
-use def_id::{CrateNum, DefId, DefIndex, DefPathHash, LOCAL_CRATE, LocalDefId, StableCrateId};
+use def_id::{CrateNum, DefId, DefIndex, DefPathHash, LocalDefId, StableCrateId, LOCAL_CRATE};
 pub mod edit_distance;
 mod span_encoding;
-pub use span_encoding::{DUMMY_SP, Span};
+pub use span_encoding::{Span, DUMMY_SP};
 
 pub mod symbol;
-pub use symbol::{Symbol, sym};
+pub use symbol::{sym, Symbol};
 
 mod analyze_source_file;
 pub mod fatal_error;
@@ -85,7 +85,7 @@ use std::{fmt, iter};
 
 use md5::{Digest, Md5};
 use rustc_data_structures::fx::FxHashMap;
-use rustc_data_structures::stable_hasher::{Hash64, Hash128, HashStable, StableHasher};
+use rustc_data_structures::stable_hasher::{Hash128, Hash64, HashStable, StableHasher};
 use rustc_data_structures::sync::{FreezeLock, FreezeWriteGuard, Lock, Lrc};
 use sha1::Sha1;
 use sha2::Sha256;
@@ -601,7 +601,11 @@ impl Span {
 
     /// Returns `self` if `self` is not the dummy span, and `other` otherwise.
     pub fn substitute_dummy(self, other: Span) -> Span {
-        if self.is_dummy() { other } else { self }
+        if self.is_dummy() {
+            other
+        } else {
+            self
+        }
     }
 
     /// Returns `true` if `self` fully encloses `other`.
@@ -639,21 +643,33 @@ impl Span {
     pub fn trim_start(self, other: Span) -> Option<Span> {
         let span = self.data();
         let other = other.data();
-        if span.hi > other.hi { Some(span.with_lo(cmp::max(span.lo, other.hi))) } else { None }
+        if span.hi > other.hi {
+            Some(span.with_lo(cmp::max(span.lo, other.hi)))
+        } else {
+            None
+        }
     }
 
     /// Returns `Some(span)`, where the end is trimmed by the start of `other`.
     pub fn trim_end(self, other: Span) -> Option<Span> {
         let span = self.data();
         let other = other.data();
-        if span.lo < other.lo { Some(span.with_hi(cmp::min(span.hi, other.lo))) } else { None }
+        if span.lo < other.lo {
+            Some(span.with_hi(cmp::min(span.hi, other.lo)))
+        } else {
+            None
+        }
     }
 
     /// Returns the source span -- this is either the supplied span, or the span for
     /// the macro callsite that expanded to it.
     pub fn source_callsite(self) -> Span {
         let ctxt = self.ctxt();
-        if !ctxt.is_root() { ctxt.outer_expn_data().call_site.source_callsite() } else { self }
+        if !ctxt.is_root() {
+            ctxt.outer_expn_data().call_site.source_callsite()
+        } else {
+            self
+        }
     }
 
     /// The `Span` for the tokens in the previous macro expansion from which `self` was generated,
@@ -2178,7 +2194,7 @@ impl SourceFile {
                 // that want to use the display col instead of byte offsets to modify Rust code, but
                 // that is a problem for another day, the previous code was already incorrect for
                 // both displaying *and* third party tools using the json output naïvely.
-                tracing::info!("couldn't find line {line} {:?}", self.name);
+                //tracing::info!("couldn't find line {line} {:?}", self.name);
                 return (line, col_or_chpos, col_or_chpos.0);
             };
             let display_col = code.chars().take(col_or_chpos.0).map(|ch| char_width(ch)).sum();

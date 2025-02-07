@@ -2032,6 +2032,14 @@ extern "C" bool LLVMRustIsBitcode(char *ptr, size_t len) {
   return identify_magic(StringRef(ptr, len)) == file_magic::bitcode;
 }
 
+extern "C" bool LLVMRustIsAlloca(LLVMValueRef V) {
+  if (auto *alloca = dyn_cast<AllocaInst>(unwrap<Value>(V))) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
 extern "C" bool LLVMRustIsNonGVFunctionPointerTy(LLVMValueRef V) {
   if (unwrap<Value>(V)->getType()->isPointerTy()) {
     if (auto *GV = dyn_cast<GlobalValue>(unwrap<Value>(V))) {

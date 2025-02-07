@@ -27,6 +27,9 @@ mod write;
 
 use std::fmt;
 
+use rustc_data_structures::fx::FxHashSet;
+use rustc_hir::def_id::DefId;
+use rustc_middle::mir::Local;
 use rustc_middle::ty::layout::{FnAbiOf, LayoutOf, TyAndLayout};
 use rustc_middle::ty::Ty;
 use rustc_target::callconv::FnAbi;
@@ -36,7 +39,7 @@ pub use self::asm::{
     AsmBuilderMethods, AsmCodegenMethods, GlobalAsmOperandRef, InlineAsmOperandRef,
 };
 pub use self::backend::{BackendTypes, CodegenBackend, ExtraBackendMethods};
-pub use self::builder::{BuilderMethods, OverflowOp, SvfMethods};
+pub use self::builder::{BuilderMethods, MiriMethods, OverflowOp, SvfMethods};
 pub use self::consts::ConstCodegenMethods;
 pub use self::coverageinfo::CoverageInfoBuilderMethods;
 pub use self::debuginfo::{DebugInfoBuilderMethods, DebugInfoCodegenMethods};
@@ -52,6 +55,10 @@ pub use self::write::{ModuleBufferMethods, ThinBufferMethods, WriteBackendMethod
 
 pub trait CodegenObject = Copy + PartialEq + fmt::Debug;
 
+pub trait CodegenMiriUnsafeLocals {
+    fn unsafe_locals(&self, did: DefId) -> Option<&FxHashSet<Local>>;
+}
+
 pub trait CodegenMethods<'tcx> = LayoutOf<'tcx, LayoutOfResult = TyAndLayout<'tcx>>
     + FnAbiOf<'tcx, FnAbiOfResult = &'tcx FnAbi<'tcx, Ty<'tcx>>>
     + TypeCodegenMethods<'tcx>
@@ -59,4 +66,5 @@ pub trait CodegenMethods<'tcx> = LayoutOf<'tcx, LayoutOfResult = TyAndLayout<'tc
     + StaticCodegenMethods
     + DebugInfoCodegenMethods<'tcx>
     + AsmCodegenMethods<'tcx>
-    + PreDefineCodegenMethods<'tcx>;
+    + PreDefineCodegenMethods<'tcx>
+    + CodegenMiriUnsafeLocals;

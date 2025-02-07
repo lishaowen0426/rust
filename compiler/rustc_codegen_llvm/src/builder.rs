@@ -51,6 +51,34 @@ impl Drop for Builder<'_, '_, '_> {
     }
 }
 
+impl MiriMethods for Builder<'_, '_, '_> {
+    fn is_alloca(&mut self, v: Self::Value) -> bool {
+        unsafe { llvm::LLVMRustIsAlloca(v) }
+    }
+    fn miri_unsafe_alloca(&mut self, alloc: Self::Value) {
+        if !self.is_alloca(alloc) {
+            panic!("{}", format!("miri try to tag a non-alloca: {:?}", alloc));
+        }
+        unsafe {
+            let key = "miri-target";
+            let kind = llvm::LLVMGetMDKindIDInContext(
+                &self.llcx,
+                key.as_ptr() as *const c_char,
+                key.len() as c_uint,
+            );
+
+            let tag_str = "unsafe_alloca";
+
+            let tag =
+                llvm::LLVMMDStringInContext2(&self.llcx, tag_str.as_ptr().cast(), tag_str.len());
+            let node = llvm::LLVMMDNodeInContext2(&self.llcx, vec![tag].as_ptr(), 1);
+            let tag_md = llvm::LLVMMetadataAsValue(self.llcx, node);
+
+            llvm::LLVMSetMetadata(alloc, kind, tag_md);
+        }
+    }
+}
+
 impl SvfMethods for Builder<'_, '_, '_> {
     fn set_svf_unsafe(&mut self) {
         self.is_unsafe = true;
