@@ -2,6 +2,7 @@
 use std::iter;
 
 use rustc_data_structures::fx::FxHashSet;
+use rustc_hir::def::DefKind;
 use rustc_hir::Safety;
 use rustc_index::bit_set::BitSet;
 use rustc_index::IndexVec;
@@ -244,12 +245,25 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
     // Allocate variable and temp allocas
 
     if is_svf_enable {
-        if cx.tcx().def_kind(instance.def_id()).is_fn_like() {
-            let fn_sig = cx.tcx().fn_sig(instance.def_id()).instantiate_identity();
-            match fn_sig.safety() {
-                Safety::Unsafe => start_bx.set_svf_unsafe(),
-                _ => {}
-            };
+        match cx.tcx().def_kind(instance.def_id()) {
+            DefKind::Fn | DefKind::AssocFn => {
+                let fn_sig = cx.tcx().fn_sig(instance.def_id()).instantiate_identity();
+                match fn_sig.safety() {
+                    Safety::Unsafe => start_bx.set_svf_unsafe(),
+                    _ => {}
+                };
+            }
+            DefKind::Closure => {
+                let closure_ty = cx.tcx().type_of(instance.def_id()).instantiate_identity();
+                if let ty::Closure(_, args) = closure_ty.kind() {
+                    let fn_sig = args.as_closure().sig();
+                    match fn_sig.safety() {
+                        Safety::Unsafe => start_bx.set_svf_unsafe(),
+                        _ => {}
+                    };
+                }
+            }
+            _ => {}
         }
     }
     let local_values = {
@@ -317,7 +331,9 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             .chain(mir.vars_and_temps_iter().map(allocate_local))
             .collect()
     };
-    start_bx.clear_svf_unsafe();
+    if is_svf_enable {
+        start_bx.clear_svf_unsafe();
+    }
     fx.initialize_locals(local_values);
 
     // Apply debuginfo to the newly allocated locals.

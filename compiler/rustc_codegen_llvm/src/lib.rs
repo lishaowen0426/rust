@@ -41,9 +41,10 @@ use rustc_metadata::EncodedMetadata;
 use rustc_middle::dep_graph::{WorkProduct, WorkProductId};
 use rustc_middle::ty::TyCtxt;
 use rustc_middle::util::Providers;
-use rustc_session::Session;
 use rustc_session::config::{OptLevel, OutputFilenames, PrintKind, PrintRequest};
+use rustc_session::Session;
 use rustc_span::symbol::Symbol;
+use tracing::{info, instrument};
 
 mod back {
     pub(crate) mod archive;
@@ -399,8 +400,10 @@ unsafe impl Send for ModuleLlvm {}
 unsafe impl Sync for ModuleLlvm {}
 
 impl ModuleLlvm {
+    #[instrument(level = "info", name = "modulellvm_new", skip(tcx))]
     fn new(tcx: TyCtxt<'_>, mod_name: &str) -> Self {
         unsafe {
+            info!("shouldDiscardNames {}", tcx.sess.fewer_names());
             let llcx = llvm::LLVMRustContextCreate(tcx.sess.fewer_names());
             let llmod_raw = context::create_module(tcx, llcx, mod_name) as *const _;
             ModuleLlvm {
@@ -411,8 +414,10 @@ impl ModuleLlvm {
         }
     }
 
+    #[instrument(level = "info", name = "modulellvm_new_metadata", skip(tcx))]
     fn new_metadata(tcx: TyCtxt<'_>, mod_name: &str) -> Self {
         unsafe {
+            info!("shouldDiscardNames {}", tcx.sess.fewer_names());
             let llcx = llvm::LLVMRustContextCreate(tcx.sess.fewer_names());
             let llmod_raw = context::create_module(tcx, llcx, mod_name) as *const _;
             ModuleLlvm {
