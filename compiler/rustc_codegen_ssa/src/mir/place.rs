@@ -92,6 +92,7 @@ impl<'a, 'tcx, V: CodegenObject> PlaceRef<'tcx, V> {
         PlaceRef::new_sized_aligned(llval, layout, layout.align.abi)
     }
 
+    #[instrument(level = "info", skip_all)]
     pub fn with_miri_unsafe_tag<Bx: BuilderMethods<'a, 'tcx, Value = V>>(
         self,
         bx: &mut Bx,

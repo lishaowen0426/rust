@@ -408,6 +408,7 @@ pub(crate) fn wants_new_eh_instructions(sess: &Session) -> bool {
     wants_wasm_eh(sess) || wants_msvc_seh(sess)
 }
 
+#[instrument(level = "info", skip(cx))]
 pub(crate) fn codegen_instance<'a, 'tcx: 'a, Bx: BuilderMethods<'a, 'tcx>>(
     cx: &'a Bx::CodegenCx,
     instance: Instance<'tcx>,
@@ -415,7 +416,7 @@ pub(crate) fn codegen_instance<'a, 'tcx: 'a, Bx: BuilderMethods<'a, 'tcx>>(
     // this is an info! to allow collecting monomorphization statistics
     // and to allow finding the last function before LLVM aborts from
     // release builds.
-    debug!("codegen_instance({})", instance);
+    info!("codegen_instance({})", instance);
 
     mir::codegen_mir::<Bx>(cx, instance);
 }

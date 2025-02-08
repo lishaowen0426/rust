@@ -8,7 +8,7 @@ use rustc_data_structures::sorted_map::SortedIndexMultiMap;
 use rustc_errors::ErrorGuaranteed;
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LocalDefId};
-use rustc_hir::{self as hir, BindingMode, ByRef, HirId, Node};
+use rustc_hir::{self as hir, BindingMode, ByRef, HirId, Node, Safety};
 use rustc_index::bit_set::GrowableBitSet;
 use rustc_index::{Idx, IndexSlice, IndexVec};
 use rustc_infer::infer::{InferCtxt, TyCtxtInferExt};
@@ -520,6 +520,10 @@ fn construct_fn<'tcx>(
         return_ty,
         return_ty_span,
         coroutine,
+        match fn_sig.safety {
+            Safety::Unsafe => true,
+            _ => false,
+        },
     );
 
     let call_site_scope =
@@ -591,7 +595,7 @@ fn construct_const<'a, 'tcx>(
     // opaques used by this function here.
     let infcx = tcx.infer_ctxt().build(TypingMode::non_body_analysis());
     let mut builder =
-        Builder::new(thir, infcx, def, hir_id, span, 0, const_ty, const_ty_span, None);
+        Builder::new(thir, infcx, def, hir_id, span, 0, const_ty, const_ty_span, None, false);
 
     let mut block = START_BLOCK;
     block = builder.expr_into_dest(Place::return_place(), block, expr).into_block();
@@ -744,6 +748,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         return_ty: Ty<'tcx>,
         return_span: Span,
         coroutine: Option<Box<CoroutineInfo<'tcx>>>,
+        is_unsafe: bool,
     ) -> Builder<'a, 'tcx> {
         let tcx = infcx.tcx;
         let attrs = tcx.hir().attrs(hir_id);
@@ -793,7 +798,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         };
 
         assert_eq!(builder.cfg.start_new_block(), START_BLOCK);
-        assert_eq!(builder.new_source_scope(span, lint_level, false), OUTERMOST_SOURCE_SCOPE);
+        assert_eq!(builder.new_source_scope(span, lint_level, is_unsafe), OUTERMOST_SOURCE_SCOPE);
         builder.source_scopes[OUTERMOST_SOURCE_SCOPE].parent_scope = None;
 
         builder

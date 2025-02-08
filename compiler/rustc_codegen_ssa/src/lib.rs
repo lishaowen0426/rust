@@ -51,6 +51,7 @@ use rustc_session::utils::NativeLibKind;
 use rustc_session::Session;
 use rustc_span::def_id::{DefId, DefIndex, LocalDefId, LOCAL_CRATE};
 use rustc_span::symbol::Symbol;
+use tracing::{info, instrument};
 
 pub mod assert_module_sources;
 pub mod back;
@@ -231,6 +232,7 @@ type MiriResult = UnordMap<DefId, UnordSet<Local>>;
 type MiriRawResult = FxHashMap<String, FxHashMap<u32, FxHashSet<u32>>>;
 type MiriRawReturnResult = UnordMap<String, UnordMap<LocalDefId, UnordSet<Local>>>;
 
+#[instrument(level = "info", skip_all)]
 fn parse_miri_result(tcx: TyCtxt<'_>, _: ()) -> (&MiriResult, &MiriRawReturnResult) {
     let crate_name_to_krate = |cname: &str| {
         tcx.crates(())
@@ -265,6 +267,7 @@ fn parse_miri_result(tcx: TyCtxt<'_>, _: ()) -> (&MiriResult, &MiriRawReturnResu
             }
         }
     }
+    info!("parsed miri: {:?}", result);
     (tcx.arena.alloc(result), tcx.arena.alloc(raw_return))
 }
 

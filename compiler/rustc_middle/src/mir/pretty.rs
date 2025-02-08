@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 use rustc_abi::Size;
 use rustc_ast::InlineAsmTemplatePiece;
 use rustc_middle::mir::interpret::{
-    AllocBytes, AllocId, Allocation, GlobalAlloc, Pointer, Provenance, alloc_range,
-    read_target_uint,
+    alloc_range, read_target_uint, AllocBytes, AllocId, Allocation, GlobalAlloc, Pointer,
+    Provenance,
 };
 use rustc_middle::mir::visit::Visitor;
 use rustc_middle::mir::*;
@@ -730,7 +730,11 @@ where
     let mut current_location = Location { block, statement_index: 0 };
     for statement in &data.statements {
         extra_data(PassWhere::BeforeLocation(current_location), w)?;
-        let indented_body = format!("{INDENT}{INDENT}{statement:?};");
+        let indented_body = if body.source_scopes[statement.source_info.scope].is_unsafe {
+            format!("{INDENT}{INDENT}{statement:?} UNSAFE;")
+        } else {
+            format!("{INDENT}{INDENT}{statement:?};")
+        };
         if options.include_extra_comments {
             writeln!(
                 w,
@@ -1754,12 +1758,13 @@ pub fn write_allocation_bytes<'tcx, Prov: Provenance, Extra, Bytes: AllocBytes>(
             }
         } else if let Some(prov) = alloc.provenance().get(i, &tcx) {
             // Memory with provenance must be defined
-            assert!(
-                alloc.init_mask().is_range_initialized(alloc_range(i, Size::from_bytes(1))).is_ok()
-            );
+            assert!(alloc
+                .init_mask()
+                .is_range_initialized(alloc_range(i, Size::from_bytes(1)))
+                .is_ok());
             ascii.push('━'); // HEAVY HORIZONTAL
-            // We have two characters to display this, which is obviously not enough.
-            // Format is similar to "oversized" above.
+                             // We have two characters to display this, which is obviously not enough.
+                             // Format is similar to "oversized" above.
             let j = i.bytes_usize();
             let c = alloc.inspect_with_uninit_and_ptr_outside_interpreter(j..j + 1)[0];
             write!(w, "╾{c:02x}{prov:#?} (1 ptr byte)╼")?;

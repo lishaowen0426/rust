@@ -307,6 +307,10 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
 
             if memory_locals.contains(local) {
                 debug!("alloc: {:?} -> place", local);
+
+                if miri_unsafe_locals.is_some() {
+                    println!("mem local: {:?}", local);
+                }
                 if layout.is_unsized() {
                     LocalRef::UnsizedPlace(
                         PlaceRef::alloca_unsized_indirect(&mut start_bx, layout)
@@ -320,6 +324,10 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                 }
             } else {
                 debug!("alloc: {:?} -> operand", local);
+
+                if miri_unsafe_locals.is_some() {
+                    println!("not mem local: {:?}", local);
+                }
                 LocalRef::new_operand(layout)
             }
         };

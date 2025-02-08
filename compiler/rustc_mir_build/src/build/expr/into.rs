@@ -11,7 +11,7 @@ use rustc_middle::span_bug;
 use rustc_middle::thir::*;
 use rustc_middle::ty::CanonicalUserTypeAnnotation;
 use rustc_span::source_map::Spanned;
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument};
 
 use crate::build::expr::category::{Category, RvalueFunc};
 use crate::build::matches::DeclareLetBindings;
@@ -20,7 +20,7 @@ use crate::build::{BlockAnd, BlockAndExtension, BlockFrame, Builder, NeedsTempor
 impl<'a, 'tcx> Builder<'a, 'tcx> {
     /// Compile `expr`, storing the result into `destination`, which
     /// is assumed to be uninitialized.
-    #[instrument(level = "debug", skip(self))]
+    #[instrument(level = "info", skip_all)]
     pub(crate) fn expr_into_dest(
         &mut self,
         destination: Place<'tcx>,
@@ -32,6 +32,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         // just use the name `this` uniformly
         let this = self;
         let expr = &this.thir[expr_id];
+        info!("expr kind: {:?}", expr.kind);
         let expr_span = expr.span;
         let source_info = this.source_info(expr_span);
 
