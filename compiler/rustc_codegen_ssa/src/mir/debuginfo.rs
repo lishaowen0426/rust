@@ -10,8 +10,9 @@ use rustc_middle::ty::layout::{LayoutOf, TyAndLayout};
 use rustc_middle::ty::{Instance, Ty};
 use rustc_middle::{bug, mir, ty};
 use rustc_session::config::DebugInfo;
-use rustc_span::symbol::{Symbol, kw};
-use rustc_span::{BytePos, Span, hygiene};
+use rustc_span::symbol::{kw, Symbol};
+use rustc_span::{hygiene, BytePos, Span};
+use tracing::{info, instrument};
 
 use super::operand::{OperandRef, OperandValue};
 use super::place::{PlaceRef, PlaceValue};
@@ -236,6 +237,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         Some((scope.adjust_dbg_scope_for_span(self.cx, span), scope.inlined_at, span))
     }
 
+    #[instrument(level = "info", skip(operand, bx, name))]
     fn spill_operand_to_stack(
         operand: OperandRef<'tcx, Bx::Value>,
         name: Option<String>,
@@ -248,6 +250,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         // at least for the cases which LLVM handles correctly.
         let spill_slot = PlaceRef::alloca(bx, operand.layout);
         if let Some(name) = name {
+            info!("spill name:{name}");
             bx.set_var_name(spill_slot.val.llval, &(name + ".dbg.spill"));
         }
         operand.val.store(bx, spill_slot);

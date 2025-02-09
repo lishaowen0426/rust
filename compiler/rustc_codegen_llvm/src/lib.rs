@@ -404,7 +404,9 @@ impl ModuleLlvm {
     fn new(tcx: TyCtxt<'_>, mod_name: &str) -> Self {
         unsafe {
             info!("shouldDiscardNames {}", tcx.sess.fewer_names());
-            let llcx = llvm::LLVMRustContextCreate(tcx.sess.fewer_names());
+            let llcx = llvm::LLVMRustContextCreate(
+                tcx.sess.fewer_names() && !tcx.sess.opts.unstable_opts.unsafety_svf,
+            );
             let llmod_raw = context::create_module(tcx, llcx, mod_name) as *const _;
             ModuleLlvm {
                 llmod_raw,
@@ -418,7 +420,9 @@ impl ModuleLlvm {
     fn new_metadata(tcx: TyCtxt<'_>, mod_name: &str) -> Self {
         unsafe {
             info!("shouldDiscardNames {}", tcx.sess.fewer_names());
-            let llcx = llvm::LLVMRustContextCreate(tcx.sess.fewer_names());
+            let llcx = llvm::LLVMRustContextCreate(
+                tcx.sess.fewer_names() && !tcx.sess.opts.unstable_opts.unsafety_svf,
+            );
             let llmod_raw = context::create_module(tcx, llcx, mod_name) as *const _;
             ModuleLlvm {
                 llmod_raw,

@@ -6,10 +6,11 @@ use std::ptr;
 use std::str::FromStr;
 use std::string::FromUtf8Error;
 
-use libc::c_uint;
+use libc::{c_char, c_uint};
 use rustc_abi::{Align, Size, WrappingRange};
 use rustc_llvm::RustString;
 
+pub use self::ffi::*;
 pub use self::AtomicRmwBinOp::*;
 pub use self::CallConv::*;
 pub use self::CodeGenOptSize::*;
@@ -17,7 +18,6 @@ pub use self::IntPredicate::*;
 pub use self::Linkage::*;
 pub use self::MetadataType::*;
 pub use self::RealPredicate::*;
-pub use self::ffi::*;
 use crate::common::AsCCharPtr;
 
 pub mod archive_ro;
@@ -168,6 +168,21 @@ pub fn SetInstructionCallConv(instr: &Value, cc: CallConv) {
 pub fn SetFunctionCallConv(fn_: &Value, cc: CallConv) {
     unsafe {
         LLVMSetFunctionCallConv(fn_, cc as c_uint);
+    }
+}
+
+pub fn SetMiriUnsafeFunction(llcx: &Context, val: &Value) {
+    unsafe {
+        let key = "miri-detected";
+        let kind =
+            ffi::LLVMGetMDKindIDInContext(llcx, key.as_ptr() as *const c_char, key.len() as c_uint);
+
+        let tag_str = "unsafe_function";
+
+        let tag = ffi::LLVMMDStringInContext2(llcx, tag_str.as_ptr().cast(), tag_str.len());
+        let node = ffi::LLVMMDNodeInContext2(llcx, vec![tag].as_ptr(), 1);
+        let tag_md = ffi::LLVMMetadataAsValue(llcx, node);
+        ffi::LLVMSetMetadata(val, kind, tag_md);
     }
 }
 

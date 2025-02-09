@@ -738,9 +738,6 @@ impl Session {
     }
 
     pub fn fewer_names(&self) -> bool {
-        if self.opts.unstable_opts.unsafety_svf {
-            return false;
-        }
         if let Some(fewer_names) = self.opts.unstable_opts.fewer_names {
             fewer_names
         } else {

@@ -124,6 +124,8 @@ pub struct FunctionCx<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> {
     caller_location: Option<OperandRef<'tcx, Bx::Value>>,
 
     is_svf_enable: bool,
+
+    miri_unsafe_locals: Option<FxHashSet<Local>>,
 }
 
 impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
@@ -137,6 +139,10 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             self.cx.typing_env(),
             ty::EarlyBinder::bind(value),
         )
+    }
+
+    pub fn miri_is_local_unsafe(&self, loc: Local) -> bool {
+        self.miri_unsafe_locals.as_ref().is_some_and(|s| s.contains(&loc))
     }
 }
 
@@ -209,6 +215,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             .collect();
 
     let is_svf_enable = cx.tcx().sess.opts.unstable_opts.unsafety_svf;
+    let miri_unsafe_locals = cx.unsafe_locals(instance.def_id()).and_then(|s| Some(s.clone()));
     let mut fx = FunctionCx {
         instance,
         mir,
@@ -228,6 +235,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         per_local_var_debug_info: None,
         caller_location: None,
         is_svf_enable,
+        miri_unsafe_locals,
     };
 
     // It may seem like we should iterate over `required_consts` to ensure they all successfully
@@ -309,7 +317,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                 debug!("alloc: {:?} -> place", local);
 
                 if miri_unsafe_locals.is_some() {
-                    println!("mem local: {:?}", local);
+                    //println!("mem local: {:?}", local);
                 }
                 if layout.is_unsized() {
                     LocalRef::UnsizedPlace(
@@ -326,7 +334,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                 debug!("alloc: {:?} -> operand", local);
 
                 if miri_unsafe_locals.is_some() {
-                    println!("not mem local: {:?}", local);
+                    //println!("not mem local: {:?}", local);
                 }
                 LocalRef::new_operand(layout)
             }
@@ -418,7 +426,8 @@ fn arg_local_refs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                     );
                 }
 
-                let place = PlaceRef::alloca(bx, layout);
+                let place = PlaceRef::alloca(bx, layout)
+                    .with_miri_unsafe_tag(bx, fx.miri_is_local_unsafe(local));
                 for i in 0..tupled_arg_tys.len() {
                     let arg = &fx.fn_abi.args[idx];
                     idx += 1;
@@ -438,7 +447,8 @@ fn arg_local_refs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             }
 
             if fx.fn_abi.c_variadic && arg_index == fx.fn_abi.args.len() {
-                let va_list = PlaceRef::alloca(bx, bx.layout_of(arg_ty));
+                let va_list = PlaceRef::alloca(bx, bx.layout_of(arg_ty))
+                    .with_miri_unsafe_tag(bx, fx.miri_is_local_unsafe(local));
                 bx.va_start(va_list.val.llval);
 
                 return LocalRef::Place(va_list);
@@ -490,7 +500,8 @@ fn arg_local_refs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                     {
                         // ...unless the argument is underaligned, then we need to copy it to
                         // a higher-aligned alloca.
-                        let tmp = PlaceRef::alloca(bx, arg.layout);
+                        let tmp = PlaceRef::alloca(bx, arg.layout)
+                            .with_miri_unsafe_tag(bx, fx.miri_is_local_unsafe(local));
                         bx.store_fn_arg(arg, &mut llarg_idx, tmp);
                         LocalRef::Place(tmp)
                     } else {
@@ -509,12 +520,14 @@ fn arg_local_refs<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                     llarg_idx += 1;
                     let indirect_operand = OperandValue::Pair(llarg, llextra);
 
-                    let tmp = PlaceRef::alloca_unsized_indirect(bx, arg.layout);
+                    let tmp = PlaceRef::alloca_unsized_indirect(bx, arg.layout)
+                        .with_miri_unsafe_tag(bx, fx.miri_is_local_unsafe(local));
                     indirect_operand.store(bx, tmp);
                     LocalRef::UnsizedPlace(tmp)
                 }
                 _ => {
-                    let tmp = PlaceRef::alloca(bx, arg.layout);
+                    let tmp = PlaceRef::alloca(bx, arg.layout)
+                        .with_miri_unsafe_tag(bx, fx.miri_is_local_unsafe(local));
                     bx.store_fn_arg(arg, &mut llarg_idx, tmp);
                     LocalRef::Place(tmp)
                 }

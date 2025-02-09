@@ -1794,7 +1794,8 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     return if fn_ret.is_indirect() {
                         // Odd, but possible, case, we have an operand temporary,
                         // but the calling convention has an indirect return.
-                        let tmp = PlaceRef::alloca(bx, fn_ret.layout);
+                        let tmp = PlaceRef::alloca(bx, fn_ret.layout)
+                            .with_miri_unsafe_tag(bx, self.miri_is_local_unsafe(index));
                         tmp.storage_live(bx);
                         llargs.push(tmp.val.llval);
                         ReturnDest::IndirectOperand(tmp, index)
@@ -1802,7 +1803,8 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         // Currently, intrinsics always need a location to store
                         // the result, so we create a temporary `alloca` for the
                         // result.
-                        let tmp = PlaceRef::alloca(bx, fn_ret.layout);
+                        let tmp = PlaceRef::alloca(bx, fn_ret.layout)
+                            .with_miri_unsafe_tag(bx, self.miri_is_local_unsafe(index));
                         tmp.storage_live(bx);
                         ReturnDest::IndirectOperand(tmp, index)
                     } else {
