@@ -8,6 +8,7 @@ use std::string::FromUtf8Error;
 
 use libc::{c_char, c_uint};
 use rustc_abi::{Align, Size, WrappingRange};
+use rustc_hir::def_id::DefIndex;
 use rustc_llvm::RustString;
 
 pub use self::ffi::*;
@@ -171,13 +172,13 @@ pub fn SetFunctionCallConv(fn_: &Value, cc: CallConv) {
     }
 }
 
-pub fn SetMiriUnsafeFunction(llcx: &Context, val: &Value) {
+pub fn SetMiriUnsafeFunction(llcx: &Context, val: &Value, def_id: DefIndex) {
     unsafe {
         let key = "miri-detected";
         let kind =
             ffi::LLVMGetMDKindIDInContext(llcx, key.as_ptr() as *const c_char, key.len() as c_uint);
 
-        let tag_str = "unsafe_function";
+        let tag_str = format!("{:?}", def_id.as_u32());
 
         let tag = ffi::LLVMMDStringInContext2(llcx, tag_str.as_ptr().cast(), tag_str.len());
         let node = ffi::LLVMMDNodeInContext2(llcx, vec![tag].as_ptr(), 1);

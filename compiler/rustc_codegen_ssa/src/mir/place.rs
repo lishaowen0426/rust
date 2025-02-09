@@ -1,6 +1,7 @@
 use rustc_abi::Primitive::{Int, Pointer};
 use rustc_abi::{Align, FieldsShape, Size, TagEncoding, VariantIdx, Variants};
 use rustc_middle::mir::tcx::PlaceTy;
+use rustc_middle::mir::Local;
 use rustc_middle::ty::layout::{HasTyCtxt, LayoutOf, TyAndLayout};
 use rustc_middle::ty::{self, Ty};
 use rustc_middle::{bug, mir};
@@ -102,6 +103,16 @@ impl<'a, 'tcx, V: CodegenObject> PlaceRef<'tcx, V> {
             info!("tag: {:?}", self.val.llval);
             bx.miri_unsafe_alloca(self.val.llval);
         }
+        return self;
+    }
+
+    #[instrument(level = "info", skip_all)]
+    pub fn with_local_tag<Bx: BuilderMethods<'a, 'tcx, Value = V>>(
+        self,
+        bx: &mut Bx,
+        local: Local,
+    ) -> Self {
+        bx.tag_with_local(self.val.llval, local);
         return self;
     }
 

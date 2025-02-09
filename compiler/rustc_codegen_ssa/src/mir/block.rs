@@ -1236,7 +1236,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
 
             for statement in &data.statements {
                 if self.is_svf_enable && mir.source_scopes[statement.source_info.scope].is_unsafe {
-                    bx.set_svf_unsafe();
+                    bx.set_svf_unsafe(Some(format!("{:?}", statement)), None);
                 }
                 self.codegen_statement(bx, statement);
                 bx.clear_svf_unsafe();
@@ -1245,7 +1245,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             if self.is_svf_enable
                 && mir.source_scopes[data.terminator().source_info.scope].is_unsafe
             {
-                bx.set_svf_unsafe();
+                bx.set_svf_unsafe(None, Some(format!("{:?}", data.terminator())));
             }
             let merging_succ = self.codegen_terminator(bx, bb, data.terminator());
             bx.clear_svf_unsafe();
@@ -1795,7 +1795,8 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         // Odd, but possible, case, we have an operand temporary,
                         // but the calling convention has an indirect return.
                         let tmp = PlaceRef::alloca(bx, fn_ret.layout)
-                            .with_miri_unsafe_tag(bx, self.miri_is_local_unsafe(index));
+                            .with_miri_unsafe_tag(bx, self.miri_is_local_unsafe(index))
+                            .with_local_tag(bx, index);
                         tmp.storage_live(bx);
                         llargs.push(tmp.val.llval);
                         ReturnDest::IndirectOperand(tmp, index)
@@ -1804,7 +1805,8 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         // the result, so we create a temporary `alloca` for the
                         // result.
                         let tmp = PlaceRef::alloca(bx, fn_ret.layout)
-                            .with_miri_unsafe_tag(bx, self.miri_is_local_unsafe(index));
+                            .with_miri_unsafe_tag(bx, self.miri_is_local_unsafe(index))
+                            .with_local_tag(bx, index);
                         tmp.storage_live(bx);
                         ReturnDest::IndirectOperand(tmp, index)
                     } else {

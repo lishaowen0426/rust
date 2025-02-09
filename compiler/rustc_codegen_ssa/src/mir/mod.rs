@@ -257,7 +257,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             DefKind::Fn | DefKind::AssocFn => {
                 let fn_sig = cx.tcx().fn_sig(instance.def_id()).instantiate_identity();
                 match fn_sig.safety() {
-                    Safety::Unsafe => start_bx.set_svf_unsafe(),
+                    Safety::Unsafe => start_bx.set_svf_unsafe(None, None),
                     _ => {}
                 };
             }
@@ -266,7 +266,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                 if let ty::Closure(_, args) = closure_ty.kind() {
                     let fn_sig = args.as_closure().sig();
                     match fn_sig.safety() {
-                        Safety::Unsafe => start_bx.set_svf_unsafe(),
+                        Safety::Unsafe => start_bx.set_svf_unsafe(None, None),
                         _ => {}
                     };
                 }
@@ -298,7 +298,8 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                         let llretptr = start_bx.get_param(0);
                         return LocalRef::Place(
                             PlaceRef::new_sized(llretptr, layout)
-                                .with_miri_unsafe_tag(&mut start_bx, miri_unsafe_tag),
+                                .with_miri_unsafe_tag(&mut start_bx, miri_unsafe_tag)
+                                .with_local_tag(&mut start_bx, local),
                         );
                     }
                     PassMode::Cast { ref cast, .. } => {
@@ -306,7 +307,8 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                         let size = cast.size(&start_bx);
                         return LocalRef::Place(
                             PlaceRef::alloca_size(&mut start_bx, size, layout)
-                                .with_miri_unsafe_tag(&mut start_bx, miri_unsafe_tag),
+                                .with_miri_unsafe_tag(&mut start_bx, miri_unsafe_tag)
+                                .with_local_tag(&mut start_bx, local),
                         );
                     }
                     _ => {}
@@ -322,12 +324,14 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
                 if layout.is_unsized() {
                     LocalRef::UnsizedPlace(
                         PlaceRef::alloca_unsized_indirect(&mut start_bx, layout)
-                            .with_miri_unsafe_tag(&mut start_bx, miri_unsafe_tag),
+                            .with_miri_unsafe_tag(&mut start_bx, miri_unsafe_tag)
+                            .with_local_tag(&mut start_bx, local),
                     )
                 } else {
                     LocalRef::Place(
                         PlaceRef::alloca(&mut start_bx, layout)
-                            .with_miri_unsafe_tag(&mut start_bx, miri_unsafe_tag),
+                            .with_miri_unsafe_tag(&mut start_bx, miri_unsafe_tag)
+                            .with_local_tag(&mut start_bx, local),
                     )
                 }
             } else {

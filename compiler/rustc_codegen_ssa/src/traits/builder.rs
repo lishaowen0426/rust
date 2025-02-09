@@ -1,8 +1,10 @@
+#![allow(elided_lifetimes_in_paths)]
 use std::assert_matches::assert_matches;
 use std::ops::Deref;
 
 use rustc_abi::{Align, BackendRepr, Scalar, Size, WrappingRange};
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrs;
+use rustc_middle::mir::Local;
 use rustc_middle::ty::layout::{FnAbiOf, LayoutOf, TyAndLayout};
 use rustc_middle::ty::{Instance, Ty};
 use rustc_session::config::OptLevel;
@@ -33,7 +35,7 @@ pub enum OverflowOp {
 }
 
 pub trait SvfMethods: BackendTypes {
-    fn set_svf_unsafe(&mut self);
+    fn set_svf_unsafe(&mut self, stmt: Option<String>, terminator: Option<String>);
     fn clear_svf_unsafe(&mut self);
     fn is_svf_unsafe(&self) -> bool;
     fn tag_svf_unsafe(&self, val: Self::Value);
@@ -117,6 +119,8 @@ pub trait BuilderMethods<'a, 'tcx>:
         }
         self.cond_br(cond, then_llbb, else_llbb)
     }
+
+    fn tag_with_local(&mut self, alloc: Self::Value, local: Local);
 
     fn switch(
         &mut self,

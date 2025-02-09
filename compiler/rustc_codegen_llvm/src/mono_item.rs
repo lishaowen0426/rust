@@ -60,7 +60,7 @@ impl<'tcx> PreDefineCodegenMethods<'tcx> for CodegenCx<'_, 'tcx> {
         let fn_abi = self.fn_abi_of_instance(instance, ty::List::empty());
         let lldecl = self.declare_fn(symbol_name, fn_abi, Some(instance));
         if self.miri_unsafe_locals.contains_key(&instance.def_id()) {
-            llvm::SetMiriUnsafeFunction(self.llcx, lldecl);
+            llvm::SetMiriUnsafeFunction(self.llcx, lldecl, instance.def_id().index);
         }
         llvm::set_linkage(lldecl, base::linkage_to_llvm(linkage));
         let attrs = self.tcx.codegen_fn_attrs(instance.def_id());

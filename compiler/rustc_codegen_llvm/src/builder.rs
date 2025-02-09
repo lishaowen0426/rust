@@ -13,6 +13,7 @@ use rustc_codegen_ssa::MemFlags;
 use rustc_data_structures::small_c_str::SmallCStr;
 use rustc_hir::def_id::DefId;
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrs;
+use rustc_middle::mir::Local;
 use rustc_middle::ty::layout::{
     FnAbiError, FnAbiOfHelpers, FnAbiRequest, HasTypingEnv, LayoutError, LayoutOfHelpers,
     TyAndLayout,
@@ -41,6 +42,8 @@ pub(crate) struct Builder<'a, 'll, 'tcx> {
     pub llbuilder: &'ll mut llvm::Builder<'ll>,
     pub cx: &'a CodegenCx<'ll, 'tcx>,
     pub is_unsafe: bool,
+    pub current_stmt: Option<String>,
+    pub current_terminator: Option<String>,
 }
 
 impl Drop for Builder<'_, '_, '_> {
@@ -79,13 +82,17 @@ impl MiriMethods for Builder<'_, '_, '_> {
     }
 }
 
-impl SvfMethods for Builder<'_, '_, '_> {
-    fn set_svf_unsafe(&mut self) {
+impl<'a, 'll, 'tcx> SvfMethods for Builder<'a, 'll, 'tcx> {
+    fn set_svf_unsafe(&mut self, stmt: Option<String>, terminator: Option<String>) {
+        self.current_stmt = stmt;
+        self.current_terminator = terminator;
         self.is_unsafe = true;
     }
 
     fn clear_svf_unsafe(&mut self) {
         self.is_unsafe = false;
+        self.current_stmt = None;
+        self.current_terminator = None;
     }
 
     fn is_svf_unsafe(&self) -> bool {
@@ -94,6 +101,17 @@ impl SvfMethods for Builder<'_, '_, '_> {
 
     fn tag_svf_unsafe(&self, val: Self::Value) {
         if self.is_svf_unsafe() {
+            if self.current_stmt.is_some() && self.current_terminator.is_some() {
+                panic!("current stmt and current terminator can not be both set");
+            }
+
+            let ir = if self.current_stmt.is_some() {
+                self.current_stmt.as_ref()
+            } else if self.current_terminator.is_some() {
+                self.current_terminator.as_ref()
+            } else {
+                None
+            };
             unsafe {
                 let key = "svf";
                 let kind = llvm::LLVMGetMDKindIDInContext(
@@ -112,6 +130,26 @@ impl SvfMethods for Builder<'_, '_, '_> {
                 let node = llvm::LLVMMDNodeInContext2(&self.llcx, vec![tag].as_ptr(), 1);
                 let tag_md = llvm::LLVMMetadataAsValue(self.llcx, node);
                 llvm::LLVMSetMetadata(val, kind, tag_md);
+
+                if let Some(mir) = ir {
+                    let key = "mir-ir";
+                    let kind = llvm::LLVMGetMDKindIDInContext(
+                        &self.llcx,
+                        key.as_ptr() as *const c_char,
+                        key.len() as c_uint,
+                    );
+
+                    let tag_str = mir;
+
+                    let tag = llvm::LLVMMDStringInContext2(
+                        &self.llcx,
+                        tag_str.as_ptr().cast(),
+                        tag_str.len(),
+                    );
+                    let node = llvm::LLVMMDNodeInContext2(&self.llcx, vec![tag].as_ptr(), 1);
+                    let tag_md = llvm::LLVMMetadataAsValue(self.llcx, node);
+                    llvm::LLVMSetMetadata(val, kind, tag_md);
+                }
             }
         }
     }
@@ -223,6 +261,25 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
             llvm::LLVMPositionBuilderAtEnd(bx.llbuilder, llbb);
         }
         bx
+    }
+
+    fn tag_with_local(&mut self, val: Self::Value, local: Local) {
+        unsafe {
+            let key = "mir-local";
+            let kind = llvm::LLVMGetMDKindIDInContext(
+                &self.llcx,
+                key.as_ptr() as *const c_char,
+                key.len() as c_uint,
+            );
+
+            let tag_str = format!("{:?}", local.as_u32());
+
+            let tag =
+                llvm::LLVMMDStringInContext2(&self.llcx, tag_str.as_ptr().cast(), tag_str.len());
+            let node = llvm::LLVMMDNodeInContext2(&self.llcx, vec![tag].as_ptr(), 1);
+            let tag_md = llvm::LLVMMetadataAsValue(self.llcx, node);
+            llvm::LLVMSetMetadata(val, kind, tag_md);
+        }
     }
 
     fn cx(&self) -> &CodegenCx<'ll, 'tcx> {
@@ -1416,7 +1473,7 @@ impl<'a, 'll, 'tcx> Builder<'a, 'll, 'tcx> {
     fn with_cx(cx: &'a CodegenCx<'ll, 'tcx>) -> Self {
         // Create a fresh builder from the crate context.
         let llbuilder = unsafe { llvm::LLVMCreateBuilderInContext(cx.llcx) };
-        Builder { llbuilder, cx, is_unsafe: false }
+        Builder { llbuilder, cx, is_unsafe: false, current_stmt: None, current_terminator: None }
     }
 
     pub(crate) fn llfn(&self) -> &'ll Value {
