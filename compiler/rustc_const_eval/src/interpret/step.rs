@@ -7,7 +7,7 @@ use rustc_abi::{BackendRepr, FieldIdx, FIRST_VARIANT};
 use rustc_data_structures::fx::FxHashSet;
 use rustc_index::IndexSlice;
 use rustc_middle::mir::interpret::{AllocId, Pointer};
-use rustc_middle::mir::Local;
+use rustc_middle::mir::{BinOp, Local};
 use rustc_middle::ty::layout::{FnAbiOf, HasTyCtxt, LayoutOf, TyAndLayout};
 use rustc_middle::ty::{self, Instance, Ty};
 use rustc_middle::{bug, mir, span_bug};
@@ -98,6 +98,10 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
 
         if is_unsafety_tracking_enabled && is_stmt_unsafe {
             //   println!("unsafe stmt in target: {:?}", stmt);
+        }
+
+        if self.tcx.crate_name(self.body().source.def_id().krate).as_str() == "itoa" {
+            println!("stmt: {:?}", stmt);
         }
 
         match &stmt.kind {
@@ -288,6 +292,17 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let result = self.binary_op(bin_op, &left, &right)?;
                 assert_eq!(result.layout, dest.layout, "layout mismatch for result of {bin_op:?}");
                 self.write_immediate(*result, &dest)?;
+                match bin_op {
+                    BinOp::Eq => {
+                        if is_unsafety_tracking_enabled {
+                            println!(
+                                "is stmt unsafe: {:?}, rvalue:{:?}, place:{:?}",
+                                is_stmt_unsafe, rvalue, place
+                            );
+                        }
+                    }
+                    _ => {}
+                }
                 false
             }
 
