@@ -259,6 +259,10 @@ pub fn phase_cargo_miri(mut args: impl Iterator<Item = String>) {
         cmd.env("MIRI_VERBOSE", verbose.to_string()); // This makes the other phases verbose.
     }
 
+    if env::var("MIRI_SVF").is_ok() {
+        cmd.env("MIRI_SVF", env::var("MIRI_SVF").unwrap());
+    }
+
     // Run cargo.
     debug_cmd("[cargo-miri cargo]", verbose, &cmd);
     exec(cmd)
@@ -485,6 +489,7 @@ pub fn phase_rustc(mut args: impl Iterator<Item = String>, phase: RustcPhase) {
                         val.push("metadata");
                     }
                 }
+
                 cmd.arg(format!("{emit_flag}={}", val.join(",")));
                 continue;
             }
@@ -536,6 +541,14 @@ pub fn phase_rustc(mut args: impl Iterator<Item = String>, phase: RustcPhase) {
     // MIRI_DEFAULT_ARGS should not be used to build host crates, hence setting "target" or "host"
     // as the value here to help Miri differentiate them.
     cmd.env("MIRI_BE_RUSTC", if target_crate { "target" } else { "host" });
+
+    if env::var("MIRI_SVF").is_ok() {
+        if verbose > 0 {
+            eprintln!("[cargo-miri rustc] MIRI_SVF: {:?}", env::var("MIRI_SVF"));
+        }
+        cmd.arg("--emit=llvm-ir");
+        cmd.arg("-Zunsafety-svf");
+    }
 
     // Run it.
     if verbose > 0 {
