@@ -541,7 +541,7 @@ pub fn eval_entry<'tcx>(
         }
     };
 
-    println!("unsafety tracking enabled: {}", !config.track_unsafety_target_crates.is_empty());
+    //println!("unsafety tracking enabled: {}", !config.track_unsafety_target_crates.is_empty());
     config.track_unsafety_target_crates.iter().for_each(|c| println!("target: {c}"));
 
     // Perform the main execution.

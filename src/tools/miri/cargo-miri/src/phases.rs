@@ -542,7 +542,10 @@ pub fn phase_rustc(mut args: impl Iterator<Item = String>, phase: RustcPhase) {
     // as the value here to help Miri differentiate them.
     cmd.env("MIRI_BE_RUSTC", if target_crate { "target" } else { "host" });
 
-    if env::var("MIRI_SVF").is_ok() {
+    if env::var("MIRI_SVF")
+        .as_ref()
+        .is_ok_and(|name| return cmd.get_args().any(|arg| arg.to_str().unwrap() == &*name))
+    {
         if verbose > 0 {
             eprintln!("[cargo-miri rustc] MIRI_SVF: {:?}", env::var("MIRI_SVF"));
         }

@@ -357,11 +357,7 @@ fn entry_fn(tcx: TyCtxt<'_>) -> (DefId, EntryFnType) {
     }
     // Look for a symbol in the local crate named `miri_start`, and treat that as the entry point.
     let sym = tcx.exported_symbols(LOCAL_CRATE).iter().find_map(|(sym, _)| {
-        if sym.symbol_name_for_local_instance(tcx).name == "miri_start" {
-            Some(sym)
-        } else {
-            None
-        }
+        if sym.symbol_name_for_local_instance(tcx).name == "miri_start" { Some(sym) } else { None }
     });
     if let Some(ExportedSymbol::NonGeneric(id)) = sym {
         let start_def_id = id.expect_local();
@@ -528,8 +524,8 @@ fn main() {
                     miri::IsolatedOp::Reject(miri::RejectOpWith::WarningWithoutBacktrace),
                 _ =>
                     show_error!(
-                    "-Zmiri-isolation-error must be `abort`, `hide`, `warn`, or `warn-nobacktrace`"
-                ),
+                        "-Zmiri-isolation-error must be `abort`, `hide`, `warn`, or `warn-nobacktrace`"
+                    ),
             };
         } else if arg == "-Zmiri-ignore-leaks" {
             miri_config.ignore_leaks = true;
