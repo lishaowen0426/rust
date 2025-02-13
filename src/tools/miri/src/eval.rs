@@ -1,12 +1,12 @@
 //! Main evaluator loop and setting up the initial stack frame.
 
 use std::ffi::{OsStr, OsString};
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::task::Poll;
-use std::{iter, thread};
+use std::{env, iter, thread};
 
 use rustc_abi::ExternAbi;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
@@ -455,36 +455,8 @@ fn output_unsafety_tracking_result_to_json<'tcx>(
     let to_key = |def_id: DefId| ecx.tcx.crate_name(def_id.krate).to_string();
 
     let mut output = output_dir.to_path_buf();
-    output.push("miri_unsafety_result.json");
+    output.push(MIRI_UNSAFE_RESULT_FILE);
     let mut result: MiriResult = FxHashMap::default();
-
-    let merge_results = |to: &mut MiriUnsafes, from: &MiriUnsafes| {
-        for (did, uls) in from.iter() {
-            let to_set = to.entry(*did).or_insert_with(FxHashSet::default);
-            uls.iter().for_each(|l| {
-                to_set.insert(*l);
-            });
-        }
-    };
-
-    // first read existing result
-    if output.exists() {
-        let mut file = File::open(output.as_path());
-        if let Ok(f) = file.as_mut() {
-            let mut json_content = String::new();
-            if f.read_to_string(&mut json_content)
-                .expect(format!("cannot read existing miri result file {:?}", output).as_str())
-                > 0
-            {
-                let existing: MiriResult = serde_json::from_str(&json_content)
-                    .expect(format!("cant deserialize result : {}", json_content).as_str());
-                for (cname, ulocals) in &existing {
-                    let u1 = result.entry(cname.clone()).or_insert_with(FxHashMap::default);
-                    merge_results(u1, ulocals);
-                }
-            }
-        }
-    }
 
     for (def_id, locals) in ecx.def_id_to_unsafe_local.iter() {
         //println!("def id {:?}, unsafe locals: {:?}", def_id, locals);
@@ -509,7 +481,7 @@ fn output_unsafety_tracking_result_to_json<'tcx>(
         }
     };
 
-    //println!("output: {}", j);
+    println!("output: {}", j);
 
     let mut file =
         OpenOptions::new().append(false).write(true).create(true).open(output.as_path())?;
@@ -542,7 +514,7 @@ pub fn eval_entry<'tcx>(
     };
 
     //println!("unsafety tracking enabled: {}", !config.track_unsafety_target_crates.is_empty());
-    config.track_unsafety_target_crates.iter().for_each(|c| println!("target: {c}"));
+    //config.track_unsafety_target_crates.iter().for_each(|c| println!("target: {c}"));
 
     // Perform the main execution.
     let res: thread::Result<InterpResult<'_, !>> =
@@ -566,7 +538,11 @@ pub fn eval_entry<'tcx>(
 
     output_unsafety_tracking_result_to_json(
         &ecx,
-        config.track_unsafety_output.unwrap_or(std::env::current_dir().unwrap()).as_path(),
+        PathBuf::from(
+            env::var("MIRI_CWD")
+                .unwrap_or(String::from(std::env::current_dir().unwrap().to_str().unwrap())),
+        )
+        .as_path(),
     )
     .expect("output result failed");
 

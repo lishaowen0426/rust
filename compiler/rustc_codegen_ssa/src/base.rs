@@ -610,7 +610,7 @@ pub fn codegen_crate<B: ExtraBackendMethods>(
 ) -> OngoingCodegen<B> {
     // Skip crate items and just output metadata in -Z no-codegen mode.
     if tcx.sess.opts.unstable_opts.no_codegen || !tcx.sess.opts.output_types.should_codegen() {
-        info!("no codegen, output_types: {:?}", tcx.sess.opts.output_types);
+        //info!("no codegen, output_types: {:?}", tcx.sess.opts.output_types);
         let ongoing_codegen = start_async_codegen(backend, tcx, target_cpu, metadata, None);
 
         ongoing_codegen.codegen_finished(tcx);
@@ -624,13 +624,7 @@ pub fn codegen_crate<B: ExtraBackendMethods>(
 
     // Run the monomorphization collector and partition the collected items into
     // codegen units.
-    let (crate_def_ids, codegen_units) = tcx.collect_and_partition_mono_items(());
-    let miri_unsafe_results = tcx.parse_miri_result(()).0;
-    if !miri_unsafe_results.is_empty() {
-        for did in crate_def_ids.inner.iter() {
-            info!("Def id:{:?}, miri unsafe?: {}", did, miri_unsafe_results.contains_key(did));
-        }
-    }
+    let (_, codegen_units) = tcx.collect_and_partition_mono_items(());
 
     // Force all codegen_unit queries so they are already either red or green
     // when compile_codegen_unit accesses them. We are not able to re-execute

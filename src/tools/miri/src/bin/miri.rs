@@ -30,7 +30,7 @@ use std::num::NonZero;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use miri::{BacktraceStyle, BorrowTrackerMethod, ProvenanceMode, RetagFields, ValidationMode};
+use miri::{BacktraceStyle, BorrowTrackerMethod, ProvenanceMode, RetagFields, ValidationMode, MIRI_UNSAFE_RESULT_FILE};
 use rustc_abi::ExternAbi;
 use rustc_data_structures::sync::Lrc;
 use rustc_driver::Compilation;
@@ -122,8 +122,6 @@ impl rustc_driver::Callbacks for MiriCompilerCalls {
                 );
                }
             }
-
-
 
             tcx.dcx().abort_if_errors();
             tcx.sess.opts.unstable_opts.unsafety_svf 
@@ -707,7 +705,13 @@ fn main() {
         if miri_config.track_unsafety_target_crates.contains(crate_name) {
             rustc_args.push("-Zunsafety-svf".to_string());
             rustc_args.push("--emit=llvm-ir".to_string());
-            println!("push -Zunsafety-svf --emit=llvm-ir to rustc_args");
+            let mut cwd = PathBuf::from(
+            env::var("MIRI_CWD")
+                .unwrap_or(String::from(std::env::current_dir().unwrap().to_str().unwrap())),
+        );
+            cwd.push(MIRI_UNSAFE_RESULT_FILE);
+            rustc_args.push(format!("-Zunsafety-miri-result={}", cwd.display()));
+            println!("rustc_args: {:?}", rustc_args);
         }
     }
 
