@@ -95,6 +95,7 @@ pub fn phase_cargo_miri(mut args: impl Iterator<Item = String>) {
                 "`cargo miri` supports the following subcommands: `run`, `test`, `nextest`, `clean`, and `setup`."
             ),
     };
+    //println!("subcommand: {:?}", subcommand);
     let verbose = num_arg_flag("-v");
     let quiet = has_arg_flag("-q") || has_arg_flag("--quiet");
 
@@ -132,7 +133,7 @@ pub fn phase_cargo_miri(mut args: impl Iterator<Item = String>) {
         setup(&subcommand, target.as_str(), &rustc_version, verbose, quiet);
     }
     let miri_sysroot = get_sysroot_dir();
-
+    //println!("miri_sysroot: {:?}", miri_sysroot);
     // Invoke actual cargo for the job, but with different flags.
     // We re-use `cargo test` and `cargo run`, which makes target and binary handling very easy but
     // requires some extra work to make the build check-only (see all the `--emit` hacks below).
@@ -144,12 +145,14 @@ pub fn phase_cargo_miri(mut args: impl Iterator<Item = String>) {
         .into_os_string()
         .into_string()
         .expect("current executable path is not valid UTF-8");
+    //println!("cargo_miri_path: {:?}", cargo_miri_path);
     let cargo_cmd = match subcommand {
         MiriCommand::Forward(s) => s,
         MiriCommand::Setup => return, // `cargo miri setup` stops here.
         MiriCommand::Clean => unreachable!(),
     };
     let metadata = get_cargo_metadata();
+    //println!("metadata: {:?}", metadata);
     let mut cmd = cargo();
     cmd.arg(&cargo_cmd);
     // In nextest we have to also forward the main `verb`.
@@ -256,6 +259,10 @@ pub fn phase_cargo_miri(mut args: impl Iterator<Item = String>) {
         cmd.env("MIRI_VERBOSE", verbose.to_string()); // This makes the other phases verbose.
     }
 
+    if env::var("MIRI_SVF").is_ok() {
+        cmd.env("MIRI_SVF", env::var("MIRI_SVF").unwrap());
+    }
+
     // Run cargo.
     debug_cmd("[cargo-miri cargo]", verbose, &cmd);
     exec(cmd)
@@ -341,6 +348,7 @@ pub fn phase_rustc(mut args: impl Iterator<Item = String>, phase: RustcPhase) {
 
     let verbose = env::var("MIRI_VERBOSE")
         .map_or(0, |verbose| verbose.parse().expect("verbosity flag must be an integer"));
+
     let target_crate = is_target_crate();
 
     let store_json = |info: CrateRunInfo| {
@@ -481,6 +489,7 @@ pub fn phase_rustc(mut args: impl Iterator<Item = String>, phase: RustcPhase) {
                         val.push("metadata");
                     }
                 }
+
                 cmd.arg(format!("{emit_flag}={}", val.join(",")));
                 continue;
             }
@@ -532,6 +541,19 @@ pub fn phase_rustc(mut args: impl Iterator<Item = String>, phase: RustcPhase) {
     // MIRI_DEFAULT_ARGS should not be used to build host crates, hence setting "target" or "host"
     // as the value here to help Miri differentiate them.
     cmd.env("MIRI_BE_RUSTC", if target_crate { "target" } else { "host" });
+
+    /*
+    if env::var("MIRI_SVF")
+        .as_ref()
+        .is_ok_and(|name| return cmd.get_args().any(|arg| arg.to_str().unwrap() == &*name))
+    {
+        if verbose > 0 {
+            eprintln!("[cargo-miri rustc] MIRI_SVF: {:?}", env::var("MIRI_SVF"));
+        }
+        cmd.arg("--emit=llvm-ir");
+        cmd.arg("-Zunsafety-svf");
+    }
+    */
 
     // Run it.
     if verbose > 0 {

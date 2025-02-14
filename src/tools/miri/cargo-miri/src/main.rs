@@ -22,6 +22,12 @@ fn main() {
     // Rustc does not support non-UTF-8 arguments so we make no attempt either.
     // (We do support non-UTF-8 environment variables though.)
     let mut args = env::args();
+    /*
+    println!("args: {:?}", args);
+    println!("RUSTFLAGS: {:?}", env::var("RUSTFLAGS"));
+    println!("RUSTC: {:?}", env::var("RUSTC"));
+    println!("MIRIFLAGS: {:?}", env::var("MIRIFLAGS"));
+    */
     // Skip binary name.
     args.next().unwrap();
 
@@ -96,6 +102,9 @@ fn main() {
             // point), then we need to behave as rustc. This is the somewhat counter-intuitive
             // behavior of having both RUSTC and RUSTC_WRAPPER set
             // (see https://github.com/rust-lang/cargo/issues/10886).
+
+            // here is when we run: cargo miri run/test
+            // how crates are compiled
             phase_rustc(args, RustcPhase::Build)
         }
         _ if looks_like_rustdoc() => {

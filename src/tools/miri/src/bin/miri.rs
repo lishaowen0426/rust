@@ -4,7 +4,9 @@
     clippy::useless_format,
     clippy::field_reassign_with_default,
     rustc::diagnostic_outside_of_impl,
-    rustc::untranslatable_diagnostic
+    rustc::untranslatable_diagnostic,
+    unused_variables,
+    unreachable_code
 )]
 
 // Some "regular" crates we want to share with rustc
@@ -28,7 +30,7 @@ use std::num::NonZero;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use miri::{BacktraceStyle, BorrowTrackerMethod, ProvenanceMode, RetagFields, ValidationMode};
+use miri::{BacktraceStyle, BorrowTrackerMethod, ProvenanceMode, RetagFields, ValidationMode, MIRI_UNSAFE_RESULT_FILE};
 use rustc_abi::ExternAbi;
 use rustc_data_structures::sync::Lrc;
 use rustc_driver::Compilation;
@@ -36,6 +38,7 @@ use rustc_hir::def_id::LOCAL_CRATE;
 use rustc_hir::{self as hir, Node};
 use rustc_hir_analysis::check::check_function_signature;
 use rustc_interface::interface::Config;
+use rustc_interface::Linker;
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrFlags;
 use rustc_middle::middle::exported_symbols::{
     ExportedSymbol, SymbolExportInfo, SymbolExportKind, SymbolExportLevel,
@@ -48,7 +51,6 @@ use rustc_session::config::{CrateType, EntryFnType, ErrorOutputType, OptLevel};
 use rustc_session::search_paths::PathKind;
 use rustc_session::{CtfeBacktrace, EarlyDiagCtxt};
 use rustc_span::def_id::DefId;
-use tracing::debug;
 
 struct MiriCompilerCalls {
     miri_config: miri::MiriConfig,
@@ -72,10 +74,10 @@ impl rustc_driver::Callbacks for MiriCompilerCalls {
 
     fn after_analysis<'tcx>(
         &mut self,
-        _: &rustc_interface::interface::Compiler,
+        compiler: &rustc_interface::interface::Compiler,
         queries: &'tcx rustc_interface::Queries<'tcx>,
     ) -> Compilation {
-        queries.global_ctxt().unwrap().enter(|tcx| {
+        let continue_codegen = queries.global_ctxt().unwrap().enter(|tcx| {
             if tcx.sess.dcx().has_errors_or_delayed_bugs().is_some() {
                 tcx.dcx().fatal("miri cannot be run on programs that fail compilation");
             }
@@ -111,13 +113,26 @@ impl rustc_driver::Callbacks for MiriCompilerCalls {
                     optimizations is usually marginal at best.");
             }
 
+
+
             if let Some(return_code) = miri::eval_entry(tcx, entry_def_id, entry_type, config) {
+               if !tcx.sess.opts.unstable_opts.unsafety_svf {
                 std::process::exit(
                     i32::try_from(return_code).expect("Return value was too large!"),
                 );
+               }
             }
+
             tcx.dcx().abort_if_errors();
+            tcx.sess.opts.unstable_opts.unsafety_svf 
         });
+
+        if continue_codegen {
+             queries.global_ctxt().unwrap().enter(|tcx| {
+                println!("codegen and build linker");
+                let _ = Linker::codegen_and_build_linker(tcx, &*compiler.codegen_backend).unwrap();
+            });
+        }
 
         Compilation::Stop
     }
@@ -357,11 +372,7 @@ fn entry_fn(tcx: TyCtxt<'_>) -> (DefId, EntryFnType) {
     }
     // Look for a symbol in the local crate named `miri_start`, and treat that as the entry point.
     let sym = tcx.exported_symbols(LOCAL_CRATE).iter().find_map(|(sym, _)| {
-        if sym.symbol_name_for_local_instance(tcx).name == "miri_start" {
-            Some(sym)
-        } else {
-            None
-        }
+        if sym.symbol_name_for_local_instance(tcx).name == "miri_start" { Some(sym) } else { None }
     });
     if let Some(ExportedSymbol::NonGeneric(id)) = sym {
         let start_def_id = id.expect_local();
@@ -528,8 +539,8 @@ fn main() {
                     miri::IsolatedOp::Reject(miri::RejectOpWith::WarningWithoutBacktrace),
                 _ =>
                     show_error!(
-                    "-Zmiri-isolation-error must be `abort`, `hide`, `warn`, or `warn-nobacktrace`"
-                ),
+                        "-Zmiri-isolation-error must be `abort`, `hide`, `warn`, or `warn-nobacktrace`"
+                    ),
             };
         } else if arg == "-Zmiri-ignore-leaks" {
             miri_config.ignore_leaks = true;
@@ -688,8 +699,22 @@ fn main() {
         );
     }
 
-    debug!("rustc arguments: {:?}", rustc_args);
-    debug!("crate arguments: {:?}", miri_config.args);
+    let crate_name_idx = rustc_args.iter().position(|arg| arg == "--crate-name");
+    if let Some(crate_name_idx) = crate_name_idx {
+        let crate_name = &rustc_args[crate_name_idx + 1];
+        if miri_config.track_unsafety_target_crates.contains(crate_name) {
+            rustc_args.push("-Zunsafety-svf".to_string());
+            rustc_args.push("--emit=llvm-ir".to_string());
+            let mut cwd = PathBuf::from(
+            env::var("MIRI_CWD")
+                .unwrap_or(String::from(std::env::current_dir().unwrap().to_str().unwrap())),
+        );
+            cwd.push(MIRI_UNSAFE_RESULT_FILE);
+            rustc_args.push(format!("-Zunsafety-miri-result={}", cwd.display()));
+            println!("rustc_args: {:?}", rustc_args);
+        }
+    }
+
     run_compiler(
         rustc_args,
         /* target_crate: */ true,

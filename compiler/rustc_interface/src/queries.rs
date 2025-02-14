@@ -15,6 +15,7 @@ use rustc_middle::ty::{GlobalCtxt, TyCtxt};
 use rustc_serialize::opaque::FileEncodeResult;
 use rustc_session::Session;
 use rustc_session::config::{self, OutputFilenames, OutputType};
+use tracing::instrument;
 
 use crate::errors::FailedWritingFile;
 use crate::interface::{Compiler, Result};
@@ -122,6 +123,7 @@ pub struct Linker {
 }
 
 impl Linker {
+    #[instrument(level = "info", skip_all)]
     pub fn codegen_and_build_linker(
         tcx: TyCtxt<'_>,
         codegen_backend: &dyn CodegenBackend,

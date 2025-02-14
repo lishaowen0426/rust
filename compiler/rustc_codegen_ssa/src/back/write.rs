@@ -2,8 +2,8 @@ use std::any::Any;
 use std::assert_matches::assert_matches;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::{fs, io, mem, str, thread};
 
 use jobserver::{Acquired, Client};
@@ -22,21 +22,21 @@ use rustc_hir::def_id::{CrateNum, LOCAL_CRATE};
 use rustc_incremental::{
     copy_cgu_workproduct_to_incr_comp_cache_dir, in_incr_comp_dir, in_incr_comp_dir_sess,
 };
-use rustc_metadata::fs::copy_to_stdout;
 use rustc_metadata::EncodedMetadata;
+use rustc_metadata::fs::copy_to_stdout;
 use rustc_middle::bug;
 use rustc_middle::dep_graph::{WorkProduct, WorkProductId};
 use rustc_middle::middle::exported_symbols::SymbolExportInfo;
 use rustc_middle::ty::TyCtxt;
+use rustc_session::Session;
 use rustc_session::config::{
     self, CrateType, Lto, OutFileName, OutputFilenames, OutputType, Passes, SwitchWithOptPath,
 };
-use rustc_session::Session;
 use rustc_span::source_map::SourceMap;
 use rustc_span::symbol::sym;
 use rustc_span::{BytePos, FileName, InnerSpan, Pos, Span};
 use rustc_target::spec::{MergeFunctions, SanitizerSet};
-use tracing::debug;
+use tracing::{debug, info, instrument};
 
 use super::link::{self, ensure_removed};
 use super::lto::{self, SerializedModule};
@@ -44,8 +44,8 @@ use super::symbol_export::symbol_name_for_instance_in_crate;
 use crate::errors::ErrorCreatingRemarkDir;
 use crate::traits::*;
 use crate::{
-    errors, CachedModuleCodegen, CodegenResults, CompiledModule, CrateInfo, ModuleCodegen,
-    ModuleKind,
+    CachedModuleCodegen, CodegenResults, CompiledModule, CrateInfo, ModuleCodegen, ModuleKind,
+    errors,
 };
 
 const PRE_LTO_BC_EXT: &str = "pre-lto.bc";
@@ -129,11 +129,7 @@ impl ModuleConfig {
         // `$regular` and `$other` are evaluated lazily.
         macro_rules! if_regular {
             ($regular: expr, $other: expr) => {
-                if let ModuleKind::Regular = kind {
-                    $regular
-                } else {
-                    $other
-                }
+                if let ModuleKind::Regular = kind { $regular } else { $other }
             };
         }
 
@@ -432,6 +428,7 @@ fn generate_lto_work<B: ExtraBackendMethods>(
     }
 }
 
+#[derive(Debug)]
 struct CompiledModules {
     modules: Vec<CompiledModule>,
     allocator_module: Option<CompiledModule>,
@@ -457,6 +454,7 @@ fn need_pre_lto_bitcode_for_incr_comp(sess: &Session) -> bool {
     }
 }
 
+#[instrument(level = "info", skip_all)]
 pub(crate) fn start_async_codegen<B: ExtraBackendMethods>(
     backend: B,
     tcx: TyCtxt<'_>,
@@ -492,6 +490,9 @@ pub(crate) fn start_async_codegen<B: ExtraBackendMethods>(
         Arc::new(allocator_config),
         coordinator_send.clone(),
     );
+
+    info!("output_filenames: {:?}", tcx.output_filenames(()));
+    info!("output_types: {:?}", sess.opts.output_types);
 
     OngoingCodegen {
         backend,
@@ -549,6 +550,7 @@ fn copy_all_cgu_workproducts_to_incr_comp_cache_dir(
     work_products
 }
 
+#[instrument(level = "info", skip(sess))]
 fn produce_final_output_artifacts(
     sess: &Session,
     compiled_modules: &CompiledModules,

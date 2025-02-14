@@ -170,3 +170,5 @@ pub const MIRI_DEFAULT_ARGS: &[&str] = &[
     // execution. Let's not do that.
     "-Zdeduplicate-diagnostics=no",
 ];
+
+pub const MIRI_UNSAFE_RESULT_FILE: &str = "miri_unsafety_result.json";
