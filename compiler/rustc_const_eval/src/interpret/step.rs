@@ -7,7 +7,7 @@ use rustc_abi::{BackendRepr, FieldIdx, FIRST_VARIANT};
 use rustc_data_structures::fx::FxHashSet;
 use rustc_index::IndexSlice;
 use rustc_middle::mir::interpret::{AllocId, Pointer};
-use rustc_middle::mir::{BinOp, Local};
+use rustc_middle::mir::Local;
 use rustc_middle::ty::layout::{FnAbiOf, HasTyCtxt, LayoutOf, TyAndLayout};
 use rustc_middle::ty::{self, Instance, Ty};
 use rustc_middle::{bug, mir, span_bug};
@@ -57,7 +57,9 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
 
         if let Some(stmt) = basic_block.statements.get(loc.statement_index) {
             let old_frames = self.frame_idx();
+            self.current_stmt_for_debug = Some(stmt.clone());
             self.eval_statement(stmt)?;
+            self.current_stmt_for_debug = None;
             // Make sure we are not updating `statement_index` of the wrong frame.
             assert_eq!(old_frames, self.frame_idx());
             // Advance the program counter.
@@ -98,10 +100,6 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
 
         if is_unsafety_tracking_enabled && is_stmt_unsafe {
             //   println!("unsafe stmt in target: {:?}", stmt);
-        }
-
-        if self.tcx.crate_name(self.body().source.def_id().krate).as_str() == "itoa" {
-            println!("stmt: {:?}", stmt);
         }
 
         match &stmt.kind {
@@ -196,7 +194,10 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
     }
 
     pub fn mark_unsafe_local(&mut self, id: DefId, local: Local) {
-        //println!("local {:?} in defid {:?} is unsafe", local, id);
+        println!(
+            "local {:?} in defid {:?} is unsafe in stmt {:?}",
+            local, id, self.current_stmt_for_debug
+        );
         self.def_id_to_unsafe_local.entry(id).or_insert_with(FxHashSet::default).insert(local);
     }
     pub fn mark_alloc_id_local_unsafe(&mut self, id: DefId, alloc_id: AllocId) {
@@ -292,17 +293,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
                 let result = self.binary_op(bin_op, &left, &right)?;
                 assert_eq!(result.layout, dest.layout, "layout mismatch for result of {bin_op:?}");
                 self.write_immediate(*result, &dest)?;
-                match bin_op {
-                    BinOp::Eq => {
-                        if is_unsafety_tracking_enabled {
-                            println!(
-                                "is stmt unsafe: {:?}, rvalue:{:?}, place:{:?}",
-                                is_stmt_unsafe, rvalue, place
-                            );
-                        }
-                    }
-                    _ => {}
-                }
+
                 false
             }
 

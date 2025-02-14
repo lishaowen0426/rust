@@ -1,13 +1,13 @@
-use rustc_ast::{MetaItemInner, MetaItemKind, ast, attr};
-use rustc_attr::{InlineAttr, InstructionSetAttr, OptimizeAttr, list_contains_name};
+use rustc_ast::{ast, attr, MetaItemInner, MetaItemKind};
+use rustc_attr::{list_contains_name, InlineAttr, InstructionSetAttr, OptimizeAttr};
 use rustc_data_structures::fx::FxHashMap;
 use rustc_errors::codes::*;
-use rustc_errors::{DiagMessage, SubdiagMessage, struct_span_code_err};
+use rustc_errors::{struct_span_code_err, DiagMessage, SubdiagMessage};
 use rustc_hir as hir;
 use rustc_hir::def::DefKind;
-use rustc_hir::def_id::{DefId, LOCAL_CRATE, LocalDefId};
+use rustc_hir::def_id::{DefId, LocalDefId, LOCAL_CRATE};
 use rustc_hir::weak_lang_items::WEAK_LANG_ITEMS;
-use rustc_hir::{LangItem, lang_items};
+use rustc_hir::{lang_items, LangItem};
 use rustc_middle::middle::codegen_fn_attrs::{
     CodegenFnAttrFlags, CodegenFnAttrs, PatchableFunctionEntry,
 };
@@ -15,10 +15,10 @@ use rustc_middle::mir::mono::Linkage;
 use rustc_middle::query::Providers;
 use rustc_middle::ty::{self as ty, TyCtxt};
 use rustc_session::parse::feature_err;
-use rustc_session::{Session, lint};
+use rustc_session::{lint, Session};
 use rustc_span::symbol::Ident;
-use rustc_span::{Span, sym};
-use rustc_target::spec::{SanitizerSet, abi};
+use rustc_span::{sym, Span};
+use rustc_target::spec::{abi, SanitizerSet};
 
 use crate::errors;
 use crate::target_features::{check_target_feature_trait_unsafe, from_target_feature_attr};
@@ -541,6 +541,10 @@ fn codegen_fn_attrs(tcx: TyCtxt<'_>, did: LocalDefId) -> CodegenFnAttrs {
             None => ia,
         }
     });
+
+    if tcx.miri_never_inline(did) {
+        codegen_fn_attrs.inline = InlineAttr::Never;
+    }
 
     // it seems this function is used before the codegen stage
     // when miri result is not generated

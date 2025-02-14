@@ -9,7 +9,7 @@ use rustc_infer::infer::at::ToTrace;
 use rustc_infer::infer::TyCtxtInferExt;
 use rustc_infer::traits::ObligationCause;
 use rustc_middle::mir::interpret::{ErrorHandled, InvalidMetaKind, ReportedErrorInfo};
-use rustc_middle::mir::Local;
+use rustc_middle::mir::{Local, Statement};
 use rustc_middle::query::TyCtxtAt;
 use rustc_middle::ty::layout::{
     self, FnAbiError, FnAbiOfHelpers, FnAbiRequest, LayoutError, LayoutOfHelpers, TyAndLayout,
@@ -55,6 +55,8 @@ pub struct InterpCx<'tcx, M: Machine<'tcx>> {
 
     /// map from a def id to its unsafe locals
     pub def_id_to_unsafe_local: FxHashMap<DefId, FxHashSet<Local>>,
+
+    pub current_stmt_for_debug: Option<Statement<'tcx>>,
 }
 
 impl<'tcx, M: Machine<'tcx>> HasDataLayout for InterpCx<'tcx, M> {
@@ -217,6 +219,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             recursion_limit: tcx.recursion_limit(),
             def_id_to_unsafe_local: FxHashMap::default(),
             unsafety_tracking_crates,
+            current_stmt_for_debug: None,
         }
     }
 

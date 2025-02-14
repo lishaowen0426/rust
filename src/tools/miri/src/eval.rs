@@ -284,7 +284,7 @@ pub fn create_ecx<'tcx>(
         for c in tcx.crates(()).iter() {
             let cname = tcx.crate_name(*c).to_string();
             if config.track_unsafety_target_crates.contains(&cname) {
-                println!("target: {cname}, cnum: {c}");
+                //println!("target: {cname}, cnum: {c}");
                 unsafety_tracking_crates.insert(*c);
             }
         }

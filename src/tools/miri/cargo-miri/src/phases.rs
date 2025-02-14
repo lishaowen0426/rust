@@ -379,6 +379,7 @@ pub fn phase_rustc(mut args: impl Iterator<Item = String>, phase: RustcPhase) {
     let runnable_crate = is_runnable_crate();
 
     if runnable_crate && target_crate {
+        eprintln!("runnable_crate and target_crate");
         assert!(
             phase != RustcPhase::Setup,
             "there should be no interpretation during sysroot build"
@@ -557,7 +558,7 @@ pub fn phase_rustc(mut args: impl Iterator<Item = String>, phase: RustcPhase) {
 
     // Run it.
     if verbose > 0 {
-        eprintln!("[cargo-miri rustc] target_crate={target_crate} runnable_crate={runnable_crate}");
+        //eprintln!("[cargo-miri rustc] target_crate={target_crate} runnable_crate={runnable_crate}");
     }
 
     // Create a stub .rlib file if "link" was requested by cargo.
@@ -565,13 +566,13 @@ pub fn phase_rustc(mut args: impl Iterator<Item = String>, phase: RustcPhase) {
     if emit_link_hack {
         for filename in out_filenames() {
             if verbose > 0 {
-                eprintln!("[cargo-miri rustc] creating fake lib file at `{}`", filename.display());
+                //eprintln!("[cargo-miri rustc] creating fake lib file at `{}`", filename.display());
             }
             File::create(filename).expect("failed to create fake lib file");
         }
     }
 
-    debug_cmd("[cargo-miri rustc]", verbose, &cmd);
+    //debug_cmd("[cargo-miri rustc]", verbose, &cmd);
     exec(cmd);
 }
 

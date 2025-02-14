@@ -51,6 +51,7 @@ use rustc_session::config::{CrateType, EntryFnType, ErrorOutputType, OptLevel};
 use rustc_session::search_paths::PathKind;
 use rustc_session::{CtfeBacktrace, EarlyDiagCtxt};
 use rustc_span::def_id::DefId;
+use rustc_hir::def_id::LocalDefId;
 
 struct MiriCompilerCalls {
     miri_config: miri::MiriConfig,
@@ -68,6 +69,11 @@ impl rustc_driver::Callbacks for MiriCompilerCalls {
                 // there's no rlib provided, so setting a dummy path here to workaround those errors.
                 Lrc::make_mut(&mut crate_source).rlib = Some((PathBuf::new(), PathKind::All));
                 crate_source
+            };
+
+            providers.miri_never_inline = |tcx, id: LocalDefId| {
+                eprintln!("miri_never_inline:{:?}", id);
+                true
             };
         });
     }
@@ -545,7 +551,7 @@ fn main() {
         } else if arg == "-Zmiri-ignore-leaks" {
             miri_config.ignore_leaks = true;
             miri_config.collect_leak_backtraces = false;
-        } else if let Some(param) = arg.strip_prefix("-Zmiri-unsafety-target=") {
+        }else if let Some(param) = arg.strip_prefix("-Zmiri-unsafety-target=") {
             let targets: Vec<String> = match parse_comma_list(param) {
                 Ok(t) => t,
                 Err(err) =>
@@ -558,7 +564,8 @@ fn main() {
                 //println!("{}", c);
                 miri_config.track_unsafety_target_crates.insert(c);
             }
-        } else if let Some(param) = arg.strip_prefix("-Zmiri-unsafety-output=") {
+        }
+         else if let Some(param) = arg.strip_prefix("-Zmiri-unsafety-output=") {
             let output = PathBuf::from(param);
             miri_config.track_unsafety_output = Some(output);
         } else if arg == "-Zmiri-strict-provenance" {
@@ -711,7 +718,7 @@ fn main() {
         );
             cwd.push(MIRI_UNSAFE_RESULT_FILE);
             rustc_args.push(format!("-Zunsafety-miri-result={}", cwd.display()));
-            println!("rustc_args: {:?}", rustc_args);
+            //println!("rustc_args: {:?}", rustc_args);
         }
     }
 

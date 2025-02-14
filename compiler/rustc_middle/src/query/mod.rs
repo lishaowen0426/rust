@@ -12,8 +12,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use rustc_arena::TypedArena;
-use rustc_ast::expand::StrippedCfgItem;
 use rustc_ast::expand::allocator::AllocatorKind;
+use rustc_ast::expand::StrippedCfgItem;
 use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::fx::{FxIndexMap, FxIndexSet};
 use rustc_data_structures::sorted_map::SortedMap;
@@ -32,17 +32,17 @@ use rustc_index::IndexVec;
 use rustc_lint_defs::LintId;
 use rustc_macros::rustc_queries;
 use rustc_query_system::ich::StableHashingContext;
-use rustc_query_system::query::{QueryCache, QueryMode, QueryState, try_get_cached};
-use rustc_session::Limits;
+use rustc_query_system::query::{try_get_cached, QueryCache, QueryMode, QueryState};
 use rustc_session::config::{EntryFnType, OptLevel, OutputFilenames, SymbolManglingVersion};
 use rustc_session::cstore::{
     CrateDepKind, CrateSource, ExternCrate, ForeignModule, LinkagePreference, NativeLib,
 };
 use rustc_session::lint::LintExpectationId;
+use rustc_session::Limits;
 use rustc_span::def_id::LOCAL_CRATE;
 use rustc_span::source_map::Spanned;
 use rustc_span::symbol::Symbol;
-use rustc_span::{DUMMY_SP, Span};
+use rustc_span::{Span, DUMMY_SP};
 use rustc_target::spec::PanicStrategy;
 use {rustc_abi as abi, rustc_ast as ast, rustc_attr as attr, rustc_hir as hir};
 
@@ -56,15 +56,15 @@ use crate::middle::lib_features::LibFeatures;
 use crate::middle::privacy::EffectiveVisibilities;
 use crate::middle::resolve_bound_vars::{ObjectLifetimeDefault, ResolveBoundVars, ResolvedArg};
 use crate::middle::stability::{self, DeprecationEntry};
-use crate::mir::Local;
 use crate::mir::interpret::{
     EvalStaticInitializerRawResult, EvalToAllocationRawResult, EvalToConstValueResult,
     EvalToValTreeResult, GlobalId, LitToConstError, LitToConstInput,
 };
 use crate::mir::mono::{CodegenUnit, CollectionMode, MonoItem};
-use crate::query::erase::{Erase, erase, restore};
+use crate::mir::Local;
+use crate::query::erase::{erase, restore, Erase};
 use crate::query::plumbing::{
-    CyclePlaceholder, DynamicQuery, query_ensure, query_ensure_error_guaranteed, query_get_at,
+    query_ensure, query_ensure_error_guaranteed, query_get_at, CyclePlaceholder, DynamicQuery,
 };
 use crate::traits::query::{
     CanonicalAliasGoal, CanonicalDropckOutlivesGoal, CanonicalImpliedOutlivesBoundsGoal,
@@ -74,12 +74,12 @@ use crate::traits::query::{
     OutlivesBound,
 };
 use crate::traits::{
-    CodegenObligationError, DynCompatibilityViolation, EvaluationResult, ImplSource,
-    ObligationCause, OverflowError, WellFormedLoc, specialization_graph,
+    specialization_graph, CodegenObligationError, DynCompatibilityViolation, EvaluationResult,
+    ImplSource, ObligationCause, OverflowError, WellFormedLoc,
 };
 use crate::ty::fast_reject::SimplifiedType;
 use crate::ty::layout::ValidityRequirement;
-use crate::ty::print::{PrintTraitRefExt, describe_as_module};
+use crate::ty::print::{describe_as_module, PrintTraitRefExt};
 use crate::ty::util::AlwaysRequiresDrop;
 use crate::ty::{
     self, CrateInherentImpls, GenericArg, GenericArgsRef, PseudoCanonicalInput, Ty, TyCtxt,
@@ -2380,6 +2380,11 @@ rustc_queries! {
 
     query miri_unsafe_result(_:()) -> &'tcx UnordMap<DefId, UnordSet<Local>> {
         desc {"parse miri result"}
+    }
+
+    query miri_never_inline(id: LocalDefId) -> bool {
+        eval_always
+        desc { "the compilation is done by miri, so never inline local crate" }
     }
 }
 
