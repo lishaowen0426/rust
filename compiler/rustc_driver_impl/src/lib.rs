@@ -25,7 +25,7 @@ use std::ffi::OsString;
 use std::fmt::Write as _;
 use std::fs::{self, File};
 use std::io::{self, IsTerminal, Read, Write};
-use std::panic::{self, PanicHookInfo, catch_unwind};
+use std::panic::{self, catch_unwind, PanicHookInfo};
 use std::path::PathBuf;
 use std::process::{self, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -38,35 +38,35 @@ use rustc_codegen_ssa::back::apple;
 use rustc_codegen_ssa::traits::CodegenBackend;
 use rustc_codegen_ssa::{CodegenErrors, CodegenResults};
 use rustc_data_structures::profiling::{
-    TimePassesFormat, get_resident_set_size, print_time_passes_entry,
+    get_resident_set_size, print_time_passes_entry, TimePassesFormat,
 };
 use rustc_errors::emitter::stderr_destination;
 use rustc_errors::registry::Registry;
 use rustc_errors::{
-    ColorConfig, DiagCtxt, ErrCode, ErrorGuaranteed, FatalError, PResult, markdown,
+    markdown, ColorConfig, DiagCtxt, ErrCode, ErrorGuaranteed, FatalError, PResult,
 };
 use rustc_feature::find_gated_cfg;
 use rustc_interface::util::{self, get_codegen_backend};
-use rustc_interface::{Linker, Queries, interface, passes};
+use rustc_interface::{interface, passes, Linker, Queries};
 use rustc_lint::unerased_lint_store;
 use rustc_metadata::creader::MetadataLoader;
 use rustc_metadata::locator;
 use rustc_middle::ty::TyCtxt;
 use rustc_parse::{new_parser_from_file, new_parser_from_source_str, unwrap_or_emit_fatal};
 use rustc_session::config::{
-    CG_OPTIONS, ErrorOutputType, Input, OutFileName, OutputType, UnstableOptions, Z_OPTIONS,
-    nightly_options,
+    nightly_options, ErrorOutputType, Input, OutFileName, OutputType, UnstableOptions, CG_OPTIONS,
+    Z_OPTIONS,
 };
 use rustc_session::getopts::{self, Matches};
 use rustc_session::lint::{Lint, LintId};
 use rustc_session::output::collect_crate_types;
-use rustc_session::{EarlyDiagCtxt, Session, config, filesearch};
-use rustc_span::FileName;
+use rustc_session::{config, filesearch, EarlyDiagCtxt, Session};
 use rustc_span::source_map::FileLoader;
+use rustc_span::FileName;
 use rustc_target::json::ToJson;
 use rustc_target::spec::{Target, TargetTuple};
-use time::OffsetDateTime;
 use time::macros::format_description;
+use time::OffsetDateTime;
 use tracing::trace;
 
 #[allow(unused_macros)]
@@ -288,6 +288,7 @@ fn run_compiler(
     >,
     using_internal_features: Arc<std::sync::atomic::AtomicBool>,
 ) -> interface::Result<()> {
+    //safe_println!("run_compiler at_args: {:?}", at_args);
     let mut default_early_dcx = EarlyDiagCtxt::new(ErrorOutputType::default());
 
     // Throw away the first argument, the name of the binary.
@@ -362,7 +363,11 @@ fn run_compiler(
         // printing some information without compiling, or exiting immediately
         // after parsing, etc.
         let early_exit = || {
-            if let Some(guar) = sess.dcx().has_errors() { Err(guar) } else { Ok(()) }
+            if let Some(guar) = sess.dcx().has_errors() {
+                Err(guar)
+            } else {
+                Ok(())
+            }
         };
 
         // This implements `-Whelp`. It should be handled very early, like
@@ -413,9 +418,11 @@ fn run_compiler(
                     });
                 } else {
                     let krate = queries.parse()?;
-                    pretty::print(sess, pp_mode, pretty::PrintExtra::AfterParsing {
-                        krate: &*krate.borrow(),
-                    });
+                    pretty::print(
+                        sess,
+                        pp_mode,
+                        pretty::PrintExtra::AfterParsing { krate: &*krate.borrow() },
+                    );
                 }
                 trace!("finished pretty-printing");
                 return early_exit();
@@ -593,7 +600,11 @@ fn handle_explain(early_dcx: &EarlyDiagCtxt, registry: Registry, code: &str, col
 /// Uses a pager if possible, falls back to stdout.
 fn show_md_content_with_pager(content: &str, color: ColorConfig) {
     let pager_name = env::var_os("PAGER").unwrap_or_else(|| {
-        if cfg!(windows) { OsString::from("more.com") } else { OsString::from("less") }
+        if cfg!(windows) {
+            OsString::from("more.com")
+        } else {
+            OsString::from("less")
+        }
     });
 
     let mut cmd = Command::new(&pager_name);
@@ -615,7 +626,11 @@ fn show_md_content_with_pager(content: &str, color: ColorConfig) {
         let mdstream = markdown::MdStream::parse_str(content);
         let bufwtr = markdown::create_stdout_bufwtr();
         let mut mdbuf = bufwtr.buffer();
-        if mdstream.write_termcolor_buf(&mut mdbuf).is_ok() { Some((bufwtr, mdbuf)) } else { None }
+        if mdstream.write_termcolor_buf(&mut mdbuf).is_ok() {
+            Some((bufwtr, mdbuf))
+        } else {
+            None
+        }
     };
 
     // Try to print via the pager, pretty output if possible.
