@@ -75,6 +75,8 @@ impl rustc_driver::Callbacks for MiriCompilerCalls {
                 eprintln!("miri_never_inline:{:?}", id);
                 true
             };
+
+
         });
     }
 
@@ -128,6 +130,8 @@ impl rustc_driver::Callbacks for MiriCompilerCalls {
                 );
                }
             }
+
+            //println!("MIRI_UNSAFE_LOCALS: {:?}", MIRI_UNSAFE_LOCALS.read().unwrap());
 
             tcx.dcx().abort_if_errors();
             tcx.sess.opts.unstable_opts.unsafety_svf 
@@ -711,6 +715,7 @@ fn main() {
         let crate_name = &rustc_args[crate_name_idx + 1];
         if miri_config.track_unsafety_target_crates.contains(crate_name) {
             rustc_args.push("-Zunsafety-svf".to_string());
+            rustc_args.push("-Zunsafety-miri".to_string());
             rustc_args.push("--emit=llvm-ir".to_string());
             let mut cwd = PathBuf::from(
             env::var("MIRI_CWD")
@@ -718,7 +723,7 @@ fn main() {
         );
             cwd.push(MIRI_UNSAFE_RESULT_FILE);
             rustc_args.push(format!("-Zunsafety-miri-result={}", cwd.display()));
-            //println!("rustc_args: {:?}", rustc_args);
+            println!("rustc_args: {:?}", rustc_args);
         }
     }
 

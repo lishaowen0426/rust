@@ -2,14 +2,19 @@
 //!
 //! The main entry point is the `step` method.
 
+use std::sync::{Mutex, RwLock};
+
 use either::Either;
+use lazy_static::lazy_static;
 use rustc_abi::{BackendRepr, FieldIdx, FIRST_VARIANT};
 use rustc_data_structures::fx::FxHashSet;
+use rustc_data_structures::unord::{UnordMap, UnordSet};
 use rustc_index::IndexSlice;
 use rustc_middle::mir::interpret::{AllocId, Pointer};
 use rustc_middle::mir::Local;
+use rustc_middle::query::Providers;
 use rustc_middle::ty::layout::{FnAbiOf, HasTyCtxt, LayoutOf, TyAndLayout};
-use rustc_middle::ty::{self, Instance, Ty};
+use rustc_middle::ty::{self, Instance, Ty, TyCtxt};
 use rustc_middle::{bug, mir, span_bug};
 use rustc_span::def_id::DefId;
 use rustc_span::source_map::Spanned;
@@ -24,6 +29,24 @@ use super::{
 };
 use crate::interpret::OpTy;
 use crate::util;
+
+lazy_static! {
+    pub static ref MIRI_UNSAFE_LOCALS: RwLock<
+        rustc_data_structures::unord::UnordMap<
+            rustc_span::def_id::DefId,
+            rustc_data_structures::unord::UnordSet<rustc_middle::mir::Local>,
+        >,
+    > = RwLock::new(rustc_data_structures::unord::UnordMap::default());
+    static ref MARK_UNSAFE_LOCAL_MUTEX: Mutex<()> = Mutex::new(());
+}
+
+fn miri_unsafe_result(tcx: TyCtxt<'_>, _: ()) -> &UnordMap<DefId, UnordSet<Local>> {
+    tcx.arena.alloc(UnordMap::default())
+}
+
+pub fn provide(providers: &mut Providers) {
+    *providers = Providers { miri_unsafe_result, ..*providers };
+}
 
 struct EvaluatedCalleeAndArgs<'tcx, M: Machine<'tcx>> {
     callee: FnVal<'tcx, M::ExtraFnVal>,
@@ -194,11 +217,18 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
     }
 
     pub fn mark_unsafe_local(&mut self, id: DefId, local: Local) {
+        let _guard = MARK_UNSAFE_LOCAL_MUTEX.lock().unwrap();
         println!(
             "local {:?} in defid {:?} is unsafe in stmt {:?}",
             local, id, self.current_stmt_for_debug
         );
         self.def_id_to_unsafe_local.entry(id).or_insert_with(FxHashSet::default).insert(local);
+        MIRI_UNSAFE_LOCALS
+            .write()
+            .unwrap()
+            .entry(id)
+            .or_insert_with(UnordSet::default)
+            .insert(local);
     }
     pub fn mark_alloc_id_local_unsafe(&mut self, id: DefId, alloc_id: AllocId) {
         let copied = self

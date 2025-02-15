@@ -5,7 +5,7 @@ use rustc_middle::mir::Local;
 use rustc_middle::ty::layout::{HasTyCtxt, LayoutOf, TyAndLayout};
 use rustc_middle::ty::{self, Ty};
 use rustc_middle::{bug, mir};
-use tracing::{debug, info, instrument};
+use tracing::{debug, instrument};
 
 use super::operand::OperandValue;
 use super::{FunctionCx, LocalRef};
@@ -100,7 +100,7 @@ impl<'a, 'tcx, V: CodegenObject> PlaceRef<'tcx, V> {
         tag: bool,
     ) -> Self {
         if tag {
-            info!("tag: {:?}", self.val.llval);
+            println!("tag with unsafe miri: {:?}", self.val.llval);
             bx.miri_unsafe_alloca(self.val.llval);
         }
         return self;

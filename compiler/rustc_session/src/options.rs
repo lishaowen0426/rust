@@ -2169,6 +2169,8 @@ written to standard error output)"),
         "path to miri unsafety analysis result file(miri_unsafety_result.json)"),
     unsafety_svf: bool = (false, parse_bool, [TRACKED],
         "enable static unsafety analysis using svf (default: no)"),
+    unsafety_miri: bool = (false, parse_bool, [TRACKED],
+        "enable static unsafety analysis using miri (default: no)"),
     unsound_mir_opts: bool = (false, parse_bool, [TRACKED],
         "enable unsound and buggy MIR optimizations (default: no)"),
     /// This name is kind of confusing: Most unstable options enable something themselves, while

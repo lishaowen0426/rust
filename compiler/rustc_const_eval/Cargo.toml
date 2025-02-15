@@ -25,4 +25,5 @@ rustc_target = { path = "../rustc_target" }
 rustc_trait_selection = { path = "../rustc_trait_selection" }
 rustc_type_ir = { path = "../rustc_type_ir" }
 tracing = "0.1"
+lazy_static = "1.5.0"
 # tidy-alphabetical-end

@@ -30,11 +30,14 @@ use rustc_middle::ty;
 use rustc_middle::util::Providers;
 
 pub use self::errors::ReportErrorExt;
+pub use self::interpret::MIRI_UNSAFE_LOCALS;
 
 rustc_fluent_macro::fluent_messages! { "../messages.ftl" }
 
 pub fn provide(providers: &mut Providers) {
     const_eval::provide(providers);
+    interpret::provide(providers);
+
     providers.tag_for_variant = const_eval::tag_for_variant_provider;
     providers.eval_to_const_value_raw = const_eval::eval_to_const_value_raw_provider;
     providers.eval_to_allocation_raw = const_eval::eval_to_allocation_raw_provider;

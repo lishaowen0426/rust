@@ -40,6 +40,7 @@
 #include "llvm/Transforms/Utils/CanonicalizeAliases.h"
 #include "llvm/Transforms/Utils/FunctionImportUtils.h"
 #include "llvm/Transforms/Utils/NameAnonGlobals.h"
+#include <iostream>
 #include <set>
 #include <string>
 #include <vector>
@@ -996,6 +997,7 @@ extern "C" LLVMRustResult LLVMRustOptimize(
   }
 
   if (LaunchSVF) {
+    std::cout << "LaunchSVF" << std::endl;
     MPM.addPass(SVFTransform());
   }
 

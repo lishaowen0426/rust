@@ -23,14 +23,14 @@ mod visitor;
 pub use rustc_middle::mir::interpret::*; // have all the `interpret` symbols in one place: here
 
 pub use self::call::FnArg;
-pub use self::eval_context::{InterpCx, format_interp_error};
+pub use self::eval_context::{format_interp_error, InterpCx};
 use self::eval_context::{from_known_layout, mir_assign_valid_types};
 pub use self::intern::{
-    HasStaticRootDefId, InternKind, InternResult, intern_const_alloc_for_constprop,
-    intern_const_alloc_recursive,
+    intern_const_alloc_for_constprop, intern_const_alloc_recursive, HasStaticRootDefId, InternKind,
+    InternResult,
 };
 pub(crate) use self::intrinsics::eval_nullary_intrinsic;
-pub use self::machine::{AllocMap, Machine, MayLeak, ReturnAction, compile_time_machine};
+pub use self::machine::{compile_time_machine, AllocMap, Machine, MayLeak, ReturnAction};
 pub use self::memory::{AllocInfo, AllocKind, AllocRef, AllocRefMut, FnVal, Memory, MemoryKind};
 use self::operand::Operand;
 pub use self::operand::{ImmTy, Immediate, OpTy};
@@ -38,6 +38,7 @@ pub use self::place::{MPlaceTy, MemPlaceMeta, PlaceTy, Writeable};
 use self::place::{MemPlace, Place};
 pub use self::projection::{OffsetMode, Projectable};
 pub use self::stack::{Frame, FrameInfo, LocalState, StackPopCleanup, StackPopInfo};
+pub use self::step::{provide, MIRI_UNSAFE_LOCALS};
 pub(crate) use self::util::create_static_alloc;
 pub use self::validity::{CtfeValidationMode, RangeSet, RefTracking};
 pub use self::visitor::ValueVisitor;

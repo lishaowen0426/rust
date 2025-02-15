@@ -12,7 +12,7 @@ use rustc_abi::{HasDataLayout, TargetDataLayout, VariantIdx};
 use rustc_codegen_ssa::back::versioned_llvm_target;
 use rustc_codegen_ssa::base::{wants_msvc_seh, wants_wasm_eh};
 use rustc_codegen_ssa::errors as ssa_errors;
-use rustc_codegen_ssa::traits::{CodegenMiriUnsafeLocals, *};
+use rustc_codegen_ssa::traits::*;
 use rustc_data_structures::base_n::{ToBaseN, ALPHANUMERIC_ONLY};
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_data_structures::small_c_str::SmallCStr;
@@ -110,16 +110,9 @@ pub(crate) struct CodegenCx<'ll, 'tcx> {
     /// `global_asm!` needs to be able to find this new global so that it can
     /// compute the correct mangled symbol name to insert into the asm.
     pub renamed_statics: RefCell<FxHashMap<DefId, &'ll Value>>,
-
-    /// results from miri unsafety analysis
-    pub miri_unsafe_locals: MiriResult,
+    //pub miri_unsafe_locals: MiriResult,
 }
 
-impl<'ll, 'tcx> CodegenMiriUnsafeLocals for CodegenCx<'ll, 'tcx> {
-    fn unsafe_locals(&self, did: DefId) -> Option<&FxHashSet<Local>> {
-        self.miri_unsafe_locals.get(&did)
-    }
-}
 fn to_llvm_tls_model(tls_model: TlsModel) -> llvm::ThreadLocalMode {
     match tls_model {
         TlsModel::GeneralDynamic => llvm::ThreadLocalMode::GeneralDynamic,
@@ -591,7 +584,6 @@ impl<'ll, 'tcx> CodegenCx<'ll, 'tcx> {
 
         let isize_ty = Type::ix_llcx(llcx, tcx.data_layout.pointer_size.bits());
 
-        let miri_unsafe_locals = Self::parse_miri_result(tcx);
         if tcx.sess.opts.unstable_opts.unsafety_miri_result.is_some() {
             //println!("parsed miri locals: {:?}", miri_unsafe_locals);
         }
@@ -621,7 +613,6 @@ impl<'ll, 'tcx> CodegenCx<'ll, 'tcx> {
             intrinsics: Default::default(),
             local_gen_sym_counter: Cell::new(0),
             renamed_statics: Default::default(),
-            miri_unsafe_locals,
         }
     }
 

@@ -1,7 +1,7 @@
 #![allow(unused_variables)]
 use std::iter;
 
-use rustc_data_structures::fx::FxHashSet;
+use rustc_const_eval::MIRI_UNSAFE_LOCALS;
 use rustc_hir::def::DefKind;
 use rustc_hir::Safety;
 use rustc_index::bit_set::BitSet;
@@ -124,8 +124,6 @@ pub struct FunctionCx<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> {
     caller_location: Option<OperandRef<'tcx, Bx::Value>>,
 
     is_svf_enable: bool,
-
-    miri_unsafe_locals: Option<FxHashSet<Local>>,
 }
 
 impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
@@ -142,7 +140,11 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
     }
 
     pub fn miri_is_local_unsafe(&self, loc: Local) -> bool {
-        self.miri_unsafe_locals.as_ref().is_some_and(|s| s.contains(&loc))
+        MIRI_UNSAFE_LOCALS
+            .read()
+            .unwrap()
+            .get(&self.instance.def_id())
+            .is_some_and(|s| s.contains(&loc))
     }
 }
 
@@ -215,7 +217,6 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             .collect();
 
     let is_svf_enable = cx.tcx().sess.opts.unstable_opts.unsafety_svf;
-    let miri_unsafe_locals = cx.unsafe_locals(instance.def_id()).and_then(|s| Some(s.clone()));
     let mut fx = FunctionCx {
         instance,
         mir,
@@ -235,7 +236,6 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         per_local_var_debug_info: None,
         caller_location: None,
         is_svf_enable,
-        miri_unsafe_locals,
     };
 
     // It may seem like we should iterate over `required_consts` to ensure they all successfully
@@ -275,7 +275,12 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         }
     }
     let local_values = {
-        let miri_unsafe_locals: Option<&FxHashSet<Local>> = cx.unsafe_locals(instance.def_id());
+        let miri_unsafe_locals = MIRI_UNSAFE_LOCALS.read().unwrap();
+        let miri_unsafe_locals = if cx.tcx().sess.opts.unstable_opts.unsafety_miri {
+            miri_unsafe_locals.get(&instance.def_id())
+        } else {
+            None
+        };
         let args = arg_local_refs(&mut start_bx, &mut fx, &memory_locals);
 
         let mut allocate_local = |local| {
@@ -283,9 +288,6 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             let layout = start_bx.layout_of(fx.monomorphize(decl.ty));
             assert!(!layout.ty.has_erasable_regions());
             let miri_unsafe_tag = miri_unsafe_locals.is_some_and(|s| s.contains(&local));
-            if miri_unsafe_tag {
-                //println!("def id: {:?}, local {:?} is unsafe", instance.def_id(), local);
-            }
 
             if local == mir::RETURN_PLACE {
                 match fx.fn_abi.ret.mode {
@@ -318,9 +320,6 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             if memory_locals.contains(local) {
                 debug!("alloc: {:?} -> place", local);
 
-                if miri_unsafe_locals.is_some() {
-                    //println!("mem local: {:?}", local);
-                }
                 if layout.is_unsized() {
                     LocalRef::UnsizedPlace(
                         PlaceRef::alloca_unsized_indirect(&mut start_bx, layout)

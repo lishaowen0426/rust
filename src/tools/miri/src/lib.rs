@@ -91,6 +91,7 @@ mod shims;
 
 // Establish a "crate-wide prelude": we often import `crate::*`.
 // Make all those symbols available in the same place as our own.
+
 #[doc(no_inline)]
 pub use rustc_const_eval::interpret::*;
 // Resolve ambiguity.
@@ -129,11 +130,11 @@ pub use crate::concurrency::thread::{
     TimeoutClock, UnblockCallback,
 };
 pub use crate::diagnostics::{
-    EvalContextExt as _, NonHaltingDiagnostic, TerminationInfo, report_error,
+    report_error, EvalContextExt as _, NonHaltingDiagnostic, TerminationInfo,
 };
 pub use crate::eval::{
-    AlignmentCheck, BacktraceStyle, IsolatedOp, MiriConfig, RejectOpWith, ValidationMode,
-    create_ecx, eval_entry,
+    create_ecx, eval_entry, AlignmentCheck, BacktraceStyle, IsolatedOp, MiriConfig, RejectOpWith,
+    ValidationMode,
 };
 pub use crate::helpers::{AccessKind, EvalContextExt as _};
 pub use crate::intrinsics::EvalContextExt as _;
@@ -145,7 +146,6 @@ pub use crate::mono_hash_map::MonoHashMap;
 pub use crate::operator::EvalContextExt as _;
 pub use crate::provenance_gc::{EvalContextExt as _, LiveAllocs, VisitProvenance, VisitWith};
 pub use crate::range_map::RangeMap;
-pub use crate::shims::EmulateItemResult;
 pub use crate::shims::env::{EnvVars, EvalContextExt as _};
 pub use crate::shims::foreign_items::{DynSym, EvalContextExt as _};
 pub use crate::shims::io_error::{EvalContextExt as _, IoError, LibcError};
@@ -153,6 +153,7 @@ pub use crate::shims::os_str::EvalContextExt as _;
 pub use crate::shims::panic::{CatchUnwindData, EvalContextExt as _};
 pub use crate::shims::time::EvalContextExt as _;
 pub use crate::shims::tls::TlsData;
+pub use crate::shims::EmulateItemResult;
 
 /// Insert rustc arguments at the beginning of the argument list that Miri wants to be
 /// set per default, for maximal validation power.
