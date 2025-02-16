@@ -1,4 +1,5 @@
 #![allow(unused_variables)]
+#![allow(dead_code)]
 use std::iter;
 
 use rustc_const_eval::MIRI_UNSAFE_LOCALS;
@@ -142,7 +143,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
     pub fn miri_is_local_unsafe(&self, loc: Local) -> bool {
         MIRI_UNSAFE_LOCALS
             .read()
-            .unwrap()
+            .expect("MIRI_UNSAFE_LOCALS read failed in miri_is_local_unsafe fn")
             .get(&self.instance.def_id())
             .is_some_and(|s| s.contains(&loc))
     }
@@ -277,7 +278,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         }
     }
     let local_values = {
-        let miri_unsafe_locals = MIRI_UNSAFE_LOCALS.read().unwrap();
+        let miri_unsafe_locals = MIRI_UNSAFE_LOCALS.read().expect("MIRI_UNSAFE_LOCALS read failed");
         let miri_unsafe_locals = if cx.tcx().sess.opts.unstable_opts.unsafety_miri {
             miri_unsafe_locals.get(&instance.def_id())
         } else {

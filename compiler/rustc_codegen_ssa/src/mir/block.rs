@@ -1237,7 +1237,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             for statement in &data.statements {
                 if true /*  self.is_svf_enable */ &&  mir.source_scopes[statement.source_info.scope].is_unsafe
                 {
-                    bx.set_svf_unsafe(Some(format!("{:?}", statement)), None);
+                    bx.set_svf_unsafe(None, None);
                 }
                 self.codegen_statement(bx, statement);
                 bx.clear_svf_unsafe();
@@ -1246,7 +1246,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             if true /*  self.is_svf_enable */
                 && mir.source_scopes[data.terminator().source_info.scope].is_unsafe
             {
-                bx.set_svf_unsafe(None, Some(format!("{:?}", data.terminator())));
+                bx.set_svf_unsafe(None, None);
             }
             let merging_succ = self.codegen_terminator(bx, bb, data.terminator());
             bx.clear_svf_unsafe();
