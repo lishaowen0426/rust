@@ -252,7 +252,9 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
 
     // Allocate variable and temp allocas
 
-    if is_svf_enable {
+    if true
+    /* is_svf_enable */
+    {
         match cx.tcx().def_kind(instance.def_id()) {
             DefKind::Fn | DefKind::AssocFn => {
                 let fn_sig = cx.tcx().fn_sig(instance.def_id()).instantiate_identity();
