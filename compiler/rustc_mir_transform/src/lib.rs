@@ -26,14 +26,14 @@ use rustc_hir::def_id::LocalDefId;
 use rustc_index::IndexVec;
 use rustc_middle::mir::{
     AnalysisPhase, Body, CallSource, ClearCrossCrate, ConstOperand, ConstQualifs, LocalDecl,
-    MirPhase, Operand, Place, ProjectionElem, Promoted, RuntimePhase, Rvalue, START_BLOCK,
-    SourceInfo, Statement, StatementKind, TerminatorKind,
+    MirPhase, Operand, Place, ProjectionElem, Promoted, RuntimePhase, Rvalue, SourceInfo,
+    Statement, StatementKind, TerminatorKind, START_BLOCK,
 };
 use rustc_middle::ty::{self, TyCtxt, TypeVisitableExt};
 use rustc_middle::util::Providers;
 use rustc_middle::{bug, query, span_bug};
 use rustc_span::source_map::Spanned;
-use rustc_span::{DUMMY_SP, sym};
+use rustc_span::{sym, DUMMY_SP};
 use rustc_trait_selection::traits;
 use tracing::{debug, trace};
 
@@ -192,6 +192,7 @@ declare_passes! {
     mod unreachable_enum_branching : UnreachableEnumBranching;
     mod unreachable_prop : UnreachablePropagation;
     mod validate : Validator;
+    mod int_to_ptr : IntToPtr;
 }
 
 rustc_fluent_macro::fluent_messages! { "../messages.ftl" }
@@ -655,7 +656,8 @@ fn run_optimization_passes<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
             // Add some UB checks before any UB gets optimized away.
             &check_alignment::CheckAlignment,
             // Before inlining: trim down MIR with passes to reduce inlining work.
-
+            //Collect int to ptrs
+            &int_to_ptr::IntToPtr,
             // Has to be done before inlining, otherwise actual call will be almost always inlined.
             // Also simple, so can just do first.
             &lower_slice_len::LowerSliceLenCalls,

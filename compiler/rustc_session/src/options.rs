@@ -1851,6 +1851,8 @@ options! {
          `=skip-entry`
          `=skip-exit`
          Multiple options can be combined with commas."),
+    int_to_ptr_check: bool = (false, parse_bool, [UNTRACKED],
+        "check if int to ptr is performed(lost provenance)"),
     layout_seed: Option<u64> = (None, parse_opt_number, [TRACKED],
         "seed layout randomization"),
     link_directives: bool = (true, parse_bool, [TRACKED],
