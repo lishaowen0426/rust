@@ -62,7 +62,7 @@ impl Edition {
             Edition::Edition2015 => true,
             Edition::Edition2018 => true,
             Edition::Edition2021 => true,
-            Edition::Edition2024 => true,
+            Edition::Edition2024 => false,
         }
     }
 
