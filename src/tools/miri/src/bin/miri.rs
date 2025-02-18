@@ -72,7 +72,7 @@ impl rustc_driver::Callbacks for MiriCompilerCalls {
             };
 
             providers.miri_never_inline = |tcx, id: LocalDefId| {
-                eprintln!("miri_never_inline:{:?}", id);
+                //eprintln!("miri_never_inline:{:?}", id);
                 true
             };
 
