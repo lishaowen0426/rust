@@ -18,17 +18,18 @@ impl<'tcx> crate::MirPass<'tcx> for IntToPtr {
         output
             .push(tcx.sess.io.output_dir.as_ref().unwrap_or(env::current_dir().as_ref().unwrap()));
         output.push("int_to_ptr");
-        let mut file = File::create(output).unwrap();
         let mut vis = IntToPtrVisitor { results: Vec::new() };
         vis.visit_body(body);
         if vis.results.is_empty() {
             return;
         }
         eprintln!("Int to ptr found:");
+        let mut file = File::create(output).unwrap();
         for location in vis.results {
             let src = body.source_info(location);
             let stmt = body.stmt_at(location);
             writeln!(file, "{:?},{:?}", src, stmt).unwrap();
+            eprintln!("{:?},{:?}", src, stmt);
         }
     }
 }

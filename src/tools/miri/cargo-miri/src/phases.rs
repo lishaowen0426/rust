@@ -379,7 +379,7 @@ pub fn phase_rustc(mut args: impl Iterator<Item = String>, phase: RustcPhase) {
     let runnable_crate = is_runnable_crate();
 
     if runnable_crate && target_crate {
-        eprintln!("runnable_crate and target_crate");
+        //eprintln!("runnable_crate and target_crate");
         assert!(
             phase != RustcPhase::Setup,
             "there should be no interpretation during sysroot build"
