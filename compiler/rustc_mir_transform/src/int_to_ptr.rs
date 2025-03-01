@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use rustc_middle::mir::visit::Visitor;
 use rustc_middle::mir::*;
 use rustc_middle::ty::TyCtxt;
+use tracing::{info, instrument};
 pub(super) struct IntToPtr;
 
 impl<'tcx> crate::MirPass<'tcx> for IntToPtr {
@@ -13,6 +14,7 @@ impl<'tcx> crate::MirPass<'tcx> for IntToPtr {
         sess.opts.unstable_opts.int_to_ptr_check
     }
 
+    #[instrument(level = "info", skip_all, name = "int_to_ptr_run")]
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
         let mut output = PathBuf::new();
         output
@@ -23,8 +25,8 @@ impl<'tcx> crate::MirPass<'tcx> for IntToPtr {
         if vis.results.is_empty() {
             return;
         }
-        eprintln!("Int to ptr found:");
         let mut file = File::create(output).unwrap();
+        info!("Int to ptr found: {:?}", vis.results);
         for location in vis.results {
             let src = body.source_info(location);
             let stmt = body.stmt_at(location);
